@@ -29,16 +29,20 @@ ENV NODE_ENV=production \
 
 # The Prisma CLI applies migrations at container start, and tsx runs the seed
 # script. Installing them here rather than copying them out of the deps stage
-# lets npm resolve their transitive graphs correctly; the two heaviest Prisma
-# packages are only used by `prisma studio` and `prisma dev`, neither of which
-# runs in production.
+# lets npm resolve their transitive graphs correctly.
 #
-# @prisma/adapter-pg is listed explicitly because Next inlines it into the
-# server bundle rather than leaving it in the traced node_modules — so the
-# standalone server has it, but the seed script would not.
+# Do NOT prune @prisma/studio-core or @prisma/dev to slim this layer. They look
+# like development-only packages, but prisma/build/cli.js requires studio-core
+# eagerly at module load, so removing it breaks `migrate deploy` itself with a
+# MODULE_NOT_FOUND that never reaches the database.
+#
+# @prisma/client and @prisma/adapter-pg are listed explicitly rather than relied
+# on from the standalone bundle: Next inlines the adapter into the server bundle
+# and only traces what the server imports, so the seed script — which runs under
+# tsx, outside that bundle — has to resolve them from here.
 RUN npm install --no-save --omit=optional \
-        prisma@7.9.1 @prisma/adapter-pg@7.9.1 dotenv@17.4.2 tsx@4.23.11 \
-    && rm -rf node_modules/@prisma/studio-core node_modules/@prisma/dev \
+        prisma@7.9.1 @prisma/client@7.9.1 @prisma/adapter-pg@7.9.1 \
+        dotenv@17.4.2 tsx@4.23.11 \
     && npm cache clean --force
 
 # Migration and seed inputs. The seed imports the generated client directly, so
@@ -62,7 +66,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
 USER nextjs
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
     CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["docker-entrypoint.sh"]
