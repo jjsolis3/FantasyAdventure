@@ -8,10 +8,10 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 2 — The character builder
+## Status: Milestone 3 — Campaign setup
 
-Accounts work and the family can be built. There is no adventure to play yet —
-that arrives with the Game Master engine in M4.
+The family can be built and an adventure can be prepared. The storyteller
+itself arrives in M4 — that is the milestone that makes it a game.
 
 | | |
 |---|---|
@@ -24,9 +24,10 @@ that arrives with the Game Master engine in M4.
 | ✅ | **M1** Admin invite management, profile and table preferences |
 | ✅ | **M2** Character builder — stats, skills, race and calling |
 | ✅ | **M2** Family ties and the Bond mechanic |
-| ⬜ | M3 campaign setup · **M4 the Game Master engine** · M5 play UI |
+| ✅ | **M3** Campaign setup — storyline, party, tone and reading level |
+| ⬜ | **M4 the Game Master engine** · M5 play UI · M6 progression |
 
-Four starter adventures are seeded, each with a three-act spine the AI
+Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
 
 ### Creating the first account
@@ -69,6 +70,48 @@ can use alone. Storing one row rather than two directions is deliberate: two
 counters for one relationship drift apart the moment anything writes to only
 one of them. The pair is keyed on the smaller character id, and each side reads
 the relationship from its own perspective.
+
+### Setting up an adventure
+
+At `/campaigns/new`: pick a storyline, choose who is coming, and decide how it
+should be told. Tone and reading level are **copied onto the campaign**, not
+referenced from your profile — changing your preferences later must not
+silently rewrite a story already in progress.
+
+The order you pick the party in is the order the game asks "what do you do?"
+around the table. Party size is checked against the storyline's range, and the
+party is settled once the adventure leaves `SETUP`, so the transcript can never
+refer to somebody who is no longer there.
+
+### Choosing a model
+
+The Game Master lands in M4, and the model matters more than anything else in
+this repo. The prompt work assumes the model can hold a scene in its head and
+return schema-valid JSON on request.
+
+**Small instruct models (≈3–4B, such as `phi3:mini`) will struggle here.** Not
+because they are bad, but because this is close to the hardest thing you can
+ask of a local model: long context, consistent characterisation across many
+turns, a tone contract, and structured output. Expect flat prose, forgotten
+details and frequent JSON repairs.
+
+For a table reading Harry Potter and Wings of Fire, the narration has to clear a
+real bar. Recommended, in rough order of preference given a single consumer GPU:
+
+| Model | Notes |
+|---|---|
+| `qwen2.5:14b-instruct` | Best structured-output reliability in this size class |
+| `mistral-nemo:12b` | Strong long-context prose, 128k window |
+| `gemma2:9b` | Good narration; watch its shorter context window |
+| `llama3.1:8b` | The safe floor — competent, widely tested |
+
+Whatever you run, check the **context window** Ollama is actually using.
+`phi3:mini` defaults to 4k, which the memory pyramid will exhaust within a few
+scenes. `ollama show <model>` reports it.
+
+Because the provider is just an OpenAI-compatible base URL, a hosted model can
+be dropped in by changing `AI_BASE_URL` and `AI_API_KEY` — useful for comparing
+what "good" looks like before deciding how hard to tune the local one.
 
 ### How sign-in works
 
@@ -151,17 +194,19 @@ docker compose up --build
 | `npm run prisma:migrate` | Create + apply a migration from schema changes |
 | `npm run prisma:studio` | Browse the database |
 | `npm run seed` | Re-seed storylines (idempotent) |
-| `npm test` | Unit tests (password hashing) |
-| `npm run test:e2e` | Browser-driven auth flow — see below |
+| `npm test` | Unit tests — hashing and game rules |
+| `npm run test:e2e` | Browser-driven auth, characters and campaigns — see below |
 
 ### Tests
 
 `npm test` runs standalone unit tests and needs nothing else.
 
 `npm run test:e2e` drives a real browser through registration, sign-in, invite
-handling, lockout and session revocation. It needs a running app **and a
-database with no accounts in it**, so it is destructive — point it at a scratch
-database, never your real one:
+handling, lockout, session revocation, the character builder, family ties and
+campaign setup. It needs a running app **and a database with no accounts in
+it**, so it is destructive — point it at a scratch database, never your real
+one. Each suite assumes it starts from an empty accounts table, so reset
+between runs:
 
 ```bash
 npm run build && npm start        # app on :3000
@@ -232,6 +277,7 @@ app/
   profile/          Display name, reading level, tone, password change
   invites/          Admin-only invite management
   characters/       Party list, builder, and per-character editing
+  campaigns/        Adventure list, setup flow, and campaign page
   page.tsx          Landing page; lists seeded storylines
 lib/
   db.ts             Prisma singleton (adapter-based, hot-reload safe)
@@ -245,14 +291,16 @@ lib/
     rules.ts        Stat budget, bonds, levels, relationship algebra
     character-options.ts  Races, callings and skills offered by the builder
     actions.ts      Server actions for characters and family ties
+    campaign-actions.ts  Server actions for campaigns and party
 components/         Shared UI, site header, character builder
 tests/
   password.test.ts  Unit tests — hashing
   rules.test.ts     Unit tests — stats, bonds, relationships
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
+  campaigns.e2e.mts   Browser-driven campaign setup
 prisma/
-  schema.prisma     Accounts, characters, relationships, storylines
+  schema.prisma     Accounts, characters, relationships, campaigns, storylines
   seed.ts           Starter adventures + bootstrap invite
   migrations/
 Dockerfile          Multi-stage; standalone runtime
