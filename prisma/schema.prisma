@@ -1,7 +1,7 @@
 // Hearthlight — database schema
 //
-// Milestone 0 establishes only what is needed to prove the stack end to end:
-// migrations run, a seed populates real data, and the app can query it.
+// M0 established the storyline templates. M1 adds accounts: invite-gated
+// registration, password login and server-side sessions.
 // Characters, campaigns, scenes and the turn log arrive in later milestones.
 
 generator client {
@@ -29,6 +29,87 @@ enum ReadingLevel {
   TEEN
   /// Mixed-age table: narrate for the youngest, leave asides for the oldest.
   FAMILY_MIXED
+}
+
+enum Role {
+  /// Can create invite codes and manage other accounts.
+  ADMIN
+  PLAYER
+}
+
+/// Someone who can sign in. On a shared screen this is usually one adult per
+/// household rather than one row per family member — the adventurers
+/// themselves become Characters in a later milestone.
+model User {
+  id           String @id @default(cuid())
+  /// Always stored lowercased so sign-in is case-insensitive.
+  email        String @unique
+  passwordHash String
+  displayName  String
+  role         Role   @default(PLAYER)
+
+  /// Household defaults, offered as the starting point when setting up a
+  /// campaign so the table's usual tone does not have to be re-picked.
+  defaultReadingLevel ReadingLevel @default(FAMILY_MIXED)
+  defaultTone         Tone         @default(COZY)
+
+  /// Throttles password guessing. Reset to zero on any successful sign-in.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  sessions       AuthSession[]
+  invitesCreated InviteCode[]  @relation("InviteCreator")
+  inviteRedeemed InviteCode?   @relation("InviteRedeemer")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Registration is invite-only: the app sits on a public URL, and without this
+/// anyone who finds it could create an account.
+model InviteCode {
+  id   String  @id @default(cuid())
+  code String  @unique
+  /// Free-text reminder of who the code was meant for.
+  note String?
+
+  createdById String?
+  createdBy   User?   @relation("InviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// One code, one account. The unique constraint enforces single use even if
+  /// two registrations race.
+  redeemedById String?   @unique
+  redeemedBy   User?     @relation("InviteRedeemer", fields: [redeemedById], references: [id], onDelete: SetNull)
+  redeemedAt   DateTime?
+
+  expiresAt DateTime?
+
+  /// Generated automatically when the database has no users at all, and printed
+  /// to the container logs so the first admin account can be created without
+  /// anyone having to seed credentials by hand.
+  isBootstrap Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([createdById])
+}
+
+/// Server-side session. The cookie carries an opaque random token; only its
+/// SHA-256 hash is stored, so a leaked database dump cannot be replayed as a
+/// login. Sessions are revocable, which a stateless JWT would not be.
+model AuthSession {
+  id        String @id @default(cuid())
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 /// A pre-authored adventure template. The AI improvises freely inside it,
