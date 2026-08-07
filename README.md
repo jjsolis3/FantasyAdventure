@@ -53,6 +53,12 @@ ever lives on a different machine, use Tailscale rather than a port-forward.
 
 ## Local development
 
+> **Not a deployment step.** This section is for running the app on your own
+> laptop while writing code. Do **not** run these commands over SSH on the
+> Coolify server — Coolify builds the image, applies migrations and seeds the
+> database by itself when you click Deploy. If you only want the game running
+> on the server, skip straight to [Deploying on Coolify](#deploying-on-coolify).
+
 Requires Node 22+ and Docker.
 
 ```bash
@@ -146,10 +152,19 @@ docker-compose.yml  Local stack
 
 ### Prisma 7 notes
 
-Two things changed in v7 that trip up older tutorials:
+Three things changed in v7 that trip up older tutorials:
 
 - The connection string is **not** in `schema.prisma`. The CLI reads it from
   `prisma.config.ts`; the runtime client gets it via the driver adapter.
 - There is no bundled query engine — `@prisma/adapter-pg` is required, and the
   generated client is emitted as TypeScript source into `generated/` (gitignored,
   regenerated on every build).
+- **Do not prune `@prisma/studio-core` or `@prisma/dev` from a production
+  image.** They look development-only and are large, but `prisma/build/cli.js`
+  requires studio-core eagerly at module load — removing it breaks
+  `migrate deploy` with `MODULE_NOT_FOUND` before it ever contacts the database.
+
+The runtime stage installs `@prisma/client` and `@prisma/adapter-pg` explicitly
+rather than relying on Next's standalone output. Next inlines the adapter into
+the server bundle and only traces what the server imports, so the seed script —
+which runs under `tsx`, outside that bundle — cannot resolve them otherwise.
