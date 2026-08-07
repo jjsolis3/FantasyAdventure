@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
 /**
@@ -11,7 +12,7 @@ export function SubmitButton({
   pendingLabel,
   variant = "primary",
 }: {
-  children: string;
+  children: ReactNode;
   pendingLabel?: string;
   variant?: "primary" | "secondary" | "danger";
 }) {
