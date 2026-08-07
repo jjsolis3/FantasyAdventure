@@ -17,6 +17,9 @@ export async function SiteHeader() {
 
         {user ? (
           <>
+            <Link href="/characters" className="text-sm text-hearth-300 hover:text-hearth-100">
+              Adventurers
+            </Link>
             {user.role === "ADMIN" ? (
               <Link href="/invites" className="text-sm text-hearth-300 hover:text-hearth-100">
                 Invites

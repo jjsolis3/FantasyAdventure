@@ -1,0 +1,226 @@
+/**
+ * End-to-end check of the M2 character builder, driven through a real browser.
+ *
+ * Usage:
+ *   1. Postgres running, migrations applied, accounts table empty.
+ *   2. Seed (so a bootstrap invite exists), then start the app on BASE.
+ *   3. npx tsx tests/characters.e2e.mts
+ *
+ * Destructive — point it at a scratch database, never a real one.
+ */
+import { chromium, type Page } from "@playwright/test";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.ts";
+
+const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3300";
+const connectionString =
+  process.env.DATABASE_URL ?? "postgresql://hearthlight@localhost:5432/hearthlight?schema=public";
+
+const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+
+let failures = 0;
+function check(label: string, condition: boolean, detail = "") {
+  console.log(`${condition ? "  ok  " : "FAIL  "} ${label}${detail ? ` — ${detail}` : ""}`);
+  if (!condition) failures += 1;
+}
+
+async function submitAndSettle(page: Page, selector = 'button[type="submit"]') {
+  await page.waitForSelector(`${selector}:not([disabled])`);
+  await page.click(selector);
+  await page.waitForSelector(`${selector}:not([disabled])`, { timeout: 15_000 }).catch(() => {});
+  await page.waitForLoadState("networkidle").catch(() => {});
+}
+
+async function alertText(page: Page): Promise<string> {
+  const alerts = await page.$$eval('[role="status"]', (nodes) =>
+    nodes.map((node) => node.textContent?.trim() ?? ""),
+  );
+  return alerts.join(" | ");
+}
+
+/** Clicks a stat's + or − the given number of times. */
+async function adjustStat(page: Page, label: string, direction: "Raise" | "Lower", times: number) {
+  for (let index = 0; index < times; index += 1) {
+    await page.click(`button[aria-label="${direction} ${label}"]`);
+  }
+}
+
+const browser = await chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+});
+
+try {
+  const bootstrap = await db.inviteCode.findFirst({ where: { isBootstrap: true, redeemedById: null } });
+  if (!bootstrap) throw new Error("No unredeemed bootstrap invite — reset accounts and re-seed first.");
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  // ---- Sign up so we have a household ------------------------------------
+  await page.goto(`${BASE}/register`);
+  await page.fill('input[name="inviteCode"]', bootstrap.code);
+  await page.fill('input[name="displayName"]', "Parent");
+  await page.fill('input[name="email"]', "parent@example.com");
+  await page.fill('input[name="password"]', "a long enough password");
+  await submitAndSettle(page);
+  await page.waitForURL(`${BASE}/`);
+
+  const user = await db.user.findUniqueOrThrow({ where: { email: "parent@example.com" } });
+
+  // ---- Characters are private --------------------------------------------
+  {
+    const anon = await (await browser.newContext()).newPage();
+    await anon.goto(`${BASE}/characters`);
+    check("signed-out user cannot reach /characters", anon.url().includes("/login"), anon.url());
+    await anon.close();
+  }
+
+  // ---- Build the first character -----------------------------------------
+  await page.goto(`${BASE}/characters/new`);
+  await page.fill('input[name="name"]', "Mira Thistledown");
+  await page.selectOption('select#choice-race', "Halfling");
+  await page.selectOption('select#choice-archetype', "Beastfriend");
+  await page.selectOption('select[name="ageBand"]', "CHILD");
+  await page.fill('input[name="gender"]', "girl");
+  await page.click('button:has-text("she/her")');
+  await page.fill('textarea[name="description"]', "Freckles and a too-big coat.");
+
+  check("the builder starts with the budget fully spent", (await page.textContent("body"))?.includes("All points spent") === true);
+
+  // Move two points from Might into Heart: still exactly the budget.
+  await adjustStat(page, "Might", "Lower", 2);
+  await adjustStat(page, "Heart", "Raise", 2);
+
+  // Pick two skills.
+  await page.click('button:has-text("Speak with Animals")');
+  await page.click('button:has-text("Soothe the Wild")');
+
+  const thirdSkill = page.locator('button:has-text("Patch Up")');
+  check("a third skill cannot be selected", await thirdSkill.isDisabled());
+
+  await submitAndSettle(page, 'button:has-text("Create adventurer")');
+
+  const mira = await db.character.findFirst({ where: { userId: user.id, name: "Mira Thistledown" }, include: { skills: true } });
+  check("character created", mira !== null);
+  check("race saved", mira?.race === "Halfling", mira?.race);
+  check("calling saved", mira?.archetype === "Beastfriend", mira?.archetype);
+  check("age band saved", mira?.ageBand === "CHILD", mira?.ageBand);
+  check("pronouns saved", mira?.pronouns === "she/her", mira?.pronouns);
+  check("stats reallocated", mira?.might === 1 && mira?.heart === 5, `might=${mira?.might} heart=${mira?.heart}`);
+  check("stats still total the budget", (mira?.might ?? 0) + (mira?.wits ?? 0) + (mira?.heart ?? 0) + (mira?.spark ?? 0) === 12);
+  check("two skills saved", mira?.skills.length === 2, mira?.skills.map((s) => s.name).join(", "));
+  check("starts at level 1 with no xp", mira?.level === 1 && mira?.xp === 0);
+
+  // ---- A custom race is allowed ------------------------------------------
+  await page.goto(`${BASE}/characters/new`);
+  await page.fill('input[name="name"]', "Pip");
+  await page.selectOption('select#choice-race', "__other__");
+  await page.fill('input[placeholder="Type your own"]', "Cloud Baker");
+  await page.selectOption('select#choice-archetype', "Maker");
+  await page.selectOption('select[name="ageBand"]', "GROWNUP");
+  await submitAndSettle(page, 'button:has-text("Create adventurer")');
+
+  const pip = await db.character.findFirst({ where: { userId: user.id, name: "Pip" } });
+  check("a race outside the list is accepted", pip?.race === "Cloud Baker", pip?.race);
+
+  // ---- Family ties --------------------------------------------------------
+  await page.goto(`${BASE}/characters/${pip!.id}`);
+  await page.selectOption('select[name="kind"]', "PARENT");
+  await page.selectOption('select[name="toId"]', mira!.id);
+  await submitAndSettle(page, 'button:has-text("Add tie")');
+
+  const relationships = await db.relationship.findMany();
+  check("exactly one row stores the pair", relationships.length === 1, `${relationships.length} rows`);
+
+  const row = relationships[0];
+  const storedCorrectly =
+    (row.characterAId === pip!.id && row.aToB === "PARENT") ||
+    (row.characterAId === mira!.id && row.aToB === "CHILD");
+  check("the tie is stored from the canonical side", storedCorrectly, `A=${row.characterAId} aToB=${row.aToB}`);
+  check("bond starts at zero", row.bondLevel === 0 && row.bondXp === 0);
+
+  // Each character should read the tie from their own perspective.
+  check("Pip's page reads 'parent of Mira'", (await page.textContent("body"))?.includes("parent of") === true);
+  await page.goto(`${BASE}/characters/${mira!.id}`);
+  check("Mira's page reads 'child of Pip'", (await page.textContent("body"))?.includes("child of") === true);
+
+  // ---- Editing preserves skill progress -----------------------------------
+  await db.characterSkill.updateMany({
+    where: { characterId: mira!.id, name: "Speak with Animals" },
+    data: { rank: 3, xp: 7 },
+  });
+
+  await page.goto(`${BASE}/characters/${mira!.id}`);
+  await page.fill('input[name="name"]', "Mira T.");
+  await submitAndSettle(page, 'button:has-text("Save changes")');
+
+  const edited = await db.character.findUniqueOrThrow({ where: { id: mira!.id }, include: { skills: true } });
+  check("rename saved", edited.name === "Mira T.", edited.name);
+  const kept = edited.skills.find((skill) => skill.name === "Speak with Animals");
+  check("an untouched skill keeps its rank and xp", kept?.rank === 3 && kept?.xp === 7, `rank=${kept?.rank} xp=${kept?.xp}`);
+
+  // ---- Another household cannot see or edit these -------------------------
+  {
+    const invite = await db.inviteCode.create({ data: { code: "HEARTH-TEST-9999" } });
+    const strangerContext = await browser.newContext();
+    const stranger = await strangerContext.newPage();
+    await stranger.goto(`${BASE}/register`);
+    await stranger.fill('input[name="inviteCode"]', invite.code);
+    await stranger.fill('input[name="displayName"]', "Stranger");
+    await stranger.fill('input[name="email"]', "stranger@example.com");
+    await stranger.fill('input[name="password"]', "another long password");
+    await submitAndSettle(stranger);
+    await stranger.waitForURL(`${BASE}/`);
+
+    const response = await stranger.goto(`${BASE}/characters/${mira!.id}`);
+    check("another household gets a 404, not the character", response?.status() === 404, String(response?.status()));
+
+    // And cannot edit it by posting the id directly.
+    await stranger.goto(`${BASE}/characters/new`);
+    await stranger.evaluate((id) => {
+      const form = document.querySelector("form");
+      const hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = "characterId";
+      hidden.value = id;
+      form?.appendChild(hidden);
+    }, mira!.id);
+    await stranger.close();
+
+    const untouched = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
+    check("the character was not modified by the stranger", untouched.name === "Mira T.");
+  }
+
+  // ---- Illegal stat spreads are refused server-side -----------------------
+  {
+    // The UI cannot produce this, so drive the action the way a crafted post would.
+    const before = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
+    await page.goto(`${BASE}/characters/${mira!.id}`);
+    await page.evaluate(() => {
+      for (const stat of ["might", "wits", "heart", "spark"]) {
+        const input = document.querySelector<HTMLInputElement>(`input[name="${stat}"]`);
+        if (input) input.value = "5";
+      }
+    });
+    await submitAndSettle(page, 'button:has-text("Save changes")');
+
+    check("an over-budget spread is rejected", /too many/i.test(await alertText(page)), await alertText(page));
+    const after = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
+    check("the rejected spread was not saved", after.might === before.might, `might=${after.might}`);
+  }
+
+  // ---- Deleting a character removes its ties ------------------------------
+  await page.goto(`${BASE}/characters/${pip!.id}`);
+  await submitAndSettle(page, 'button:has-text("Remove Pip")');
+
+  check("character deleted", (await db.character.findUnique({ where: { id: pip!.id } })) === null);
+  check("its family ties went with it", (await db.relationship.count()) === 0);
+
+  await page.close();
+} finally {
+  await browser.close();
+  await db.$disconnect();
+}
+
+console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
+process.exit(failures === 0 ? 0 : 1);

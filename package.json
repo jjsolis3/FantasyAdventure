@@ -15,7 +15,7 @@
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:e2e": "tsx tests/auth.e2e.mts"
+    "test:e2e": "tsx tests/auth.e2e.mts && tsx tests/characters.e2e.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.9.1",

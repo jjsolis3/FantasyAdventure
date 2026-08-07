@@ -58,6 +58,7 @@ model User {
   lockedUntil         DateTime?
 
   sessions       AuthSession[]
+  characters     Character[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
 
@@ -110,6 +111,114 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// Roughly how old the character is. Kept as bands rather than a number
+/// because it exists to tell the Game Master how to write them, not to do
+/// arithmetic with.
+enum AgeBand {
+  CHILD
+  TEEN
+  GROWNUP
+  ELDER
+}
+
+/// An adventurer. Characters belong to the account that made them, so on a
+/// shared screen one household owns the whole party.
+model Character {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  /// Free text, because "Fox-folk" should not be the limit of anyone's imagination.
+  race        String
+  /// The character's calling — Guardian, Trickster, Healer and so on.
+  archetype   String
+  gender      String?
+  /// Stored verbatim and used by the Game Master when narrating.
+  pronouns    String  @default("they/them")
+  ageBand     AgeBand @default(GROWNUP)
+  /// Appearance and manner, in the player's own words. Feeds the GM prompt.
+  description String?
+
+  // The four stats. Constrained by a point budget that is enforced in code
+  // (see lib/game/rules.ts) rather than by the database, so the rule can change
+  // without a migration invalidating characters that were already legal.
+  might Int @default(3)
+  wits  Int @default(3)
+  heart Int @default(3)
+  spark Int @default(3)
+
+  /// Earned through play. Level is derived from xp, never set directly.
+  xp    Int @default(0)
+  level Int @default(1)
+
+  skills        CharacterSkill[]
+  /// Relationships where this character is the "A" side, and the "B" side.
+  relationshipsA Relationship[]  @relation("RelationshipA")
+  relationshipsB Relationship[]  @relation("RelationshipB")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model CharacterSkill {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// Matches a skill key from lib/game/character-options.ts.
+  name String
+  rank Int    @default(1)
+  /// Progress toward the next rank, awarded when the skill is used well.
+  xp   Int    @default(0)
+
+  @@unique([characterId, name])
+  @@index([characterId])
+}
+
+/// How two characters are related. This is the heart of the family twist:
+/// bonds grow when characters help each other, and unlock Family Moves that
+/// neither can use alone.
+enum RelationshipKind {
+  PARENT
+  CHILD
+  SIBLING
+  GRANDPARENT
+  GRANDCHILD
+  PET
+  FRIEND
+}
+
+/// One row per pair, never two.
+///
+/// Storing both directions would mean two bond counters for one relationship,
+/// which will drift apart the moment anything writes to only one of them. The
+/// pair is stored with the lexicographically smaller character id as A, and
+/// `aToB` describes A's role toward B — B's role is derived by inverting it.
+model Relationship {
+  id String @id @default(cuid())
+
+  characterAId String
+  characterA   Character @relation("RelationshipA", fields: [characterAId], references: [id], onDelete: Cascade)
+  characterBId String
+  characterB   Character @relation("RelationshipB", fields: [characterBId], references: [id], onDelete: Cascade)
+
+  /// A's role toward B. "A is the PARENT of B."
+  aToB RelationshipKind
+
+  /// Rises through play. Family Moves unlock at thresholds.
+  bondLevel Int @default(0)
+  bondXp    Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([characterAId, characterBId])
+  @@index([characterBId])
 }
 
 /// A pre-authored adventure template. The AI improvises freely inside it,

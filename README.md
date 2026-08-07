@@ -8,9 +8,10 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 1 — Accounts
+## Status: Milestone 2 — The character builder
 
-The stack is deployable and invite-gated sign-in works. There is no game yet.
+Accounts work and the family can be built. There is no adventure to play yet —
+that arrives with the Game Master engine in M4.
 
 | | |
 |---|---|
@@ -21,7 +22,9 @@ The stack is deployable and invite-gated sign-in works. There is no game yet.
 | ✅ | **M0** Dockerfile + compose, ready for Coolify |
 | ✅ | **M1** Invite-only registration, password sign-in, server-side sessions |
 | ✅ | **M1** Admin invite management, profile and table preferences |
-| ⬜ | M2 character builder · M3 campaign setup · **M4 the Game Master engine** · M5 play UI |
+| ✅ | **M2** Character builder — stats, skills, race and calling |
+| ✅ | **M2** Family ties and the Bond mechanic |
+| ⬜ | M3 campaign setup · **M4 the Game Master engine** · M5 play UI |
 
 Four starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -35,7 +38,7 @@ logs:
 ```
 ══════════════════════════════════════════════════════════
   No accounts exist yet. Register the first one at /register
-  using this invite code:   HEARTH-K3M9-PQ7T
+  using this invite code:   HEARTH-XXXX-XXXX   <- yours will differ
   That account becomes the administrator.
 ══════════════════════════════════════════════════════════
 ```
@@ -43,6 +46,29 @@ logs:
 Open the **Logs** tab in Coolify, copy the code, and register at `/register`.
 That account becomes the administrator and can issue invites from `/invites`.
 Once anyone has registered, bootstrap codes stop being generated.
+
+### Characters and the family twist
+
+Build everyone at `/characters` — you choose who actually travels when an
+adventure begins, so it is fine to add the whole household.
+
+**Four stats, twelve points.** Might, Wits, Heart and **Spark**. Each runs 1–5
+and the twelve-point budget averages 3, so a character is competent everywhere
+unless you deliberately specialise. `Heart` is a first-class stat, not a
+throwaway — comforting someone is as valid a way through a scene as lifting a
+gate. The budget is enforced server-side, not just in the builder.
+
+**Race and calling are free text.** The lists are suggestions with a stat
+affinity attached; a child who wants to be a Cloud Baker can be one, and the
+Game Master will take it seriously.
+
+**Family ties are mechanical, not decoration.** Declare that Pip is Mira's
+parent and the game stores one row for the pair with a shared **Bond** counter.
+Bonds rise when characters help each other and unlock Family Moves that neither
+can use alone. Storing one row rather than two directions is deliberate: two
+counters for one relationship drift apart the moment anything writes to only
+one of them. The pair is keyed on the smaller character id, and each side reads
+the relationship from its own perspective.
 
 ### How sign-in works
 
@@ -205,6 +231,7 @@ app/
   login/ register/  Sign-in and invite-gated sign-up
   profile/          Display name, reading level, tone, password change
   invites/          Admin-only invite management
+  characters/       Party list, builder, and per-character editing
   page.tsx          Landing page; lists seeded storylines
 lib/
   db.ts             Prisma singleton (adapter-based, hot-reload safe)
@@ -214,12 +241,18 @@ lib/
     invites.ts      Code validation and redemption
     invite-code.ts  Pure generator — import-free so the seed can use it
     actions.ts      Server actions for every auth form
-components/         Shared UI and the site header
+  game/
+    rules.ts        Stat budget, bonds, levels, relationship algebra
+    character-options.ts  Races, callings and skills offered by the builder
+    actions.ts      Server actions for characters and family ties
+components/         Shared UI, site header, character builder
 tests/
-  password.test.ts  Unit tests
+  password.test.ts  Unit tests — hashing
+  rules.test.ts     Unit tests — stats, bonds, relationships
   auth.e2e.mts      Browser-driven auth flow
+  characters.e2e.mts  Browser-driven character builder
 prisma/
-  schema.prisma     User, InviteCode, AuthSession, Storyline, StorylineAct
+  schema.prisma     Accounts, characters, relationships, storylines
   seed.ts           Starter adventures + bootstrap invite
   migrations/
 Dockerfile          Multi-stage; standalone runtime
