@@ -221,6 +221,161 @@ const storylines = [
       },
     ],
   },
+  {
+    slug: "the-dragon-who-lost-her-name",
+    title: "The Dragon Who Lost Her Name",
+    tagline: "A young dragon can't remember her name, and without it she can't go home.",
+    premise:
+      "Dragons of the Cloudreach keep their names the way other creatures keep their hearts — " +
+      "lose it and you belong nowhere. A half-grown dragon has crash-landed in the valley with " +
+      "no memory of hers, and her clan's Naming Flight is in four days. The family must help " +
+      "her piece it back together from the few dragons who still remember her, most of whom " +
+      "would rather not talk about it.",
+    hook:
+      "The sound is enormous and then, suddenly, very small. In the wreck of the barley field " +
+      "sits a dragon the size of a pony, wings folded wrong, looking up with an expression that " +
+      "says she was hoping nobody saw that. 'Don't,' she says, when someone opens their mouth. " +
+      "'Don't ask me what I'm called.'",
+    defaultTone: "ADVENTUROUS",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 14,
+    acts: [
+      {
+        index: 1,
+        title: "The Dragon in the Barley",
+        goal: "Earn the dragon's trust. She is proud, frightened, and certain the family will hand her over to her clan. She should refuse help until someone admits to a failure of their own.",
+        beats: [
+          "She can breathe fire but flinches when she does, and will not say why",
+          "Her scales change colour with her mood and she hates that everyone can tell",
+          "She remembers a lullaby but not who sang it",
+        ],
+      },
+      {
+        index: 2,
+        title: "Three Dragons Who Remember",
+        goal: "Send the party to three dragons who each hold a fragment of her name. Each will trade only for something that costs the family real effort — never coin.",
+        beats: [
+          "The archivist dragon has the first syllable but has sworn not to speak it aloud",
+          "A rival her own age remembers it perfectly and is furious about being asked",
+          "The eldest of the clan is going deaf and will only answer a question asked kindly, twice",
+        ],
+      },
+      {
+        index: 3,
+        title: "The Naming Flight",
+        goal: "The family stands with her at the Flight. The clan expects her to arrive alone; arriving with a family is itself the answer nobody expected.",
+        beats: [
+          "The clan's law says only dragons may attend, and the law turns out to be younger than it claims",
+          "She has to say her name out loud in front of everyone who watched her lose it",
+          "She offers to carry the family home, and this time the landing is perfect",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "the-sleepover-at-marrow-house",
+    title: "The Sleepover at Marrow House",
+    tagline: "Two nights minding an old house. It creaks. It is definitely just creaking.",
+    premise:
+      "The family has agreed to look after Marrow House while its owner is away — feed the cat, " +
+      "water the ferns, don't mind the noises. The noises are considerable. Every spooky thing " +
+      "in the house turns out to have a lonely explanation and something that needs doing, and " +
+      "by the second night the house is on their side.",
+    hook:
+      "The note on the kitchen table is in careful, spidery handwriting. 'Cat eats at six. Ferns " +
+      "on Tuesdays. The knocking in the west hall is nothing to worry about — it stops if you " +
+      "knock back.' Underneath, in different ink, someone has added: 'Please do knock back.'",
+    defaultTone: "ADVENTUROUS",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 12,
+    acts: [
+      {
+        index: 1,
+        title: "First Night",
+        goal: "Build atmosphere and let the party be properly spooked — then have the first scare resolve into something harmless and a bit sad. Establish that nothing here wants to hurt them.",
+        beats: [
+          "Something knocks in the west hall in a rhythm, waiting to be answered",
+          "The cat stares at a doorway that is not there in the morning",
+          "A cold patch on the stairs turns out to be standing exactly where someone used to wait",
+        ],
+      },
+      {
+        index: 2,
+        title: "What the House Is Missing",
+        goal: "The house is trying to finish something. Reveal it through objects rather than explanation, and require different characters to notice different pieces.",
+        beats: [
+          "A cupboard refuses to open for anyone who has not apologised for something that day",
+          "A photograph has a person missing from it, and the gap is the shape of the cat",
+          "The knocking spells out a word if someone thinks to count it",
+        ],
+      },
+      {
+        index: 3,
+        title: "Second Night",
+        goal: "The family does the thing the house cannot do for itself. The resolution should be warm, not triumphant — nothing is defeated, something is finished.",
+        beats: [
+          "Every room the party was kind in stays lit; the ones they rushed stay dark",
+          "The last door needs everyone knocking at once",
+          "In the morning the house is quiet, and the note on the table is in fresh ink: 'Thank you.'",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "the-village-that-built-itself",
+    title: "The Village That Built Itself",
+    tagline: "Whatever you build in Thistlewick comes alive by morning. Something has been building at night.",
+    premise:
+      "In Thistlewick, anything you make with your hands wakes up overnight — a crooked birdhouse " +
+      "becomes a crooked bird, a stone wall learns to shuffle aside for friends. It is a lovely " +
+      "way to live until the village wakes to find structures nobody remembers making, growing " +
+      "a little larger each night. Someone is building in the dark, and they are not finished.",
+    hook:
+      "The gate you built yesterday says good morning. That part is normal. What is not normal " +
+      "is the staircase in the village square — forty steps of pale stone, going up, ending in " +
+      "nothing at all. Nobody built it. It was six steps shorter yesterday.",
+    defaultTone: "ADVENTUROUS",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 15,
+    acts: [
+      {
+        index: 1,
+        title: "What You Make, Wakes",
+        goal: "Let the party build things and discover what the village does with them. Everything they make should come back later. Reward invention over caution.",
+        beats: [
+          "The first thing a character builds develops a personality that matches its maker",
+          "Something built badly on purpose turns out to be exactly what is needed later",
+          "The staircase grows again overnight, and it is now clearly waiting for something",
+        ],
+      },
+      {
+        index: 2,
+        title: "The Night Builder",
+        goal: "Track the builder through what it makes rather than through clues. Its structures are unfinished versions of something it half-remembers.",
+        beats: [
+          "Each new structure is an attempt at a house, and each attempt is closer",
+          "It borrows materials, and always leaves something in exchange",
+          "A character who builds something *for* it gets the first real response",
+        ],
+      },
+      {
+        index: 3,
+        title: "Building Together",
+        goal: "The builder cannot finish alone — it has never seen a finished home. The party must build one with it, using things they made in Act 1.",
+        beats: [
+          "The plan needs more hands than the party has, so the things they built help",
+          "Someone has to decide what makes a house a home, out loud",
+          "The staircase finally leads somewhere, and it is the front door",
+        ],
+      },
+    ],
+  },
 ] as const;
 
 /**

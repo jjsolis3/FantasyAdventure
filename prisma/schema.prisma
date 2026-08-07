@@ -59,6 +59,7 @@ model User {
 
   sessions       AuthSession[]
   characters     Character[]
+  campaigns      Campaign[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
 
@@ -155,6 +156,7 @@ model Character {
   level Int @default(1)
 
   skills        CharacterSkill[]
+  partyMemberships PartyMember[]
   /// Relationships where this character is the "A" side, and the "B" side.
   relationshipsA Relationship[]  @relation("RelationshipA")
   relationshipsB Relationship[]  @relation("RelationshipB")
@@ -221,6 +223,69 @@ model Relationship {
   @@index([characterBId])
 }
 
+enum CampaignStatus {
+  /// Created, party chosen, but the first scene has not been narrated yet.
+  SETUP
+  ACTIVE
+  PAUSED
+  COMPLETE
+}
+
+/// One family's run through a storyline. The storyline is the sheet music;
+/// the campaign is the performance, and it can wander a long way from the page.
+model Campaign {
+  id      String @id @default(cuid())
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  storylineId String
+  storyline   Storyline @relation(fields: [storylineId], references: [id])
+
+  title String
+
+  /// Copied from the storyline and the owner's preferences at creation, then
+  /// owned by the campaign — changing your profile later must not silently
+  /// rewrite how an adventure in progress is narrated.
+  tone         Tone
+  readingLevel ReadingLevel
+
+  status          CampaignStatus @default(SETUP)
+  /// 1-based; tracks which act of the storyline the party is working through.
+  currentActIndex Int            @default(1)
+
+  /// Durable facts the Game Master accumulates — locations, NPCs meets, plot
+  /// threads. Empty until the engine lands in M4.
+  worldState Json @default("{}")
+
+  party PartyMember[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastPlayedAt DateTime?
+
+  @@index([ownerId])
+  @@index([storylineId])
+}
+
+/// A character travelling in a campaign. Characters outlive campaigns and may
+/// appear in several, so the party is a join rather than a field on Character.
+model PartyMember {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// Order the game asks "what do you do?" around the table.
+  position Int
+  joinedAt DateTime @default(now())
+
+  @@unique([campaignId, characterId])
+  @@index([characterId])
+}
+
 /// A pre-authored adventure template. The AI improvises freely inside it,
 /// but the acts give it a spine so the story goes somewhere.
 model Storyline {
@@ -238,6 +303,7 @@ model Storyline {
   estimatedScenes Int            @default(12)
   isActive        Boolean        @default(true)
   acts            StorylineAct[]
+  campaigns       Campaign[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 

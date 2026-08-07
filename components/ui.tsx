@@ -25,6 +25,8 @@ export function Field({
   name,
   type = "text",
   defaultValue,
+  value,
+  onChange,
   placeholder,
   error,
   hint,
@@ -35,19 +37,26 @@ export function Field({
   name: string;
   type?: string;
   defaultValue?: string;
+  /** Pass with `onChange` to drive the input from parent state. */
+  value?: string;
+  onChange?: (value: string) => void;
   placeholder?: string;
   error?: string;
   hint?: string;
   autoComplete?: string;
   required?: boolean;
 }) {
+  const controlled = value !== undefined && onChange !== undefined;
+
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-medium text-hearth-200">{label}</span>
       <input
         name={name}
         type={type}
-        defaultValue={defaultValue}
+        {...(controlled
+          ? { value, onChange: (event) => onChange(event.target.value) }
+          : { defaultValue })}
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}

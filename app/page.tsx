@@ -37,7 +37,7 @@ export default async function Home() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
-        eyebrow={user ? `Welcome back, ${user.displayName}` : "Milestone 1 · Accounts"}
+        eyebrow={user ? `Welcome back, ${user.displayName}` : "A family adventure"}
         title="Hearthlight"
         lead="A wholesome fantasy adventure for the whole family, guided by a Game Master who never gets tired and never says no to a silly idea."
       />
@@ -54,7 +54,21 @@ export default async function Home() {
         </Card>
       ) : (
         <>
-          {!user ? (
+          {user ? (
+            <div className="mb-8">
+              <Alert tone="info">
+                Ready when you are —{" "}
+                <Link href="/campaigns/new" className="underline hover:text-hearth-100">
+                  start an adventure
+                </Link>{" "}
+                or{" "}
+                <Link href="/characters" className="underline hover:text-hearth-100">
+                  build your family
+                </Link>
+                .
+              </Alert>
+            </div>
+          ) : (
             <div className="mb-8">
               <Alert tone="info">
                 <Link href="/login" className="underline hover:text-hearth-100">
@@ -63,7 +77,7 @@ export default async function Home() {
                 to build your party and begin an adventure.
               </Alert>
             </div>
-          ) : null}
+          )}
 
           <section>
             <div className="mb-6 flex items-baseline justify-between">
@@ -100,7 +114,7 @@ export default async function Home() {
       )}
 
       <footer className="mt-16 border-t border-hearth-800/50 pt-6 text-sm text-hearth-400">
-        Next up: the character builder.{" "}
+        Next up: the Game Master.{" "}
         <a href="/api/health" className="text-hearth-300 underline hover:text-hearth-200">
           Health check
         </a>

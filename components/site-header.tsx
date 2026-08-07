@@ -17,6 +17,9 @@ export async function SiteHeader() {
 
         {user ? (
           <>
+            <Link href="/campaigns" className="text-sm text-hearth-300 hover:text-hearth-100">
+              Adventures
+            </Link>
             <Link href="/characters" className="text-sm text-hearth-300 hover:text-hearth-100">
               Adventurers
             </Link>
