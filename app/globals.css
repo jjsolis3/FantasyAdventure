@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* Warm hearth palette — candlelight and old paper rather than the usual
+   dungeon-crawler black and blood red. The whole point is that this game feels
+   safe to sit down to with a seven-year-old. */
+@theme {
+  --color-hearth-50: #fdf8f0;
+  --color-hearth-100: #f8ecd9;
+  --color-hearth-200: #efd6b0;
+  --color-hearth-300: #e3b97e;
+  --color-hearth-400: #d69a52;
+  --color-hearth-500: #c67f35;
+  --color-hearth-600: #a9632a;
+  --color-hearth-700: #874b25;
+  --color-hearth-800: #5c3319;
+  --color-hearth-900: #3a2011;
+  --color-hearth-950: #241309;
+
+  --color-moss-400: #7fa374;
+  --color-moss-600: #4f7048;
+  --color-moss-800: #2f4a2c;
+
+  --font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(198, 127, 53, 0.18), transparent 70%),
+    var(--color-hearth-950);
+  color: var(--color-hearth-100);
+  min-height: 100dvh;
+}

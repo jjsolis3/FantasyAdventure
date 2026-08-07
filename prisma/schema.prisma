@@ -1,0 +1,72 @@
+// Hearthlight — database schema
+//
+// Milestone 0 establishes only what is needed to prove the stack end to end:
+// migrations run, a seed populates real data, and the app can query it.
+// Characters, campaigns, scenes and the turn log arrive in later milestones.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// How gentle the Game Master should be. Set per storyline as a default,
+/// later overridden per campaign.
+enum Tone {
+  /// Warm and low-stakes. Setbacks are inconveniences, never threats.
+  COZY
+  /// Real tension and real stakes, but still no gore and no death.
+  ADVENTUROUS
+}
+
+/// Drives vocabulary, sentence length and narration density in the GM prompt.
+enum ReadingLevel {
+  EARLY_READER
+  MIDDLE_GRADE
+  TEEN
+  /// Mixed-age table: narrate for the youngest, leave asides for the oldest.
+  FAMILY_MIXED
+}
+
+/// A pre-authored adventure template. The AI improvises freely inside it,
+/// but the acts give it a spine so the story goes somewhere.
+model Storyline {
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  title           String
+  tagline         String
+  premise         String
+  /// The opening situation the GM narrates in scene one.
+  hook            String
+  defaultTone     Tone           @default(COZY)
+  readingLevel    ReadingLevel   @default(FAMILY_MIXED)
+  minPlayers      Int            @default(2)
+  maxPlayers      Int            @default(5)
+  estimatedScenes Int            @default(12)
+  isActive        Boolean        @default(true)
+  acts            StorylineAct[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([isActive])
+}
+
+/// One act of a storyline. `beats` are optional waypoints the GM should try to
+/// reach — not a script. Players are free to ignore them entirely.
+model StorylineAct {
+  id          String    @id @default(cuid())
+  storylineId String
+  storyline   Storyline @relation(fields: [storylineId], references: [id], onDelete: Cascade)
+  /// 1-based position within the storyline.
+  index       Int
+  title       String
+  /// What this act is meant to accomplish, written as guidance to the GM.
+  goal        String
+  beats       String[]
+
+  @@unique([storylineId, index])
+  @@index([storylineId])
+}

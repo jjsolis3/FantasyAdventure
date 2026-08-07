@@ -1,0 +1,46 @@
+# Local development stack. Coolify users: see README — in Coolify you create the
+# Postgres resource separately and deploy the app from the Dockerfile, so only
+# the `app` service below has a Coolify equivalent.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hearthlight
+      POSTGRES_PASSWORD: hearthlight
+      POSTGRES_DB: hearthlight
+    volumes:
+      - hearthlight-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearthlight -d hearthlight"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      # Exposed only so you can point Prisma Studio or psql at it from the host.
+      - "127.0.0.1:5432:5432"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hearthlight:hearthlight@db:5432/hearthlight?schema=public
+      # Where the Game Master lives. Points at an AI server on the Docker host;
+      # change to the machine's LAN IP if the model runs on a different box.
+      AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
+      AI_MODEL: ${AI_MODEL:-llama3.1:8b}
+      AI_API_KEY: ${AI_API_KEY:-}
+    extra_hosts:
+      # Lets the container reach services listening on the host itself.
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+
+volumes:
+  hearthlight-db:
