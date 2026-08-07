@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { generateInviteCode } from "../lib/auth/invite-code.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set — cannot seed.");
@@ -222,6 +223,40 @@ const storylines = [
   },
 ] as const;
 
+/**
+ * Ensures there is a way to create the very first account.
+ *
+ * While the database has no users, an unredeemed bootstrap code is kept alive
+ * and printed to the container logs on every boot — so the first admin can be
+ * created by reading the Coolify logs, with no credentials baked into the image
+ * and no default password to forget about. Once anyone has registered, this
+ * stops running entirely.
+ */
+async function ensureBootstrapInvite() {
+  if ((await db.user.count()) > 0) return;
+
+  const existing = await db.inviteCode.findFirst({
+    where: { isBootstrap: true, redeemedById: null },
+  });
+
+  const invite =
+    existing ??
+    (await db.inviteCode.create({
+      data: {
+        code: generateInviteCode(),
+        isBootstrap: true,
+        note: "First administrator account",
+      },
+    }));
+
+  const banner = "═".repeat(58);
+  console.log(`\n${banner}`);
+  console.log("  No accounts exist yet. Register the first one at /register");
+  console.log(`  using this invite code:   ${invite.code}`);
+  console.log("  That account becomes the administrator.");
+  console.log(`${banner}\n`);
+}
+
 async function main() {
   console.log("Seeding storylines…");
 
@@ -244,6 +279,8 @@ async function main() {
 
   const total = await db.storyline.count();
   console.log(`Done. ${total} storylines available.`);
+
+  await ensureBootstrapInvite();
 }
 
 main()

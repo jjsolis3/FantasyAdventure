@@ -8,21 +8,62 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 0 — Foundations
+## Status: Milestone 1 — Accounts
 
-The stack is stood up and deployable end to end. There is no game yet.
+The stack is deployable and invite-gated sign-in works. There is no game yet.
 
 | | |
 |---|---|
-| ✅ | Next.js 16 (App Router) + TypeScript, standalone output |
-| ✅ | Postgres via Prisma 7 with the `@prisma/adapter-pg` driver adapter |
-| ✅ | Migrations + idempotent storyline seed on container start |
-| ✅ | `/api/health` reporting real database connectivity |
-| ✅ | Dockerfile + compose, ready for Coolify |
-| ⬜ | M1 accounts and invite codes · M2 character builder · M3 campaign setup · **M4 the Game Master engine** · M5 play UI |
+| ✅ | **M0** Next.js 16 (App Router) + TypeScript, standalone output |
+| ✅ | **M0** Postgres via Prisma 7 with the `@prisma/adapter-pg` driver adapter |
+| ✅ | **M0** Migrations + idempotent storyline seed on container start |
+| ✅ | **M0** `/api/health` reporting real database connectivity |
+| ✅ | **M0** Dockerfile + compose, ready for Coolify |
+| ✅ | **M1** Invite-only registration, password sign-in, server-side sessions |
+| ✅ | **M1** Admin invite management, profile and table preferences |
+| ⬜ | M2 character builder · M3 campaign setup · **M4 the Game Master engine** · M5 play UI |
 
 Four starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
+
+### Creating the first account
+
+Registration is invite-only, so the first account needs a code that nobody has
+yet. While the database has no users, every container start prints one to the
+logs:
+
+```
+══════════════════════════════════════════════════════════
+  No accounts exist yet. Register the first one at /register
+  using this invite code:   HEARTH-K3M9-PQ7T
+  That account becomes the administrator.
+══════════════════════════════════════════════════════════
+```
+
+Open the **Logs** tab in Coolify, copy the code, and register at `/register`.
+That account becomes the administrator and can issue invites from `/invites`.
+Once anyone has registered, bootstrap codes stop being generated.
+
+### How sign-in works
+
+- Passwords are hashed with **scrypt** (`N=2^15`), using Node's built-in
+  implementation. argon2id is the better algorithm on paper, but every Node
+  binding for it is a native module, and this image is Alpine/musl — the exact
+  packaging surface that already broke one deploy. The cost parameters are
+  stored inside each hash, so they can be raised later without invalidating
+  existing passwords.
+- Sessions are **server-side and revocable**. The cookie holds an opaque random
+  token; only its SHA-256 hash is stored, so a database dump cannot be replayed
+  as a login. Changing a password ends every other session.
+- Sign-in failures are **deliberately vague** ("Email or password is incorrect")
+  and take the same time whether or not the account exists, so the form cannot
+  be used to discover who has an account. Eight failures lock an account for
+  15 minutes.
+- The session cookie's `Secure` flag follows the proxy's `X-Forwarded-Proto`
+  rather than `NODE_ENV`. A fresh Coolify deployment is served over plain http
+  on an sslip.io domain, and a `Secure` cookie is silently dropped over http —
+  sign-in would appear to work and then bounce straight back to the login page.
+  Set `COOKIE_SECURE=true` to force it on.
 
 ---
 
@@ -84,6 +125,27 @@ docker compose up --build
 | `npm run prisma:migrate` | Create + apply a migration from schema changes |
 | `npm run prisma:studio` | Browse the database |
 | `npm run seed` | Re-seed storylines (idempotent) |
+| `npm test` | Unit tests (password hashing) |
+| `npm run test:e2e` | Browser-driven auth flow — see below |
+
+### Tests
+
+`npm test` runs standalone unit tests and needs nothing else.
+
+`npm run test:e2e` drives a real browser through registration, sign-in, invite
+handling, lockout and session revocation. It needs a running app **and a
+database with no accounts in it**, so it is destructive — point it at a scratch
+database, never your real one:
+
+```bash
+npm run build && npm start        # app on :3000
+E2E_BASE_URL=http://127.0.0.1:3000 npm run test:e2e
+```
+
+Playwright's browsers are not downloaded during `npm ci` (the Dockerfile sets
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, since the image never runs them). To run
+the E2E tests locally, install one with `npx playwright install chromium`, or
+point `CHROMIUM_PATH` at an existing Chromium binary.
 
 ---
 
@@ -115,6 +177,7 @@ In the application's **Environment Variables** tab:
 | `AI_API_KEY` | Usually blank for local servers |
 | `APP_VERSION` | Optional; surfaces on `/api/health` so you can tell which build is live |
 | `SEED_ON_START` | `true` (set `false` once you manage storylines by hand) |
+| `COOKIE_SECURE` | Optional. Leave unset — it follows `X-Forwarded-Proto` automatically. Set `true` to force secure cookies once you are on https. |
 
 ### 4. Health check and domain
 
@@ -139,11 +202,25 @@ containers cannot reach each other over `localhost`.
 ```
 app/
   api/health/       Health endpoint — reports real DB connectivity
+  login/ register/  Sign-in and invite-gated sign-up
+  profile/          Display name, reading level, tone, password change
+  invites/          Admin-only invite management
   page.tsx          Landing page; lists seeded storylines
-lib/db.ts           Prisma singleton (adapter-based, hot-reload safe)
+lib/
+  db.ts             Prisma singleton (adapter-based, hot-reload safe)
+  auth/
+    password.ts     scrypt hashing, parameters embedded per hash
+    session.ts      Server-side sessions, requireUser / requireAdmin
+    invites.ts      Code validation and redemption
+    invite-code.ts  Pure generator — import-free so the seed can use it
+    actions.ts      Server actions for every auth form
+components/         Shared UI and the site header
+tests/
+  password.test.ts  Unit tests
+  auth.e2e.mts      Browser-driven auth flow
 prisma/
-  schema.prisma     Storyline + StorylineAct
-  seed.ts           Four starter adventures
+  schema.prisma     User, InviteCode, AuthSession, Storyline, StorylineAct
+  seed.ts           Starter adventures + bootstrap invite
   migrations/
 Dockerfile          Multi-stage; standalone runtime
 docker-entrypoint.sh  Waits for Postgres, migrates, seeds, starts

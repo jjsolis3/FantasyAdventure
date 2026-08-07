@@ -4,6 +4,10 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# @playwright/test is a devDependency used by the end-to-end tests. Its
+# postinstall would otherwise pull ~400MB of browsers into a layer that never
+# runs them.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm ci
 
 # ---- Stage 2: build --------------------------------------------------------
@@ -47,7 +51,11 @@ RUN npm install --no-save --omit=optional \
 
 # Migration and seed inputs. The seed imports the generated client directly, so
 # it comes along too — the standalone server has its own copy bundled already.
+# lib/ is here because the seed reaches into lib/auth/invite-code.ts; that
+# module is deliberately import-free so it resolves by relative path, since the
+# `@/` tsconfig alias does not exist in this stage.
 COPY prisma ./prisma
+COPY lib ./lib
 COPY prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/generated ./generated
 
