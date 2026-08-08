@@ -8,11 +8,10 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 4 — The Game Master engine
+## Status: Milestone 5 — Playable
 
-The storyteller exists. It adjudicates, rolls, narrates and remembers. The play
-UI that puts it in front of your family is M5 — until then it is driven from
-the command line.
+It is a game. Gather round one screen, begin an adventure, and the storyteller
+sets the scene and asks each of you in turn. Progression and polish are M6/M7.
 
 | | |
 |---|---|
@@ -27,7 +26,8 @@ the command line.
 | ✅ | **M2** Family ties and the Bond mechanic |
 | ✅ | **M3** Campaign setup — storyline, party, tone and reading level |
 | ✅ | **M4** Four-stage turn pipeline, memory pyramid, safety guard, CLI harness |
-| ⬜ | M5 play UI · M6 progression · M7 polish |
+| ✅ | **M5** The table — streaming turn progress, dice reveals, transcript |
+| ⬜ | M6 progression · M7 polish |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -84,6 +84,37 @@ The order you pick the party in is the order the game asks "what do you do?"
 around the table. Party size is checked against the storyline's range, and the
 party is settled once the adventure leaves `SETUP`, so the transcript can never
 refer to somebody who is no longer there.
+
+### Playing
+
+`/campaigns/[id]/play` is the table. Everyone gathers round one screen.
+
+**Beginning.** The storyteller narrates the opening from the storyline's hook,
+names each character so everyone knows they are present, and leaves the party
+facing a situation.
+
+**A turn.** The game asks each character in turn — "Mira, what do you do?" —
+in the order the party was picked. Anything can be typed; nothing is refused.
+"Waits and watches" is always an option. A review step shows all the declared
+actions before they are sent, so a child who typed something by accident can
+change it.
+
+**While the storyteller thinks.** A turn is three model calls and can take a
+minute on a local model. Rather than a spinner, each stage is announced as it
+starts, and **the dice go out as soon as they are rolled** — which is the part
+everyone wants to see anyway. The roll tumbles briefly before settling.
+
+**Narration is not streamed token by token, deliberately.** It is checked
+against the safety guard before any of it is shown, and a guard that runs after
+the children have already read the text is not a guard. The client types it out
+on arrival instead, which reads as live without the risk.
+
+**If the model is unreachable** the table gets a plain explanation and a "Try
+again" button. Nothing is lost — the adventure sits exactly where it was.
+
+The transcript, the dice and every player's own words persist, so the game can
+be closed mid-scene and picked up next week. Closed chapters collapse into a
+"story so far" recap.
 
 ### How the Game Master works
 
@@ -277,6 +308,7 @@ docker compose up --build
 | `npm run seed` | Re-seed storylines (idempotent) |
 | `npm test` | Unit tests — hashing, rules, dice, prompts, provider |
 | `npm run gm:harness` | Run one Game Master turn against your model — see below |
+| `npm run mock:model` | A fake Ollama on :11499, so the play tests need no GPU |
 | `npm run test:e2e` | Browser-driven auth, characters and campaigns — see below |
 
 ### Tests
@@ -284,8 +316,10 @@ docker compose up --build
 `npm test` runs standalone unit tests and needs nothing else.
 
 `npm run test:e2e` drives a real browser through registration, sign-in, invite
-handling, lockout, session revocation, the character builder, family ties and
-campaign setup. It needs a running app **and a database with no accounts in
+handling, lockout, session revocation, the character builder, family ties,
+campaign setup and a complete played turn. The play suite talks to
+`npm run mock:model` rather than a real model, so it needs no GPU — start that
+on :11499 and point the app at `AI_BASE_URL=http://127.0.0.1:11499/v1`. It needs a running app **and a database with no accounts in
 it**, so it is destructive — point it at a scratch database, never your real
 one. Each suite assumes it starts from an empty accounts table, so reset
 between runs:
@@ -362,7 +396,8 @@ app/
   profile/          Display name, reading level, tone, password change
   invites/          Admin-only invite management
   characters/       Party list, builder, and per-character editing
-  campaigns/        Adventure list, setup flow, and campaign page
+  campaigns/        Adventure list, setup flow, campaign page, and the table
+  api/campaigns/[id]/turn/  SSE endpoint that runs and streams a turn
   page.tsx          Landing page; lists seeded storylines
 lib/
   db.ts             Prisma singleton (adapter-based, hot-reload safe)
@@ -400,6 +435,8 @@ tests/
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
+  play.e2e.mts        Browser-driven play, against the mock model
+  mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines
   seed.ts           Starter adventures + bootstrap invite
