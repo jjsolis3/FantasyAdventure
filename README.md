@@ -275,6 +275,12 @@ adapter rather than being bent into the OpenAI shape.
 
 ### Choosing a model
 
+**[docs/ollama.md](docs/ollama.md) is the step-by-step runbook** — verifying the
+server, making it reachable from the container, the context-window setting that
+quietly breaks the pipeline, and the exact `ollama pull` commands per VRAM tier.
+Start there if the storyteller cannot be reached or the practice turn is
+reporting JSON failures.
+
 The model matters more than anything else in this repo. The pipeline assumes it
 can hold a scene in its head and return schema-valid JSON on request.
 
@@ -294,9 +300,11 @@ real bar. Recommended, in rough order of preference given a single consumer GPU:
 | `gemma2:9b` | Good narration; watch its shorter context window |
 | `llama3.1:8b` | The safe floor — competent, widely tested |
 
-Whatever you run, check the **context window** Ollama is actually using.
-`phi3:mini` defaults to 4k, which the memory pyramid will exhaust within a few
-scenes. `ollama show <model>` reports it.
+Whatever you run, check the **context window** Ollama is actually using — this
+is the single most common cause of a model looking worse than it is. Ollama caps
+`num_ctx` at 2048–4096 regardless of what the model supports, and truncates from
+the front of the prompt, which is where the rules and JSON instructions live.
+`ollama show <model>` reports it; [docs/ollama.md](docs/ollama.md) has the fix.
 
 Because the provider is just an OpenAI-compatible base URL, a hosted model can
 be dropped in by changing `AI_BASE_URL` and `AI_API_KEY` — useful for comparing
@@ -343,10 +351,19 @@ to be both good prose and valid JSON is where local models fall apart.
 
 ### A note on exposing your AI
 
-Do **not** port-forward Ollama to the internet. It ships with no
-authentication, so anyone who finds the port gets free use of your GPU. Only
-the web app needs a public URL — it reaches the AI over your LAN. If the model
-ever lives on a different machine, use Tailscale rather than a port-forward.
+Do **not** port-forward Ollama to the internet, and do not leave it listening on
+a public address. It ships with **no authentication of any kind** — anyone who
+reaches port 11434 gets unlimited use of your GPU, can list your models, and can
+delete them. Port 11434 is on every scanner's default list; exposed instances get
+found in hours. There is no TLS either, so prompts — which here contain your
+family's characters and story — travel in plaintext.
+
+Only the web app needs a public URL. If the model lives on a different machine,
+connect the two with [Tailscale](https://tailscale.com), or put an
+authenticating reverse proxy in front of Ollama. The app already sends
+`Authorization: Bearer <key>` when an API key is set, so a token-checking proxy
+needs no code changes. [docs/ollama.md § 2b](docs/ollama.md#2b-when-ollama-is-on-a-different-network)
+has both, with the exact commands.
 
 ---
 

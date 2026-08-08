@@ -101,7 +101,7 @@ export function StorytellerForm({
             value={baseUrl}
             onChange={setBaseUrl}
             error={state?.fieldErrors?.baseUrl}
-            hint="Include the /v1 at the end."
+            hint="Include the /v1 at the end. Use the server's LAN address — localhost means the app's own container, not your machine."
           />
 
           <Field

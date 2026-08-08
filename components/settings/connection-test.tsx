@@ -3,9 +3,19 @@
 import { useState } from "react";
 import { Alert } from "@/components/ui";
 
+type Reach = {
+  role: "main" | "narration";
+  model: string;
+  ok: boolean;
+  latencyMs?: number;
+  reply?: string;
+  error?: string;
+};
+
 type Result = {
   config?: { kind: string; baseUrl: string; model: string; narrationModel: string; hasApiKey: boolean };
-  reach?: { ok: boolean; latencyMs: number; reply: string };
+  /** One entry per model checked — a second one appears when narration is routed separately. */
+  reach?: Reach[];
   turn?: {
     narration: string;
     checks: { characterName: string; stat: string; roll: number; total: number; target: number; outcome: string }[];
@@ -79,7 +89,8 @@ export function ConnectionTest({
           const stage = String((data as { stage?: string }).stage ?? "");
           if (stage) setStep(`Practice turn — ${stage}…`);
         } else if (event === "config") setResult((r) => ({ ...r, config: data as Result["config"] }));
-        else if (event === "reach") setResult((r) => ({ ...r, reach: data as Result["reach"] }));
+        else if (event === "reach")
+          setResult((r) => ({ ...r, reach: [...(r.reach ?? []), data as unknown as Reach] }));
         else if (event === "turn") setResult((r) => ({ ...r, turn: data as Result["turn"] }));
         else if (event === "error") setResult((r) => ({ ...r, error: String(data.message) }));
       });
@@ -160,10 +171,19 @@ export function ConnectionTest({
         </dl>
       ) : null}
 
-      {result.reach ? (
-        <p className="mt-4 text-sm text-moss-400">
-          Answered in {result.reach.latencyMs}ms — “{result.reach.reply}”
-        </p>
+      {result.reach && result.reach.length > 0 ? (
+        <ul className="mt-4 space-y-1 text-sm">
+          {result.reach.map((reach) => (
+            <li key={reach.role} className={reach.ok ? "text-moss-400" : "text-red-300"}>
+              <span className="text-hearth-400">
+                {reach.role === "narration" ? "Narration" : "Dice and memory"} ({reach.model}):{" "}
+              </span>
+              {reach.ok
+                ? `answered in ${reach.latencyMs}ms — “${reach.reply}”`
+                : `failed — ${reach.error}`}
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       {result.turn ? (

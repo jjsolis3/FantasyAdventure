@@ -5,6 +5,7 @@ import { SETTINGS_ID, resolveAiConfig } from "@/lib/ai/settings";
 import { modelCalls } from "@/lib/engine/play";
 import { runTurn } from "@/lib/engine/gm";
 import { buildContext } from "@/lib/ai/context";
+import { sseResponse } from "@/lib/http/sse";
 import type { StatKey } from "@/lib/game/rules";
 
 export const dynamic = "force-dynamic";
@@ -28,28 +29,21 @@ export async function POST(request: Request) {
   if (admin instanceof Response) return admin;
 
   const body = (await request.json().catch(() => ({}))) as { deep?: boolean };
-  const encoder = new TextEncoder();
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let closed = false;
-      const send = (event: string, data: unknown) => {
-        if (closed) return;
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      };
+  return sseResponse(async (send) => {
+    const record = async (ok: boolean, note: string) => {
+      await db.aiSetting
+        .update({
+          where: { id: SETTINGS_ID },
+          data: { lastTestedAt: new Date(), lastTestOk: ok, lastTestNote: note.slice(0, 500) },
+        })
+        .catch(() => {
+          // Settings may not be saved yet; the test still reports its result.
+        });
+    };
 
-      const record = async (ok: boolean, note: string) => {
-        await db.aiSetting
-          .update({
-            where: { id: SETTINGS_ID },
-            data: { lastTestedAt: new Date(), lastTestOk: ok, lastTestNote: note.slice(0, 500) },
-          })
-          .catch(() => {
-            // Settings may not be saved yet; the test still reports its result.
-          });
-      };
-
-      try {
+    try {
+      {
         send("step", { step: "config", label: "Reading settings…" });
         const config = await resolveAiConfig();
         send("config", {
@@ -61,18 +55,63 @@ export async function POST(request: Request) {
         });
 
         // ---- Reachability -------------------------------------------------
-        send("step", { step: "reach", label: "Saying hello…" });
-        const started = Date.now();
-        const reply = await chat(config, {
-          messages: [{ role: "user", content: "Reply with the single word: ready" }],
-          maxTokens: 10,
-          temperature: 0,
-        });
-        const latency = Date.now() - started;
-        send("reach", { ok: true, latencyMs: latency, reply: reply.trim().slice(0, 120) });
+        //
+        // Both models, not just the first. When narration is routed to a
+        // second model, a check that only greets the main one reports success
+        // for a configuration that cannot finish a turn — the JSON stages
+        // work, and the game dies at the narration step with a message about
+        // a model nobody tested.
+        const probes: { role: "main" | "narration"; model: string }[] = [
+          { role: "main", model: config.model },
+        ];
+        if (config.narrationModel !== config.model) {
+          probes.push({ role: "narration", model: config.narrationModel });
+        }
+
+        let slowest = 0;
+        for (const probe of probes) {
+          send("step", {
+            step: `reach:${probe.role}`,
+            label:
+              probes.length === 1
+                ? "Saying hello…"
+                : `Saying hello to the ${probe.role === "main" ? "dice and memory" : "narration"} model…`,
+          });
+
+          const started = Date.now();
+          try {
+            const reply = await chat(config, {
+              model: probe.model,
+              messages: [{ role: "user", content: "Reply with the single word: ready" }],
+              maxTokens: 10,
+              temperature: 0,
+            });
+            const latency = Date.now() - started;
+            slowest = Math.max(slowest, latency);
+            send("reach", {
+              role: probe.role,
+              model: probe.model,
+              ok: true,
+              latencyMs: latency,
+              reply: reply.trim().slice(0, 120),
+            });
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            send("reach", { role: probe.role, model: probe.model, ok: false, error: detail });
+
+            const note =
+              probe.role === "narration"
+                ? `The narration model (${probe.model}) failed, even though ${config.model} answered. ${detail}`
+                : detail;
+            await record(false, note);
+            send("error", { message: note });
+            return;
+          }
+        }
 
         if (!body.deep) {
-          await record(true, `Reachable in ${latency}ms.`);
+          const summary = probes.map((probe) => probe.model).join(" and ");
+          await record(true, `${summary} reachable in ${slowest}ms.`);
           send("done", { ok: true });
           return;
         }
@@ -188,22 +227,11 @@ export async function POST(request: Request) {
             : problems.join(" ");
         await record(problems.length === 0, note);
         send("done", { ok: problems.length === 0 });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Something went wrong.";
-        await record(false, message);
-        send("error", { message });
-      } finally {
-        closed = true;
-        controller.close();
       }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Something went wrong.";
+      await record(false, message);
+      send("error", { message });
+    }
   });
 }

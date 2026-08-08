@@ -19,8 +19,25 @@ const server = createServer((request, response) => {
   let raw = "";
   request.on("data", (chunk) => (raw += chunk));
   request.on("end", () => {
-    const body = JSON.parse(raw || "{}") as { messages?: { content: string }[] };
+    const body = JSON.parse(raw || "{}") as { messages?: { content: string }[]; model?: string };
     const prompt = (body.messages ?? []).map((message) => message.content).join("\n");
+
+    // Any model named "…cannot-load" fails the way Ollama does when a blob is
+    // missing, corrupt, or unreadable: a 500 from a server that is otherwise
+    // perfectly reachable. This is how the settings test proves it checks
+    // every configured model rather than only the first.
+    if ((body.model ?? "").includes("cannot-load")) {
+      response.writeHead(500, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          error: {
+            message: `unable to load model: /models/blobs/sha256-${"0".repeat(12)}`,
+            type: "api_error",
+          },
+        }),
+      );
+      return;
+    }
 
     let content: string;
 

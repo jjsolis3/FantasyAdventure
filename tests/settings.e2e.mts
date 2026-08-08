@@ -104,14 +104,43 @@ try {
 
   // ---- The quick check reaches the mock -----------------------------------
   await page.click('button:has-text("Quick check")');
-  await page.waitForSelector("text=/Answered in/", { timeout: 30_000 });
-  check("the quick check reports a reply", /Answered in \d+ms/.test((await page.textContent("body")) ?? ""));
+  await page.waitForSelector("text=/answered in/", { timeout: 30_000 });
+  check("the quick check reports a reply", /answered in \d+ms/.test((await page.textContent("body")) ?? ""));
 
   await waitFor("the test result to be recorded", async () => {
     const row = await db.aiSetting.findUnique({ where: { id: "singleton" } });
     return row?.lastTestOk === true;
   });
   check("the result was recorded", (await db.aiSetting.findUniqueOrThrow({ where: { id: "singleton" } })).lastTestOk === true);
+
+  // ---- A broken narration model must fail the quick check -----------------
+  //
+  // The regression this pins: the check used to greet only the main model, so
+  // a configuration whose narration model could not load reported success and
+  // then died mid-turn, naming a model the test had never touched.
+  await page.fill('input[name="narrationModel"]', "model-that-cannot-load");
+  await submitAndSettle(page, 'button:has-text("Save settings")');
+
+  await page.click('button:has-text("Quick check")');
+  await page.waitForSelector("text=/failed —/", { timeout: 30_000 });
+  const withBadNarration = (await page.textContent("body")) ?? "";
+  check(
+    "the quick check names the narration model that failed",
+    /model-that-cannot-load/.test(withBadNarration),
+  );
+  check(
+    "the quick check still reports the working main model",
+    /mock-model/.test(withBadNarration),
+  );
+
+  await waitFor("the failure to be recorded", async () => {
+    const row = await db.aiSetting.findUnique({ where: { id: "singleton" } });
+    return row?.lastTestOk === false;
+  });
+
+  // Put it back so the practice turn below runs against a working pair.
+  await page.fill('input[name="narrationModel"]', "");
+  await submitAndSettle(page, 'button:has-text("Save settings")');
 
   // ---- The practice turn runs the whole pipeline --------------------------
   await page.click('button:has-text("Run a practice turn")');
