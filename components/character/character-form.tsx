@@ -5,6 +5,7 @@ import { createCharacterAction, updateCharacterAction } from "@/lib/game/actions
 import type { FormState } from "@/lib/auth/actions";
 import { AGE_BANDS, ARCHETYPES, PRONOUN_PRESETS, RACES, findArchetype, findRace } from "@/lib/game/character-options";
 import { SKILLS_PER_CHARACTER, type StatBlock, type StatKey } from "@/lib/game/rules";
+import { generateName } from "@/lib/game/names";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { StatAllocator } from "./stat-allocator";
@@ -118,6 +119,7 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
   const [state, formAction] = useActionState<FormState, FormData>(action, null);
   const saved = mode === "edit" && state !== null && state.error === "";
 
+  const [name, setName] = useState(initial.name);
   const [race, setRace] = useState(initial.race);
   const [archetype, setArchetype] = useState(initial.archetype);
   const [pronouns, setPronouns] = useState(initial.pronouns);
@@ -155,7 +157,28 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
       {saved ? <Alert tone="success">Saved.</Alert> : null}
 
       <div className="space-y-5">
-        <Field label="Name" name="name" defaultValue={initial.name} error={state?.fieldErrors?.name} placeholder="Mira Thistledown" />
+        <div>
+          <Field
+            label="Name"
+            name="name"
+            value={name}
+            onChange={setName}
+            error={state?.fieldErrors?.name}
+            placeholder="Mira Thistledown"
+          />
+          <button
+            type="button"
+            onClick={() => setName(generateName({ race, archetype }))}
+            className="mt-2 rounded-lg border border-hearth-700 px-3 py-1.5 text-sm text-hearth-200 transition-colors hover:border-hearth-600 hover:bg-hearth-800/50"
+          >
+            🎲 Surprise me
+          </button>
+          <span className="ml-3 text-sm text-hearth-400">
+            {race || archetype
+              ? "Suggestions follow your race and calling."
+              : "Pick a race and calling first for names that suit them."}
+          </span>
+        </div>
 
         <ChoiceField label="Race" name="race" options={RACES} value={race} onChange={setRace} error={state?.fieldErrors?.race} />
         <ChoiceField
