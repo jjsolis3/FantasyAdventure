@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { probe, readAiConfig } from "@/lib/ai/provider";
+import { probe } from "@/lib/ai/provider";
+import { resolveAiConfig } from "@/lib/ai/settings";
 
 // Always hit the database rather than serving a cached "healthy" from build time.
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   let ai: { configured: boolean; model?: string; reachable?: boolean; detail?: string };
 
   try {
-    const config = readAiConfig();
+    const config = await resolveAiConfig();
     ai = { configured: true, model: config.model };
     if (wantsAiProbe) {
       const result = await probe(config);

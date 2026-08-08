@@ -245,6 +245,34 @@ Plain `/api/health` only reports whether the model is configured — a live prob
 on every Coolify poll would hammer your GPU, and the app is deliberately still
 "healthy" with the model down.
 
+### Settings, and switching to a cloud model
+
+`/settings/storyteller` (admin only) configures the storyteller from the
+browser, so the model can be changed **without a redeploy**. Presets are
+included for Ollama, Anthropic, OpenAI, OpenRouter and Groq.
+
+Settings are stored in the database and take over from the environment
+variables once saved. The environment remains the fallback, so a fresh
+deployment works before anyone opens the page.
+
+**Two tests, and the second is the one that matters.** A quick check says
+whether the model answers at all. *Run a practice turn* drives the real
+four-step pipeline against a synthetic scene and reports what would break:
+whether it could produce usable JSON for the dice, whether anything would ever
+be remembered, how many retries it needed, and how many words it wrote. A model
+can pass the quick check and still be unable to run the game.
+
+**API keys are encrypted at rest.** The encryption key lives in
+`SETTINGS_SECRET` in the environment, never in the database, so a database dump
+or a stray backup does not hand over a working key. Without that variable set,
+the page refuses to store a key rather than saving it in the clear — local
+models need no key, so everything else still works. The key is never sent back
+to the browser; the page shows only a hint like `sk-ant…4f2a`.
+
+Anthropic speaks a different wire format from everything else (`/v1/messages`,
+its own auth header, system prompt as a separate field), so it has its own
+adapter rather than being bent into the OpenAI shape.
+
 ### Choosing a model
 
 The model matters more than anything else in this repo. The pipeline assumes it
@@ -450,6 +478,8 @@ app/
   page.tsx          Landing page; lists seeded storylines
 lib/
   db.ts             Prisma singleton (adapter-based, hot-reload safe)
+  settings/
+    secret-box.ts   AES-256-GCM for keys stored in the database
   auth/
     password.ts     scrypt hashing, parameters embedded per hash
     session.ts      Server-side sessions, requireUser / requireAdmin
@@ -457,7 +487,8 @@ lib/
     invite-code.ts  Pure generator — import-free so the seed can use it
     actions.ts      Server actions for every auth form
   ai/
-    provider.ts     OpenAI-compatible client, streaming and not
+    provider.ts     OpenAI-compatible and Anthropic clients
+    settings.ts     Resolves config: database first, environment as fallback
     prompts.ts      The tone contract and every stage's prompt
     context.ts      The memory pyramid and token budgeting
     schemas.ts      Zod contracts the model must satisfy
@@ -488,6 +519,8 @@ tests/
   campaigns.e2e.mts   Browser-driven campaign setup
   play.e2e.mts        Browser-driven play, against the mock model
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
+  settings.e2e.mts    Browser-driven storyteller settings and connection test
+  settings.test.ts    Unit tests — key encryption and the Anthropic adapter
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

@@ -20,7 +20,11 @@ export type ChatOptions = {
   signal?: AbortSignal;
 };
 
+export type ProviderKind = "OPENAI_COMPATIBLE" | "ANTHROPIC";
+
 export type AiConfig = {
+  /** Which wire format the endpoint speaks. */
+  kind: ProviderKind;
   baseUrl: string;
   apiKey: string | null;
   /** Default model, and the one used for structured work. */
@@ -52,6 +56,7 @@ export function readAiConfig(env: NodeJS.ProcessEnv = process.env): AiConfig {
   if (!model) throw new AiUnavailableError("AI_MODEL is not set, e.g. qwen2.5:latest");
 
   return {
+    kind: (env.AI_PROVIDER ?? "").trim().toUpperCase() === "ANTHROPIC" ? "ANTHROPIC" : "OPENAI_COMPATIBLE",
     baseUrl,
     apiKey: env.AI_API_KEY?.trim() || null,
     model,
@@ -84,8 +89,74 @@ function bodyFor(config: AiConfig, options: ChatOptions, stream: boolean) {
   };
 }
 
+/**
+ * Anthropic's Messages API.
+ *
+ * Kept as a separate function rather than bent into the OpenAI shape: the
+ * differences (auth header, version header, system prompt as a top-level
+ * field, content returned as blocks) are structural, and pretending otherwise
+ * would produce a translation layer that breaks quietly.
+ */
+async function anthropicChat(config: AiConfig, options: ChatOptions): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  options.signal?.addEventListener("abort", () => controller.abort(), { once: true });
+
+  // Anthropic takes the system prompt separately from the conversation.
+  const system = options.messages.filter((message) => message.role === "system").map((m) => m.content).join("\n\n");
+  const messages = options.messages
+    .filter((message) => message.role !== "system")
+    .map((message) => ({ role: message.role as "user" | "assistant", content: message.content }));
+
+  try {
+    const response = await fetch(`${config.baseUrl}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": config.apiKey ?? "",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: options.model ?? config.model,
+        max_tokens: options.maxTokens ?? 800,
+        temperature: options.temperature ?? 0.7,
+        ...(system ? { system } : {}),
+        messages: messages.length > 0 ? messages : [{ role: "user" as const, content: "Continue." }],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new AiUnavailableError(`Anthropic returned ${response.status}. ${detail.slice(0, 300)}`);
+    }
+
+    const payload = (await response.json()) as { content?: { type?: string; text?: string }[] };
+    const text = (payload.content ?? [])
+      .filter((block) => block.type === "text")
+      .map((block) => block.text ?? "")
+      .join("");
+
+    if (!text) throw new AiUnavailableError("Anthropic returned no text content.");
+    return text;
+  } catch (error) {
+    if (error instanceof AiUnavailableError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new AiUnavailableError(
+        `Anthropic did not answer within ${Math.round(config.timeoutMs / 1000)}s.`,
+        error,
+      );
+    }
+    throw new AiUnavailableError(`Could not reach Anthropic at ${config.baseUrl}.`, error);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** One non-streaming completion. Returns the assistant's message content. */
 export async function chat(config: AiConfig, options: ChatOptions): Promise<string> {
+  if (config.kind === "ANTHROPIC") return anthropicChat(config, options);
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
@@ -146,6 +217,13 @@ export async function* chatStream(
   config: AiConfig,
   options: ChatOptions,
 ): AsyncGenerator<string, void, unknown> {
+  if (config.kind === "ANTHROPIC") {
+    // Anthropic streams a different event vocabulary. Nothing in the turn
+    // pipeline streams (narration is checked before it is shown), so rather
+    // than carry an untested second implementation this says so plainly.
+    throw new AiUnavailableError("Streaming is not implemented for Anthropic; use chat().");
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   options.signal?.addEventListener("abort", () => controller.abort(), { once: true });

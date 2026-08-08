@@ -11,7 +11,8 @@ import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/con
 import { openingPrompt, summaryPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
 import { summarySchema, validator } from "@/lib/ai/schemas";
 import { requestStructured } from "@/lib/ai/json";
-import { chat, readAiConfig, type AiConfig } from "@/lib/ai/provider";
+import { chat, type AiConfig } from "@/lib/ai/provider";
+import { resolveAiConfig } from "@/lib/ai/settings";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
 import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { xpForOutcome } from "@/lib/engine/dice";
@@ -270,7 +271,7 @@ export async function beginCampaign(
   if (campaign.status !== "SETUP") throw new Error("This adventure has already begun.");
   if (campaign.party.length === 0) throw new Error("Nobody is in the party.");
 
-  const config = readAiConfig();
+  const config = await resolveAiConfig();
   const records: AiCallRecord[] = [];
   const calls = modelCalls(config, (record) => records.push(record));
 
@@ -395,7 +396,7 @@ export async function playTurn(
 
   const validMove = familyMove ? await validateFamilyMove(campaign, familyMove, scene.id) : null;
 
-  const config = readAiConfig();
+  const config = await resolveAiConfig();
   const records: AiCallRecord[] = [];
   const calls = modelCalls(config, (record) => records.push(record));
 

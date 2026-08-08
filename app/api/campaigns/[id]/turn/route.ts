@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/session";
+import { requireUserForApi } from "@/lib/auth/session";
 import { beginCampaign, playTurn, type FamilyMoveChoice, type PlayerAction } from "@/lib/engine/play";
 import type { TurnProgress } from "@/lib/engine/gm";
 
@@ -24,7 +24,8 @@ export const maxDuration = 300;
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireUser();
+  const user = await requireUserForApi();
+  if (user instanceof Response) return user;
 
   const body = (await request.json().catch(() => ({}))) as {
     mode?: "begin" | "turn";
