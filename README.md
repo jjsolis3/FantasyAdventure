@@ -66,6 +66,15 @@ gate. The budget is enforced server-side, not just in the builder.
 affinity attached; a child who wants to be a Cloud Baker can be one, and the
 Game Master will take it seriously.
 
+**Names can be rolled.** "Surprise me" suggests a name shaped by both the race
+and the calling — a Dwarf Guardian tends to come out a Thrain Ironhollow, a
+Fox-folk Trickster a Vix Winkwood. It is a pure function rather than an AI
+call: this button gets pressed ten times in a row while a child decides whether
+they are a Pip or a Poppy, so it has to be instant and has to keep working when
+the model server is asleep. Given names are mixed rather than split by gender,
+so any name suits anyone, and a race the generator has never heard of still
+gets something sensible.
+
 **Family ties are mechanical, not decoration.** Declare that Pip is Mira's
 parent and the game stores one row for the pair with a shared **Bond** counter.
 Bonds rise when one of them genuinely helps the other, and unlock **Family
@@ -460,6 +469,7 @@ lib/
     play.ts         Wires the pipeline to the database
   game/
     rules.ts        Stat budget, bonds, levels, skills, Family Moves
+    names.ts        Name suggestions shaped by race and calling
     character-options.ts  Races, callings and skills offered by the builder
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
@@ -469,6 +479,7 @@ scripts/
 tests/
   password.test.ts  Unit tests — hashing
   rules.test.ts     Unit tests — stats, bonds, relationships
+  names.test.ts     Unit tests — the name generator
   engine.test.ts    Unit tests — dice, JSON repair, context, safety
   gm.test.ts        Unit tests — the pipeline, with a stubbed model
   provider.test.ts  Unit tests — wire format, against a mock server
