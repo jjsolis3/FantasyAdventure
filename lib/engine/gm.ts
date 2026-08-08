@@ -45,6 +45,11 @@ export type ModelCalls = {
   prose: (system: string, prompt: string) => Promise<string>;
 };
 
+/** Emitted as the pipeline advances, so a slow turn does not look like a hang. */
+export type TurnProgress =
+  | { type: "stage"; stage: "adjudicating" | "rolling" | "narrating" | "extracting" }
+  | { type: "dice"; checks: CheckResult[] };
+
 export type TurnResult = {
   adjudication: Adjudication;
   checks: CheckResult[];
@@ -87,6 +92,7 @@ export async function runTurn(
   input: TurnInput,
   calls: ModelCalls,
   roller?: () => number,
+  onProgress?: (event: TurnProgress) => void,
 ): Promise<TurnResult> {
   const diagnostics: TurnResult["diagnostics"] = {
     adjudicationRepairs: 0,
@@ -102,6 +108,7 @@ export async function runTurn(
   }));
 
   // ---- 1. Adjudicate -------------------------------------------------------
+  onProgress?.({ type: "stage", stage: "adjudicating" });
   let adjudication: Adjudication = { checks: [], automatic: [] };
   try {
     const result = await requestStructured({
@@ -132,6 +139,7 @@ export async function runTurn(
   }
 
   // ---- 2. Roll -------------------------------------------------------------
+  onProgress?.({ type: "stage", stage: "rolling" });
   const checks: CheckResult[] = [];
   for (const requested of adjudication.checks) {
     const member = findMember(input.party, requested.character);
@@ -151,7 +159,12 @@ export async function runTurn(
     checks.push(resolveCheck(request, member.stats, roller));
   }
 
+  // The dice go out before the narration is written. On a local model that
+  // wait is 20-40 seconds, and watching the rolls land is the fun part anyway.
+  onProgress?.({ type: "dice", checks });
+
   // ---- 3. Narrate ----------------------------------------------------------
+  onProgress?.({ type: "stage", stage: "narrating" });
   const resolutions = [
     ...checks.map(describeResult),
     ...adjudication.automatic.map((entry) => `${entry.character}: ${entry.effect} (happens automatically)`),
@@ -183,6 +196,7 @@ export async function runTurn(
   }
 
   // ---- 4. Extract ----------------------------------------------------------
+  onProgress?.({ type: "stage", stage: "extracting" });
   let extraction: Extraction = {
     sceneTitle: null,
     location: null,

@@ -13,7 +13,7 @@ import { summarySchema, validator } from "@/lib/ai/schemas";
 import { requestStructured } from "@/lib/ai/json";
 import { chat, readAiConfig, type AiConfig } from "@/lib/ai/provider";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
-import { runTurn, type ModelCalls } from "@/lib/engine/gm";
+import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { xpForOutcome } from "@/lib/engine/dice";
 import { bondLevelFor, kindFromPerspective, levelFor, type StatKey } from "@/lib/game/rules";
 
@@ -251,7 +251,11 @@ async function nextOrdinal(sceneId: string): Promise<number> {
  * Separate from `playTurn` because there are no player actions yet and nothing
  * to adjudicate — just the storyline's hook, turned into prose.
  */
-export async function beginCampaign(campaignId: string, userId: string) {
+export async function beginCampaign(
+  campaignId: string,
+  userId: string,
+  onProgress?: (event: TurnProgress) => void,
+) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
   if (campaign.status !== "SETUP") throw new Error("This adventure has already begun.");
@@ -267,6 +271,7 @@ export async function beginCampaign(campaignId: string, userId: string) {
     readingLevel: campaign.readingLevel as ReadingLevelKey,
   });
 
+  onProgress?.({ type: "stage", stage: "narrating" });
   let narration = await calls.prose(
     system,
     openingPrompt({ context: built.text, hook: campaign.storyline.hook }),
@@ -310,7 +315,12 @@ export async function beginCampaign(campaignId: string, userId: string) {
 export type PlayerAction = { characterId: string; text: string };
 
 /** Runs one party turn and commits everything it produced. */
-export async function playTurn(campaignId: string, userId: string, actions: PlayerAction[]) {
+export async function playTurn(
+  campaignId: string,
+  userId: string,
+  actions: PlayerAction[],
+  onProgress?: (event: TurnProgress) => void,
+) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
   if (campaign.status !== "ACTIVE") throw new Error("This adventure is not in progress.");
@@ -358,6 +368,8 @@ export async function playTurn(campaignId: string, userId: string, actions: Play
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
     },
     calls,
+    undefined,
+    onProgress,
   );
 
   const turnCounter = campaign.turnCounter + 1;

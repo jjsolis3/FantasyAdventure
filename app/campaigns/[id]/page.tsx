@@ -163,10 +163,26 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         </Card>
 
         <Card>
-          <Alert tone="info">
-            The storyteller arrives in the next milestone. Everything here is saved and waiting —
-            when the Game Master engine lands, this adventure will begin from the hook above.
-          </Alert>
+          {campaign.party.length === 0 ? (
+            <Alert tone="info">Choose a party below before the adventure can begin.</Alert>
+          ) : (
+            <>
+              <h2 className="font-display mb-2 text-xl text-hearth-100">
+                {campaign.status === "SETUP" ? "Ready when you are" : "Pick up where you left off"}
+              </h2>
+              <p className="mb-4 text-sm text-hearth-400">
+                {campaign.status === "SETUP"
+                  ? "Gather everyone round one screen. The storyteller will set the scene, then ask each of you in turn."
+                  : `${campaign.turnCounter} ${campaign.turnCounter === 1 ? "turn" : "turns"} so far.`}
+              </p>
+              <Link
+                href={`/campaigns/${campaign.id}/play`}
+                className="inline-block rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
+              >
+                {campaign.status === "SETUP" ? "Begin the adventure" : "Continue the adventure"}
+              </Link>
+            </>
+          )}
         </Card>
 
         {campaign.status === "SETUP" ? (

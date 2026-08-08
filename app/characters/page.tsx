@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 import { STATS, STAT_INFO, kindFromPerspective, RELATIONSHIP_LABELS } from "@/lib/game/rules";
 import { AGE_BANDS } from "@/lib/game/character-options";
+import { LevelBadge } from "@/components/character/level-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -69,40 +70,49 @@ export default async function CharactersPage() {
             return (
               <li key={character.id}>
                 <Card className="transition-colors hover:border-hearth-700">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <Link
-                      href={`/characters/${character.id}`}
-                      className="font-display text-xl text-hearth-100 hover:text-hearth-50"
-                    >
-                      {character.name}
-                    </Link>
-                    <span className="text-sm text-hearth-300">
-                      {ageLabel(character.ageBand)} {character.race} {character.archetype}
-                    </span>
-                    <span className="text-xs text-hearth-400">{character.pronouns}</span>
+                  {/* The badge sits in its own column so a long name wraps
+                      beside it rather than pushing it off the card. */}
+                  <div className="flex items-start gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <Link
+                          href={`/characters/${character.id}`}
+                          className="font-display text-xl text-hearth-100 hover:text-hearth-50"
+                        >
+                          {character.name}
+                        </Link>
+                        <span className="text-sm text-hearth-300">
+                          {ageLabel(character.ageBand)} {character.race} {character.archetype}
+                        </span>
+                        <span className="text-xs text-hearth-400">{character.pronouns}</span>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-3">
+                        {STATS.map((stat) => (
+                          <span key={stat} className="text-sm text-hearth-300">
+                            <span className="text-hearth-400">{STAT_INFO[stat].label}</span>{" "}
+                            {character[stat]}
+                          </span>
+                        ))}
+                      </div>
+
+                      {character.skills.length > 0 ? (
+                        <p className="mt-3 text-sm text-hearth-200/60">
+                          {character.skills.map((skill) => skill.name).join(" · ")}
+                        </p>
+                      ) : null}
+
+                      {relations.length > 0 ? (
+                        <p className="mt-3 text-sm text-hearth-400">
+                          {relations
+                            .map((relation) => `${RELATIONSHIP_LABELS[relation.kind]} ${relation.other.name}`)
+                            .join(" · ")}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <LevelBadge xp={character.xp} />
                   </div>
-
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    {STATS.map((stat) => (
-                      <span key={stat} className="text-sm text-hearth-300">
-                        <span className="text-hearth-400">{STAT_INFO[stat].label}</span> {character[stat]}
-                      </span>
-                    ))}
-                  </div>
-
-                  {character.skills.length > 0 ? (
-                    <p className="mt-3 text-sm text-hearth-200/60">
-                      {character.skills.map((skill) => skill.name).join(" · ")}
-                    </p>
-                  ) : null}
-
-                  {relations.length > 0 ? (
-                    <p className="mt-3 text-sm text-hearth-400">
-                      {relations
-                        .map((relation) => `${RELATIONSHIP_LABELS[relation.kind]} ${relation.other.name}`)
-                        .join(" · ")}
-                    </p>
-                  ) : null}
                 </Card>
               </li>
             );
