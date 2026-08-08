@@ -135,6 +135,33 @@ export async function requireAdmin(): Promise<SessionUser> {
 }
 
 /**
+ * Guards for route handlers.
+ *
+ * `requireUser` and `requireAdmin` redirect, which is right for a page and
+ * wrong for an API: a POST that redirects looks like a success to `fetch`,
+ * which follows it and reports 200. These return a 403 instead, so refusal is
+ * unambiguous to a caller and to a test.
+ */
+export async function requireUserForApi(): Promise<SessionUser | Response> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return Response.json({ error: "You need to be signed in." }, { status: 401 });
+  }
+  return user;
+}
+
+export async function requireAdminForApi(): Promise<SessionUser | Response> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return Response.json({ error: "You need to be signed in." }, { status: 401 });
+  }
+  if (user.role !== "ADMIN") {
+    return Response.json({ error: "Administrators only." }, { status: 403 });
+  }
+  return user;
+}
+
+/**
  * Constant-time string comparison for user-supplied secrets such as invite
  * codes, so a timing difference cannot be used to guess them character by
  * character.

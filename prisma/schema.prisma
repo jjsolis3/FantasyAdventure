@@ -469,6 +469,47 @@ model FamilyMoveUse {
   @@index([campaignId])
 }
 
+enum AiProviderKind {
+  /// Anything speaking OpenAI's /v1/chat/completions: Ollama, vLLM, LM Studio,
+  /// OpenAI itself, OpenRouter, Groq, Together, DeepSeek.
+  OPENAI_COMPATIBLE
+  /// Anthropic's /v1/messages, which is a different shape entirely.
+  ANTHROPIC
+}
+
+/// The storyteller's connection settings, editable from the admin UI so the
+/// model can be changed without a redeploy.
+///
+/// A single row, pinned to id "singleton". Environment variables remain the
+/// fallback, so a fresh deployment works before anyone visits the settings page.
+model AiSetting {
+  id String @id @default("singleton")
+
+  kind    AiProviderKind @default(OPENAI_COMPATIBLE)
+  baseUrl String
+  model   String
+  /// Optional second model used only for narration.
+  narrationModel String?
+
+  /// AES-256-GCM ciphertext. The key lives in the environment, never the
+  /// database, so a database dump alone cannot reveal it.
+  apiKeyCipher String?
+  /// Kept so the UI can show "sk-ant-…4f2a" without decrypting anything.
+  apiKeyHint   String?
+
+  maxContextTokens Int @default(3000)
+  timeoutMs        Int @default(120000)
+
+  /// Result of the last connection test, so the page can show the state it was
+  /// left in rather than looking untested after every reload.
+  lastTestedAt DateTime?
+  lastTestOk   Boolean?
+  lastTestNote String?
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
 /// A pre-authored adventure template. The AI improvises freely inside it,
 /// but the acts give it a spine so the story goes somewhere.
 model Storyline {

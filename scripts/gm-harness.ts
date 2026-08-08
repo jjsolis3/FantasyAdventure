@@ -16,6 +16,8 @@
 import "dotenv/config";
 import { buildContext } from "../lib/ai/context.ts";
 import { probe, readAiConfig } from "../lib/ai/provider.ts";
+// The harness reads the environment rather than the database on purpose: it is
+// for comparing models offline, without needing the app or Postgres running.
 import { runTurn, type TurnInput } from "../lib/engine/gm.ts";
 import { modelCalls, type AiCallRecord } from "../lib/engine/play.ts";
 import type { StatKey } from "../lib/game/rules.ts";
