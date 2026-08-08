@@ -351,10 +351,19 @@ to be both good prose and valid JSON is where local models fall apart.
 
 ### A note on exposing your AI
 
-Do **not** port-forward Ollama to the internet. It ships with no
-authentication, so anyone who finds the port gets free use of your GPU. Only
-the web app needs a public URL — it reaches the AI over your LAN. If the model
-ever lives on a different machine, use Tailscale rather than a port-forward.
+Do **not** port-forward Ollama to the internet, and do not leave it listening on
+a public address. It ships with **no authentication of any kind** — anyone who
+reaches port 11434 gets unlimited use of your GPU, can list your models, and can
+delete them. Port 11434 is on every scanner's default list; exposed instances get
+found in hours. There is no TLS either, so prompts — which here contain your
+family's characters and story — travel in plaintext.
+
+Only the web app needs a public URL. If the model lives on a different machine,
+connect the two with [Tailscale](https://tailscale.com), or put an
+authenticating reverse proxy in front of Ollama. The app already sends
+`Authorization: Bearer <key>` when an API key is set, so a token-checking proxy
+needs no code changes. [docs/ollama.md § 2b](docs/ollama.md#2b-when-ollama-is-on-a-different-network)
+has both, with the exact commands.
 
 ---
 

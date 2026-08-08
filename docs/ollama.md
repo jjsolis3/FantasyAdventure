@@ -1,8 +1,11 @@
 # Setting up Ollama for Hearthlight
 
-Everything here is run **on the Ubuntu server where Ollama lives**, over SSH,
-unless a step says otherwise. Work through it in order — each section assumes
-the one before it passed.
+Everything here is run **on the machine where Ollama lives**, over SSH, unless a
+step says otherwise. That is not necessarily the Coolify server — in a typical
+setup Coolify runs the app and the database on one box, and Ollama runs on
+whichever machine has the GPU.
+
+Work through it in order; each section assumes the one before it passed.
 
 If you only read one section, read [Context window](#4-context-window--the-one-that-actually-bites).
 It is the setting most likely to make the game misbehave in a way that looks
@@ -10,20 +13,56 @@ like a bad model rather than a bad configuration.
 
 ---
 
-## 0. First: what is your server's real IP address?
+## 0. First: which address, and is it private?
 
 `http://192.168.1.50:11434/v1` is the **example value** shipped in
 `.env.example`. If that address is what the settings page shows, confirm it is
-genuinely your server before debugging anything else — a wrong IP produces
+genuinely your machine before debugging anything else — a wrong address produces
 exactly the "could not reach the model server" error, and no amount of Ollama
 tuning fixes it.
 
+On the Ollama machine:
+
 ```bash
-hostname -I
+hostname -I        # its address(es) on the local network
+curl -s ifconfig.me; echo    # the public address the internet sees
 ```
 
-The first address on that line is normally the LAN address. Use it everywhere
-below in place of `<SERVER_IP>`.
+**These two answer different questions, and which one you should use depends on
+whether they match.**
+
+| What you see | What it means | Which address to use |
+|---|---|---|
+| `hostname -I` gives `192.168.x.x` / `10.x.x.x` / `172.16–31.x.x`, and `ifconfig.me` gives something different | Normal home or office network. The machine is behind a router. | The **private** one from `hostname -I` — if the Coolify server is on the same network |
+| Both give the same public address | A cloud VPS or a directly-connected machine | See [Section 2b](#2b-when-ollama-is-on-a-different-network) — it needs protecting |
+
+### The private ranges, for reference
+
+Only these three blocks are private. Everything else is internet-routable:
+
+```
+10.0.0.0     – 10.255.255.255
+172.16.0.0   – 172.31.255.255
+192.168.0.0  – 192.168.255.255
+```
+
+If the address you are about to put in the settings page is **not** in one of
+those ranges, stop and read section 2b before going further. A public address
+means either the traffic leaves your network, or the address is your router's
+and Ollama is not actually there.
+
+### If the Coolify server and Ollama are on the same network
+
+Use the private address, not the public one. Two reasons:
+
+1. Traffic stays inside your network — no port-forward, nothing exposed.
+2. **Many routers cannot route a request from inside back to their own public
+   address** (this is called NAT hairpinning, and consumer routers often drop
+   it). So pointing the app at your own WAN IP frequently fails even when
+   everything is configured correctly, in a way that is genuinely baffling to
+   debug.
+
+Use the private address everywhere below in place of `<AI_HOST>`.
 
 ---
 
@@ -115,12 +154,149 @@ sudo ufw allow from 192.168.1.0/24 to any port 11434 proto tcp
 
 Adjust `192.168.1.0/24` to match your own subnet.
 
-> **Do not port-forward 11434 through your router.** Ollama has no
-> authentication of any kind. Anyone who finds the port gets unrestricted use of
-> your GPU and can read every model you have pulled. Only the Hearthlight web
-> app needs a public address. If the AI ever moves to a different machine,
-> connect them with [Tailscale](https://tailscale.com) rather than a
-> port-forward.
+If the Coolify server is on the same network, that is everything — skip to
+section 3. If it is not, read on.
+
+---
+
+## 2b. When Ollama is on a different network
+
+`OLLAMA_HOST=0.0.0.0` opens the port to whatever can route to that machine. On a
+home LAN behind a router, that is your own devices. On a machine with a public
+address, **that is the entire internet.**
+
+Ollama has no authentication of any kind. Not a password, not a token, not an
+allowlist. Anyone who connects to port 11434 can:
+
+- run unlimited inference on your GPU, indefinitely, at your electricity cost
+- list every model you have pulled
+- **pull new models**, filling your disk
+- **delete your models** (`DELETE /api/delete`)
+
+Port 11434 is in every internet-wide scanner's default list. Exposed instances
+get found in hours, not months. There is also no TLS: prompts travel in
+plaintext, and Hearthlight's prompts contain your children's character names and
+everything that happens in your family's story.
+
+So: **do not port-forward 11434, and do not leave a public-IP Ollama open.**
+Pick one of the two options below instead.
+
+### Option A — Tailscale (recommended)
+
+A private encrypted network between just your machines. No port-forward, no
+open ports, nothing exposed to scanners. Free for personal use, and about ten
+minutes of work.
+
+On **both** the Ollama machine and the Coolify server:
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+Each prints a URL — open it, sign in with the same account for both. Then:
+
+```bash
+tailscale ip -4        # this machine's tailnet address, a 100.x.x.x
+tailscale status       # confirms both machines see each other
+```
+
+On the Ollama machine, bind Ollama to the tailnet address specifically rather
+than to everything, and firewall the rest:
+
+```bash
+sudo systemctl edit ollama
+```
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_KEEP_ALIVE=30m"
+```
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+
+# Only the tailnet may reach the port
+sudo ufw allow in on tailscale0 to any port 11434 proto tcp
+sudo ufw deny 11434/tcp
+sudo ufw enable
+```
+
+Then use the Ollama machine's `100.x.x.x` address in the settings page:
+
+```
+http://100.x.x.x:11434/v1
+```
+
+The app's container reaches it through the Coolify host's routing table, since
+bridge-networked containers route outbound traffic via the host. Confirm from
+the container's Terminal in Coolify with the `node -e` command in section 3.
+
+If that fails, the container is not picking up the host's tailnet route. The
+reliable fix is to bind the app's traffic to the host network, or to run
+Tailscale as a sidecar container next to the app — but test first, because the
+default usually works.
+
+### Option B — an authenticated reverse proxy
+
+If Tailscale is not an option, put something in front of Ollama that checks a
+token, and let nothing reach Ollama directly.
+
+This works neatly because **Hearthlight already sends
+`Authorization: Bearer <key>`** whenever an API key is configured. So a proxy
+that validates that header needs no application changes at all — set the key on
+the settings page and it is sent with every call.
+
+On the Ollama machine, with [Caddy](https://caddyserver.com) installed:
+
+```caddy
+# /etc/caddy/Caddyfile
+ai.example.com {
+    @unauthorized not header Authorization "Bearer PUT_A_LONG_RANDOM_STRING_HERE"
+    respond @unauthorized 401
+
+    reverse_proxy 127.0.0.1:11434
+}
+```
+
+```bash
+sudo systemctl reload caddy
+```
+
+Generate the token with `openssl rand -base64 32`.
+
+Then lock Ollama itself to loopback so the proxy is the only way in — this is
+the default, so simply **do not** set `OLLAMA_HOST=0.0.0.0` in this
+configuration — and firewall accordingly:
+
+```bash
+sudo ufw allow 443/tcp
+sudo ufw deny 11434/tcp
+```
+
+In the settings page use `https://ai.example.com/v1` and paste the token into
+the API key field. Caddy obtains a TLS certificate automatically, so the traffic
+is encrypted, which plain Ollama never is.
+
+> Storing that key requires `SETTINGS_SECRET` to be set in Coolify's environment
+> variables — the app encrypts keys at rest and refuses to store one otherwise.
+> Generate it with `openssl rand -base64 32`.
+
+Narrow it further if the Coolify server has a fixed address:
+
+```bash
+sudo ufw allow from <COOLIFY_SERVER_IP> to any port 443 proto tcp
+```
+
+### What not to do
+
+| Approach | Why not |
+|---|---|
+| Port-forward 11434 on the router | No auth, no TLS, found by scanners within hours |
+| Public IP + `OLLAMA_HOST=0.0.0.0`, no proxy | Same, minus the router |
+| Cloudflare Tunnel to Ollama with no access policy | Hides the IP, still unauthenticated |
+| Firewall allowlist by IP alone, on a residential connection | Home IPs change; the game breaks at renewal |
 
 ---
 
@@ -134,13 +310,13 @@ not, so test the one that matters.
 
 ```bash
 # Native API — confirms reachability and lists installed models
-curl http://<SERVER_IP>:11434/api/tags
+curl http://<AI_HOST>:11434/api/tags
 
 # The OpenAI-compatible path the app actually calls
-curl http://<SERVER_IP>:11434/v1/models
+curl http://<AI_HOST>:11434/v1/models
 
 # A real completion through that path
-curl http://<SERVER_IP>:11434/v1/chat/completions \
+curl http://<AI_HOST>:11434/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen2.5:latest",
@@ -158,7 +334,7 @@ This is the definitive test — it is the only network path that matters. Open
 the container's **Terminal** in Coolify and run:
 
 ```sh
-node -e "fetch('http://<SERVER_IP>:11434/v1/models').then(r=>r.text()).then(console.log).catch(e=>console.log('FAIL',e.message))"
+node -e "fetch('http://<AI_HOST>:11434/v1/models').then(r=>r.text()).then(console.log).catch(e=>console.log('FAIL',e.message))"
 ```
 
 `node` is used rather than `curl` because the runtime image is
@@ -326,7 +502,7 @@ In `/settings/storyteller`:
 | Field | Value |
 |---|---|
 | Provider | Ollama (local) |
-| Address | `http://<SERVER_IP>:11434/v1` — note the `/v1` |
+| Address | `http://<AI_HOST>:11434/v1` — note the `/v1` |
 | Model | `hearth-gm` (your Modelfile variant, not the base name) |
 | Narration model | `hearth-narrator`, or blank to use the same one |
 | API key | leave empty — Ollama needs none |
@@ -342,7 +518,7 @@ not more configuration.
 You can also compare models from a shell without touching the UI:
 
 ```bash
-AI_BASE_URL=http://<SERVER_IP>:11434/v1 AI_MODEL=hearth-gm npm run gm:harness
+AI_BASE_URL=http://<AI_HOST>:11434/v1 AI_MODEL=hearth-gm npm run gm:harness
 ```
 
 ---
