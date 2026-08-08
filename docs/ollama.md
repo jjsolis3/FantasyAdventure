@@ -66,6 +66,116 @@ Use the private address everywhere below in place of `<AI_HOST>`.
 
 ---
 
+## Windows Server — read this instead of sections 1, 2 and 6
+
+Sections 1, 2 and 6 assume Linux. On Windows Server the same three things have to
+be true — the process runs, it listens on more than loopback, and it uses the
+GPU if there is one — but the commands differ, and Windows adds one failure mode
+Linux does not have.
+
+A quick tell that you are on Windows: `hostname -I` replies
+
+```
+hostname: Using the hostname command to set the hostname of the machine is not
+supported. Use the Network control panel application to set the hostname.
+```
+
+Windows' `hostname.exe` reads *any* argument as an attempt to rename the machine.
+Use `ipconfig` instead.
+
+### The Windows-only failure: Ollama is not a service
+
+**On Windows, Ollama installs as a tray application that runs under the logged-in
+user, not as a Windows service.** On a server you administer over RDP, this means
+Ollama stops when you log off — the game works while you are connected and breaks
+after you disconnect, which is a genuinely confusing way to fail.
+
+Install [NSSM](https://nssm.cc/download), then register it properly. In an
+elevated PowerShell:
+
+```powershell
+# Find where Ollama actually installed
+Get-Command ollama | Select-Object -ExpandProperty Source
+
+nssm install Ollama "C:\Users\<you>\AppData\Local\Programs\Ollama\ollama.exe" serve
+nssm set Ollama AppEnvironmentExtra `
+    OLLAMA_HOST=0.0.0.0:11434 `
+    OLLAMA_MODELS=C:\ollama\models `
+    OLLAMA_KEEP_ALIVE=30m
+nssm start Ollama
+
+Get-Service Ollama
+```
+
+`OLLAMA_MODELS` is not optional here. Models default to
+`C:\Users\<you>\.ollama\models`, but a service running as LocalSystem looks in
+`C:\Windows\System32\config\systemprofile\.ollama` instead — so models you
+already pulled appear to vanish the moment Ollama becomes a service. Setting an
+explicit path avoids that, and lets you put the models on whichever volume has
+room.
+
+Task Scheduler with *Run whether user is logged on or not* also works if you
+would rather not install NSSM.
+
+### Checking it, on Windows
+
+```powershell
+ollama --version
+Get-Service Ollama
+
+# What address is it bound to? 0.0.0.0 good, 127.0.0.1 unreachable from outside
+Get-NetTCPConnection -LocalPort 11434 | Select-Object LocalAddress, State
+
+# Does it answer locally?
+Invoke-RestMethod http://localhost:11434/api/tags
+```
+
+`curl.exe` also exists on Windows Server 2019 and behaves like Linux `curl` — but
+plain `curl` in PowerShell is an alias for `Invoke-WebRequest`, which takes
+different arguments. Type `curl.exe` explicitly, or use `Invoke-RestMethod`.
+
+### Environment variables without NSSM
+
+If Ollama runs as a tray app rather than a service, set the variables machine-wide
+and restart it:
+
+```powershell
+[Environment]::SetEnvironmentVariable('OLLAMA_HOST','0.0.0.0:11434','Machine')
+[Environment]::SetEnvironmentVariable('OLLAMA_KEEP_ALIVE','30m','Machine')
+```
+
+Then quit Ollama from the system tray and start it again — the process reads these
+only at launch.
+
+### Firewall
+
+```powershell
+New-NetFirewallRule -DisplayName "Ollama (Hearthlight)" `
+    -Direction Inbound -Protocol TCP -LocalPort 11434 `
+    -RemoteAddress <COOLIFY_SERVER_IP> -Action Allow
+```
+
+**`-RemoteAddress` is the important part.** Without it the rule allows the port
+from anywhere the machine is reachable, which on a public-facing server is the
+whole internet. If the machine already sits behind a source-restricted perimeter
+firewall, confirm that restriction covers **port 11434 specifically** and not just
+80 and 443 — a rule that opens a new port is a new rule, and it does not inherit
+the old one's source list.
+
+### GPU check
+
+```powershell
+Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM
+nvidia-smi          # if an NVIDIA GPU is present
+ollama ps           # PROCESSOR column: 100% GPU is what you want
+```
+
+On a virtual machine without GPU passthrough there is no GPU, and everything runs
+on the CPU. Read the next section before choosing a model — it changes the answer
+completely.
+
+---
+
 ## 1. Is Ollama running at all?
 
 ```bash
@@ -394,6 +504,73 @@ pipeline; raise it only if you have VRAM to spare, since context costs memory.
 
 ---
 
+## 4b. Will it be fast enough? Measure before you choose a model
+
+**Without a GPU, this pipeline is slow enough to change the answer about whether
+to self-host at all.** Not broken — slow. Worth knowing before you spend an
+evening tuning Modelfiles.
+
+One Hearthlight turn is **three** model calls (adjudicate → narrate → extract),
+and each one re-reads the whole assembled prompt. So a turn costs three prompt
+reads plus three generations, not one of each.
+
+### Measure it, don't estimate it
+
+```bash
+ollama run qwen2.5:latest --verbose "Write three sentences about a fox."
+```
+
+The `--verbose` output ends with the two numbers that matter:
+
+- **`prompt eval rate`** — how fast it reads the prompt. The memory pyramid sends
+  roughly 3000 tokens per call, so 3000 ÷ this rate is the read time per call.
+- **`eval rate`** — how fast it writes. Narration is ~500 tokens.
+
+Rough per-turn arithmetic:
+
+```
+turn ≈ 3 × (3000 / prompt_eval_rate)  +  (250 + 500 + 250) / eval_rate
+```
+
+Also check `ollama ps` immediately afterwards. If the PROCESSOR column says
+anything other than `100% GPU`, you are on CPU.
+
+### What the numbers mean
+
+| Combined per-turn time | What it feels like at the table |
+|---|---|
+| Under 30s | Fine. The pause is part of the drama. |
+| 30–90s | Workable, but expect the kids to wander off between turns. |
+| 2–5 min | Frustrating. One scene takes an evening. |
+| Over 5 min | Not playable with children. |
+
+### What to expect on a CPU-only server
+
+On a mid-2010s server Xeon — 8 cores, quad-channel DDR4, no GPU — token
+generation is limited by memory bandwidth rather than clock speed, and prompt
+reading is limited by cores. A 7–8B model at Q4 typically lands around 4–6
+tokens/second generating and 15–30 tokens/second reading, which works out to
+**roughly 6–12 minutes per turn**. A 3B model roughly halves that and is still
+too slow, while being too small to hold the tone contract and return valid JSON.
+
+Treat those figures as a starting hypothesis, not a verdict — run the command
+above and use your own numbers. But if they land anywhere near that range, the
+honest options are:
+
+1. **Add a GPU** to the machine (or move Ollama to a machine that has one). Even
+   a modest 8GB card takes a 7B model from minutes to seconds.
+2. **Use a cloud model.** The settings page already supports this, and for a
+   family game the cost is small — see [Cost, if you use a cloud model](#cost-if-you-use-a-cloud-model)
+   below.
+3. **Play asynchronously.** Turns resolve over minutes rather than seconds. This
+   is a real option for a slower, letter-writing style of game, but it is not the
+   around-the-table experience the app was built for.
+
+There is no prompt tuning that recovers a 10× speed gap. Do not spend time on
+Modelfiles until the measurement says the hardware can keep up.
+
+---
+
 ## 5. Which models to pull
 
 You already have `phi3:latest`, `gemma3`, `qwen2.5:latest` and `llama3.1`.
@@ -523,12 +700,82 @@ AI_BASE_URL=http://<AI_HOST>:11434/v1 AI_MODEL=hearth-gm npm run gm:harness
 
 ---
 
+## Cost, if you use a cloud model
+
+If section 4b says the hardware cannot keep up, this is the alternative — and for
+a family game it is cheaper than people expect. The settings page already supports
+it; nothing needs redeploying.
+
+### What one turn costs
+
+A turn is three calls. The memory pyramid budgets ~3000 tokens of content per
+call, and with the system prompt, tone contract and output-format instructions on
+top, a turn comes to roughly **10,500 input tokens and 1,100 output tokens**.
+
+| Configuration | Per turn | 20-turn session | Weekly play, per month |
+|---|---|---|---|
+| Haiku 4.5 throughout | ~$0.016 | ~$0.32 | ~$1.30 |
+| Haiku for dice + memory, Sonnet 5 for narration | ~$0.029 | ~$0.58 | ~$2.30 |
+| Sonnet 5 throughout | ~$0.048 | ~$0.96 | ~$3.80 |
+
+Prices used: Haiku 4.5 at $1 / $5 per million input / output tokens; Sonnet 5 at
+$3 / $15. Sonnet 5 has introductory pricing of $2 / $10 through 31 August 2026,
+so it is cheaper than the table until then.
+
+### The split configuration is the one to use
+
+Hearthlight already routes the two jobs separately, which fits this well: the
+adjudication and extraction stages need reliable JSON and nothing else, while
+narration is the part your daughters actually read.
+
+In `/settings/storyteller`:
+
+| Field | Value |
+|---|---|
+| Provider | Anthropic (Claude) |
+| Address | `https://api.anthropic.com/v1` |
+| Model | `claude-haiku-4-5` — the dice and memory stages |
+| Narration model | `claude-sonnet-5` — the story text |
+| API key | your key from console.anthropic.com |
+
+That is about **60 cents for an evening's play**, with narration written by a
+model that clears the Wings of Fire bar comfortably.
+
+### Before the key will save
+
+`SETTINGS_SECRET` must be set in Coolify's environment variables. The app
+encrypts API keys at rest and refuses to store one otherwise rather than saving
+it in the clear.
+
+```bash
+openssl rand -base64 32
+```
+
+Add it as `SETTINGS_SECRET`, redeploy once, then paste the key into the settings
+page. The key is never sent back to the browser afterwards — the page shows only
+a hint like `sk-ant…4f2a`.
+
+### Keeping the local model too
+
+These are not exclusive. Leaving Ollama installed lets you compare: run **Run a
+practice turn** against each and read the narration side by side. The local model
+costs nothing but time; the cloud one costs a few cents and answers in seconds.
+For a weekly family game, the cloud model is very likely the better trade — but
+the comparison takes five minutes and settles it with evidence rather than my
+estimate.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `Could not reach the model server` | Wrong IP, or bound to loopback | Sections 0 and 2 |
 | Works from the server, not from the container | `OLLAMA_HOST` still `127.0.0.1`, or firewall | Section 2 |
+| Works while you are logged in over RDP, stops afterwards | Windows: Ollama is a tray app, not a service | Windows Server section |
+| Models "disappeared" after making it a service | Windows: LocalSystem looks in a different profile | Set `OLLAMA_MODELS` explicitly |
+| `hostname -I` says to use the network control panel | You are on Windows, not Linux | Use `ipconfig`; Windows Server section |
+| Turns take 5+ minutes and `ollama ps` shows CPU | No GPU — this is the hardware, not the config | Section 4b |
 | `404` from `/v1/chat/completions` | Missing `/v1` on the address, or model name not installed | Section 7; `ollama list` |
 | `model 'x' not found` | Name mismatch — tags matter | `ollama list`, use the exact name including the tag |
 | Practice turn reports JSON failures | Context truncated by a low `num_ctx` | Section 4 |
