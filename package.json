@@ -14,6 +14,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "gm:harness": "tsx scripts/gm-harness.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:e2e": "tsx tests/auth.e2e.mts && tsx tests/characters.e2e.mts && tsx tests/campaigns.e2e.mts"
   },

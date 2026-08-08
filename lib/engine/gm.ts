@@ -1,0 +1,225 @@
+/**
+ * The Game Master pipeline.
+ *
+ * One party turn runs four stages:
+ *
+ *   1. ADJUDICATE — one JSON call: which declared actions need a dice check
+ *   2. ROLL       — the server rolls; the model has no say in outcomes
+ *   3. NARRATE    — one prose call, told exactly what the dice decided
+ *   4. EXTRACT    — one JSON call: what changed, pulled from the narration
+ *
+ * Narration and extraction are separate calls on purpose. Asking one response
+ * to be both good prose and valid JSON is where small local models fall apart:
+ * they either write stilted prose to protect the JSON, or produce lovely prose
+ * with unusable JSON stapled on.
+ */
+
+import type { Adjudication, Extraction } from "@/lib/ai/schemas";
+import { adjudicationSchema, extractionSchema, validator } from "@/lib/ai/schemas";
+import { requestStructured, StructuredOutputError } from "@/lib/ai/json";
+import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
+import { checkNarration, safetyReminder } from "@/lib/ai/safety";
+import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type Difficulty } from "@/lib/engine/dice";
+import type { StatKey } from "@/lib/game/rules";
+
+/** Everything the pipeline needs, with no database or HTTP knowledge. */
+export type TurnInput = {
+  context: string;
+  tone: ToneKey;
+  readingLevel: ReadingLevelKey;
+  sceneText: string;
+  party: {
+    id: string;
+    name: string;
+    stats: Record<StatKey, number>;
+    skills: { name: string; rank: number }[];
+  }[];
+  actions: { characterId: string; text: string }[];
+  /** Set when player input tripped the safety screen. */
+  deflectionNote?: string | null;
+};
+
+/** Injected so the pipeline can be tested without a model server. */
+export type ModelCalls = {
+  json: (prompt: string, repairHint: string | null) => Promise<string>;
+  prose: (system: string, prompt: string) => Promise<string>;
+};
+
+export type TurnResult = {
+  adjudication: Adjudication;
+  checks: CheckResult[];
+  narration: string;
+  extraction: Extraction;
+  diagnostics: {
+    adjudicationRepairs: number;
+    extractionRepairs: number;
+    safetyRegenerated: boolean;
+    /** Set when adjudication failed and the turn ran without dice. */
+    adjudicationFellBack: boolean;
+    /** Set when extraction failed; the turn still counts, nothing is recorded. */
+    extractionFellBack: boolean;
+  };
+};
+
+/** Matches a name the model produced back to a real party member. */
+function findMember<T extends { name: string }>(party: T[], name: string): T | undefined {
+  const needle = name.trim().toLowerCase();
+  return (
+    party.find((member) => member.name.toLowerCase() === needle) ??
+    // Models routinely shorten "Mira Thistledown" to "Mira".
+    party.find((member) => member.name.toLowerCase().startsWith(needle)) ??
+    party.find((member) => needle.startsWith(member.name.toLowerCase().split(" ")[0]))
+  );
+}
+
+/** Picks the character's best relevant skill for a check, if any. */
+function skillFor(
+  member: { skills: { name: string; rank: number }[] },
+  intent: string,
+): { name: string; rank: number } | undefined {
+  const lowered = intent.toLowerCase();
+  return member.skills
+    .filter((skill) => lowered.includes(skill.name.toLowerCase().split(" ")[0]))
+    .sort((a, b) => b.rank - a.rank)[0];
+}
+
+export async function runTurn(
+  input: TurnInput,
+  calls: ModelCalls,
+  roller?: () => number,
+): Promise<TurnResult> {
+  const diagnostics: TurnResult["diagnostics"] = {
+    adjudicationRepairs: 0,
+    extractionRepairs: 0,
+    safetyRegenerated: false,
+    adjudicationFellBack: false,
+    extractionFellBack: false,
+  };
+
+  const namedActions = input.actions.map((action) => ({
+    character: input.party.find((member) => member.id === action.characterId)?.name ?? "Someone",
+    text: action.text,
+  }));
+
+  // ---- 1. Adjudicate -------------------------------------------------------
+  let adjudication: Adjudication = { checks: [], automatic: [] };
+  try {
+    const result = await requestStructured({
+      call: (hint) =>
+        calls.json(
+          adjudicationPrompt({
+            sceneText: input.sceneText,
+            party: input.party
+              .map((member) => `- ${member.name}`)
+              .join("\n"),
+            actions: namedActions,
+          }),
+          hint,
+        ),
+      validate: validator(adjudicationSchema),
+    });
+    adjudication = result.value;
+    diagnostics.adjudicationRepairs = result.repairs;
+  } catch (error) {
+    // A turn with no dice is a worse turn, not a broken one — everything the
+    // players declared simply happens. Far better than showing them an error.
+    if (!(error instanceof StructuredOutputError)) throw error;
+    diagnostics.adjudicationFellBack = true;
+    adjudication = {
+      checks: [],
+      automatic: namedActions.map((action) => ({ character: action.character, effect: action.text })),
+    };
+  }
+
+  // ---- 2. Roll -------------------------------------------------------------
+  const checks: CheckResult[] = [];
+  for (const requested of adjudication.checks) {
+    const member = findMember(input.party, requested.character);
+    if (!member) continue; // The model invented someone; quietly drop it.
+
+    const skill = skillFor(member, requested.intent);
+    const request: CheckRequest = {
+      characterId: member.id,
+      characterName: member.name,
+      stat: requested.stat as StatKey,
+      difficulty: requested.difficulty as Difficulty,
+      intent: requested.intent,
+      skillRank: skill?.rank,
+      skillName: skill?.name,
+    };
+
+    checks.push(resolveCheck(request, member.stats, roller));
+  }
+
+  // ---- 3. Narrate ----------------------------------------------------------
+  const resolutions = [
+    ...checks.map(describeResult),
+    ...adjudication.automatic.map((entry) => `${entry.character}: ${entry.effect} (happens automatically)`),
+  ].join("\n\n");
+
+  const system = systemPrompt({ tone: input.tone, readingLevel: input.readingLevel });
+  const basePrompt = narrationPrompt({
+    context: input.context,
+    actions: namedActions,
+    resolutions: resolutions || "Nothing needed a dice roll this turn.",
+  });
+
+  let narration = await calls.prose(
+    system,
+    input.deflectionNote ? `${basePrompt}\n\n${input.deflectionNote}` : basePrompt,
+  );
+
+  const verdict = checkNarration(narration);
+  if (!verdict.ok) {
+    diagnostics.safetyRegenerated = true;
+    narration = await calls.prose(system, `${basePrompt}\n\n${safetyReminder(verdict.matched)}`);
+
+    // If it trips twice, keep the text but strip the offending word rather
+    // than showing the table an error or an empty scene.
+    const second = checkNarration(narration);
+    if (!second.ok) {
+      narration = narration.replace(new RegExp(second.matched, "gi"), "…");
+    }
+  }
+
+  // ---- 4. Extract ----------------------------------------------------------
+  let extraction: Extraction = {
+    sceneTitle: null,
+    location: null,
+    memories: [],
+    bondMoments: [],
+    actComplete: false,
+    sceneComplete: false,
+  };
+
+  try {
+    const result = await requestStructured({
+      call: (hint) =>
+        calls.json(
+          extractionPrompt({
+            narration,
+            partyNames: input.party.map((member) => member.name),
+          }),
+          hint,
+        ),
+      validate: validator(extractionSchema),
+    });
+    extraction = result.value;
+    diagnostics.extractionRepairs = result.repairs;
+  } catch (error) {
+    // The story still happened and is still recorded; only the bookkeeping is
+    // lost. Losing a memory row is not worth failing the turn over.
+    if (!(error instanceof StructuredOutputError)) throw error;
+    diagnostics.extractionFellBack = true;
+  }
+
+  // Bond moments must be between two different, real party members. A model
+  // will occasionally credit someone with helping themselves.
+  extraction.bondMoments = extraction.bondMoments.filter((moment) => {
+    const from = findMember(input.party, moment.from);
+    const to = findMember(input.party, moment.to);
+    return from !== undefined && to !== undefined && from.id !== to.id;
+  });
+
+  return { adjudication, checks, narration, extraction, diagnostics };
+}

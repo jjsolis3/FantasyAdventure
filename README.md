@@ -8,10 +8,11 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 3 — Campaign setup
+## Status: Milestone 4 — The Game Master engine
 
-The family can be built and an adventure can be prepared. The storyteller
-itself arrives in M4 — that is the milestone that makes it a game.
+The storyteller exists. It adjudicates, rolls, narrates and remembers. The play
+UI that puts it in front of your family is M5 — until then it is driven from
+the command line.
 
 | | |
 |---|---|
@@ -25,7 +26,8 @@ itself arrives in M4 — that is the milestone that makes it a game.
 | ✅ | **M2** Character builder — stats, skills, race and calling |
 | ✅ | **M2** Family ties and the Bond mechanic |
 | ✅ | **M3** Campaign setup — storyline, party, tone and reading level |
-| ⬜ | **M4 the Game Master engine** · M5 play UI · M6 progression |
+| ✅ | **M4** Four-stage turn pipeline, memory pyramid, safety guard, CLI harness |
+| ⬜ | M5 play UI · M6 progression · M7 polish |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -83,11 +85,90 @@ around the table. Party size is checked against the storyline's range, and the
 party is settled once the adventure leaves `SETUP`, so the transcript can never
 refer to somebody who is no longer there.
 
+### How the Game Master works
+
+One party turn runs four stages:
+
+```
+1. ADJUDICATE  JSON call  → which declared actions need a dice check
+2. ROLL        server     → the model has no say in outcomes
+3. NARRATE     prose call → told exactly what the dice decided
+4. EXTRACT     JSON call  → what changed, pulled back out of the narration
+```
+
+**The server rolls, never the model.** If the AI decides outcomes, character
+stats become decoration and it stops being a game. The Game Master proposes
+checks; `lib/engine/dice.ts` decides how they land; the Game Master narrates
+the result it is handed.
+
+**Narration and JSON are separate calls.** Asking one response to be both good
+prose and valid JSON is where small local models fall apart — they either write
+stilted prose to protect the JSON, or produce lovely prose with unusable JSON
+stapled on. Two calls cost more and work far better.
+
+**Nothing crashes the table.** Adjudication failing means a turn with no dice,
+not an error screen. Extraction failing means nothing is remembered from that
+turn, but the story still happened and is still recorded. Every stage has a
+defined fallback.
+
+**Set `AI_NARRATION_MODEL`** to use one model for prose and another for JSON —
+qwen2.5 is more reliable at structured output while llama3.1 and gemma tend to
+narrate better. Leave it unset to use one model for both.
+
+### Memory — how it remembers across sessions
+
+A local model cannot be handed twenty sessions of transcript, so context is a
+pyramid, trimmed from the bottom when it exceeds `AI_MAX_CONTEXT_TOKENS`:
+
+| Layer | Dropped when short of room? |
+|---|---|
+| Campaign premise and current act | Never |
+| Party sheet, stats, bonds | Never |
+| Location and current scene summary | Never |
+| Long-term memories, ranked | Capped at a third of what remains |
+| Earlier scene summaries | Capped at a quarter of what remains |
+| Recent turns, verbatim | Oldest dropped first |
+
+Memories rank by **importance before recency**, so a central plot thread from
+ten turns ago still outranks incidental scenery from last turn. When a scene
+closes it is summarised and its turns stop costing context entirely — which is
+what makes a long campaign fit in a 7B model's window.
+
+### Trying it against your model
+
+`npm run gm:harness` runs one complete turn — a real scene, two characters,
+two declared actions — against your model server and prints every stage: the
+assembled context, the adjudication JSON, the dice, the narration, the
+extraction, per-call latency, and a verdict calling out anything that went
+wrong.
+
+```bash
+AI_BASE_URL=http://192.168.1.50:11434/v1 AI_MODEL=qwen2.5:latest npm run gm:harness
+```
+
+It needs no database and no running app, so it is the fastest way to compare
+models on identical input:
+
+```bash
+AI_MODEL=phi3:latest     npm run gm:harness
+AI_MODEL=qwen2.5:latest  npm run gm:harness
+AI_MODEL=llama3.1:latest npm run gm:harness
+```
+
+Watch for `adjudicationFellBack` or `extractionFellBack` in the diagnostics —
+those mean the model could not produce usable JSON at all, and dice or memory
+were skipped. Repairs above zero mean it needed a second attempt.
+
+`/api/health?ai=1` performs a live probe from inside the container, which is
+the quickest way to confirm the app can actually reach your model over the LAN.
+Plain `/api/health` only reports whether the model is configured — a live probe
+on every Coolify poll would hammer your GPU, and the app is deliberately still
+"healthy" with the model down.
+
 ### Choosing a model
 
-The Game Master lands in M4, and the model matters more than anything else in
-this repo. The prompt work assumes the model can hold a scene in its head and
-return schema-valid JSON on request.
+The model matters more than anything else in this repo. The pipeline assumes it
+can hold a scene in its head and return schema-valid JSON on request.
 
 **Small instruct models (≈3–4B, such as `phi3:mini`) will struggle here.** Not
 because they are bad, but because this is close to the hardest thing you can
@@ -194,7 +275,8 @@ docker compose up --build
 | `npm run prisma:migrate` | Create + apply a migration from schema changes |
 | `npm run prisma:studio` | Browse the database |
 | `npm run seed` | Re-seed storylines (idempotent) |
-| `npm test` | Unit tests — hashing and game rules |
+| `npm test` | Unit tests — hashing, rules, dice, prompts, provider |
+| `npm run gm:harness` | Run one Game Master turn against your model — see below |
 | `npm run test:e2e` | Browser-driven auth, characters and campaigns — see below |
 
 ### Tests
@@ -244,8 +326,11 @@ In the application's **Environment Variables** tab:
 |---|---|
 | `DATABASE_URL` | The Postgres resource's **internal** URL, e.g. `postgresql://postgres:PASSWORD@postgresql-abc123:5432/postgres` |
 | `AI_BASE_URL` | Your AI server's OpenAI-compatible endpoint, e.g. `http://192.168.1.50:11434/v1` |
-| `AI_MODEL` | e.g. `llama3.1:8b` |
+| `AI_MODEL` | e.g. `qwen2.5:latest` — also used for JSON stages |
+| `AI_NARRATION_MODEL` | Optional. A second model for prose only |
 | `AI_API_KEY` | Usually blank for local servers |
+| `AI_MAX_CONTEXT_TOKENS` | Default 3000. Lower it if your model's window is small |
+| `AI_TIMEOUT_MS` | Default 120000. Raise for a large model on modest hardware |
 | `APP_VERSION` | Optional; surfaces on `/api/health` so you can tell which build is live |
 | `SEED_ON_START` | `true` (set `false` once you manage storylines by hand) |
 | `COOKIE_SECURE` | Optional. Leave unset — it follows `X-Forwarded-Proto` automatically. Set `true` to force secure cookies once you are on https. |
@@ -287,15 +372,31 @@ lib/
     invites.ts      Code validation and redemption
     invite-code.ts  Pure generator — import-free so the seed can use it
     actions.ts      Server actions for every auth form
+  ai/
+    provider.ts     OpenAI-compatible client, streaming and not
+    prompts.ts      The tone contract and every stage's prompt
+    context.ts      The memory pyramid and token budgeting
+    schemas.ts      Zod contracts the model must satisfy
+    json.ts         Forgiving extraction plus the repair loop
+    safety.ts       Last-line content guard
+  engine/
+    dice.ts         Checks and outcomes — the server rolls, not the model
+    gm.ts           The four-stage pipeline, no database or HTTP
+    play.ts         Wires the pipeline to the database
   game/
     rules.ts        Stat budget, bonds, levels, relationship algebra
     character-options.ts  Races, callings and skills offered by the builder
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
 components/         Shared UI, site header, character builder
+scripts/
+  gm-harness.ts     Drive one turn against a real model server
 tests/
   password.test.ts  Unit tests — hashing
   rules.test.ts     Unit tests — stats, bonds, relationships
+  engine.test.ts    Unit tests — dice, JSON repair, context, safety
+  gm.test.ts        Unit tests — the pipeline, with a stubbed model
+  provider.test.ts  Unit tests — wire format, against a mock server
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
