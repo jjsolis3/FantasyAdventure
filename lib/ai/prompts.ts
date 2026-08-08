@@ -138,6 +138,7 @@ Reply with ONLY this JSON, no other text:
   "location": "<where they are now, or null if unchanged>",
   "memories": [{"kind": "FACT|NPC|PLACE|PLOT_THREAD", "key": "<short handle>", "content": "<one sentence>", "importance": 1-5}],
   "bondMoments": [{"from": "<character>", "to": "<character>", "why": "<what they did for them>"}],
+  "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>"}],
   "actComplete": false,
   "sceneComplete": false
 }
@@ -147,6 +148,8 @@ Rules:
 - bondMoments are ONLY between two characters in the party list above, and only
   when one genuinely helped, protected, encouraged or comforted the other.
 - sceneComplete is true only if the party has moved somewhere new or time has jumped.
+- itemsGained is ONLY for objects a character is now carrying. Not scenery, not
+  things they merely looked at.
 - Use [] for empty lists, never null.`;
 }
 

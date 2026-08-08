@@ -28,13 +28,14 @@ const server = createServer((request, response) => {
       // Fenced, with a preamble — exactly what a 7B model tends to emit.
       content =
         'Sure, here you go:\n```json\n{"checks":[{"character":"Mira","stat":"heart","difficulty":"NORMAL",' +
-        '"intent":"hum to the frightened creature"}],"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
+        '"intent":"Speak with Animals to hum to the frightened creature"}],"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
     } else if (prompt.includes("extract what should be remembered")) {
       // Trailing comma, and a bond moment naming someone real.
       content =
         '{"sceneTitle":"The Barley Field","location":"the barley field","memories":' +
         '[{"kind":"NPC","key":"the creature","content":"It settles when someone hums.","importance":4}],' +
         '"bondMoments":[{"from":"Rowan","to":"Mira","why":"stood between her and the noise"}],' +
+        '"itemsGained":[{"character":"Mira","name":"a smooth grey stone","description":"warm to the touch"}],' +
         '"actComplete":false,"sceneComplete":false,}';
     } else if (prompt.includes("Summarise this scene")) {
       content = '{"summary":"The family met something frightened in the barley and calmed it."}';

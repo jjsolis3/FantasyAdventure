@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
+import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 
 export type PlayCharacter = {
   id: string;
@@ -75,18 +76,21 @@ export function PlayClient({
   status,
   party,
   initialEntries,
+  availableMoves,
 }: {
   campaignId: string;
   campaignTitle: string;
   status: string;
   party: PlayCharacter[];
   initialEntries: TranscriptEntry[];
+  availableMoves: AvailableMove[];
 }) {
   const router = useRouter();
 
   const [entries, setEntries] = useState<TranscriptEntry[]>(initialEntries);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [move, setMove] = useState<MoveChoice | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const hasBegun = status !== "SETUP";
@@ -132,6 +136,7 @@ export function PlayClient({
         // The server has already committed everything; refreshing pulls the
         // authoritative transcript rather than trusting what was streamed.
         setDrafts({});
+        setMove(null);
         router.refresh();
       } catch (error) {
         setPhase({
@@ -261,11 +266,13 @@ export function PlayClient({
               </ul>
             )}
 
+            <FamilyMovePicker available={availableMoves} chosen={move} onChoose={setMove} />
+
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 disabled={filledActions.length === 0}
-                onClick={() => run({ mode: "turn", actions: filledActions })}
+                onClick={() => run({ mode: "turn", actions: filledActions, familyMove: move })}
                 className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500 disabled:opacity-40"
               >
                 Tell the storyteller

@@ -8,10 +8,10 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 5 — Playable
+## Status: Milestone 6 — Growing
 
-It is a game. Gather round one screen, begin an adventure, and the storyteller
-sets the scene and asks each of you in turn. Progression and polish are M6/M7.
+Characters now get better at things, collect what they find, and unlock moves
+they can only use together. Polish is M7.
 
 | | |
 |---|---|
@@ -27,7 +27,8 @@ sets the scene and asks each of you in turn. Progression and polish are M6/M7.
 | ✅ | **M3** Campaign setup — storyline, party, tone and reading level |
 | ✅ | **M4** Four-stage turn pipeline, memory pyramid, safety guard, CLI harness |
 | ✅ | **M5** The table — streaming turn progress, dice reveals, transcript |
-| ⬜ | M6 progression · M7 polish |
+| ✅ | **M6** Skill growth, inventory, milestone announcements, Family Moves |
+| ⬜ | M7 polish |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -67,8 +68,8 @@ Game Master will take it seriously.
 
 **Family ties are mechanical, not decoration.** Declare that Pip is Mira's
 parent and the game stores one row for the pair with a shared **Bond** counter.
-Bonds rise when characters help each other and unlock Family Moves that neither
-can use alone. Storing one row rather than two directions is deliberate: two
+Bonds rise when one of them genuinely helps the other, and unlock **Family
+Moves** — see below. Storing one row rather than two directions is deliberate: two
 counters for one relationship drift apart the moment anything writes to only
 one of them. The pair is keyed on the smaller character id, and each side reads
 the relationship from its own perspective.
@@ -115,6 +116,45 @@ again" button. Nothing is lost — the adventure sits exactly where it was.
 The transcript, the dice and every player's own words persist, so the game can
 be closed mid-scene and picked up next week. Closed chapters collapse into a
 "story so far" recap.
+
+### Growing — what play changes
+
+**Experience.** Every roll earns some, even a failed one: a child who rolled
+badly should not also be punished with nothing. Levels are always derived from
+experience, never set directly.
+
+**Skills improve by being used**, whatever the dice said. A skill the Game
+Master picked up on ("Speak with Animals to calm her") earns a point, and ranks
+add straight to future rolls.
+
+**Family Moves.** Bonds now unlock something. Each move needs two characters,
+so none can be used alone — that is the entire point — and each is spendable
+once per scene, which keeps it a moment rather than a routine.
+
+| Move | Bond | Effect |
+|---|---|---|
+| Lend a Hand | 1 | +2 to what they are trying to do |
+| Stand Together | 2 | Roll twice, keep the better |
+| Never Alone | 3 | If it goes wrong, try once more |
+| Two as One | 4 | A near miss becomes a success |
+| Hearthlight | 5 | It simply works |
+
+Effects are applied in `lib/engine/dice.ts`, not in the narration. A move that
+only changed the wording would make bonds decoration, and the children would
+work that out within two sessions. The move is offered at the review step —
+after everyone has spoken — because a move belongs to a pair, not a person.
+
+Bond 1 takes three helpful moments, so helping each other has to become a habit
+before it unlocks anything.
+
+**Things you find.** The Game Master can hand out items, which are recorded per
+character and shown at the table and on the character sheet. Picking up a
+second of something raises the count rather than duplicating the row.
+
+**Growth is announced, not just recorded.** Levelling up, a skill reaching a new
+rank, a Family Move unlocking, something picked up — each writes a line into the
+transcript. A number quietly ticking up in a database is not a reward; being
+told "Mira reached level 2" is.
 
 ### How the Game Master works
 
@@ -419,7 +459,7 @@ lib/
     gm.ts           The four-stage pipeline, no database or HTTP
     play.ts         Wires the pipeline to the database
   game/
-    rules.ts        Stat budget, bonds, levels, relationship algebra
+    rules.ts        Stat budget, bonds, levels, skills, Family Moves
     character-options.ts  Races, callings and skills offered by the builder
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
@@ -436,6 +476,7 @@ tests/
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
   play.e2e.mts        Browser-driven play, against the mock model
+  progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

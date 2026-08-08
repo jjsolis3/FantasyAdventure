@@ -156,6 +156,7 @@ model Character {
   level Int @default(1)
 
   skills        CharacterSkill[]
+  inventory     InventoryItem[]
   partyMemberships PartyMember[]
   /// Relationships where this character is the "A" side, and the "B" side.
   relationshipsA Relationship[]  @relation("RelationshipA")
@@ -177,6 +178,26 @@ model CharacterSkill {
   rank Int    @default(1)
   /// Progress toward the next rank, awarded when the skill is used well.
   xp   Int    @default(0)
+
+  @@unique([characterId, name])
+  @@index([characterId])
+}
+
+/// Something the party picked up, was given, or made. Kept per character
+/// rather than per party so it survives a character leaving an adventure.
+model InventoryItem {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  quantity    Int     @default(1)
+
+  /// Which adventure it came from, so a journal can say where.
+  foundInCampaignId String?
+
+  createdAt DateTime @default(now())
 
   @@unique([characterId, name])
   @@index([characterId])
@@ -259,6 +280,7 @@ model Campaign {
 
   party  PartyMember[]
   scenes Scene[]
+  familyMoveUses FamilyMoveUse[]
   memories Memory[]
   aiCalls  AiCall[]
 
@@ -424,6 +446,27 @@ model AiCall {
   createdAt DateTime @default(now())
 
   @@index([campaignId, createdAt])
+}
+
+/// A record that a Family Move was spent, so it can be limited to once per
+/// scene. Storing uses rather than a cooldown counter means the limit survives
+/// a restart and can be shown in the UI without recomputing anything.
+model FamilyMoveUse {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  sceneId        String
+  relationshipId String
+  /// Matches a key from FAMILY_MOVES in lib/game/rules.ts.
+  moveKey        String
+
+  /// Campaign turn counter at the moment it was used.
+  usedAtTurn Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([sceneId, relationshipId, moveKey])
+  @@index([campaignId])
 }
 
 /// A pre-authored adventure template. The AI improvises freely inside it,

@@ -107,6 +107,107 @@ test("d20 stays within range across many rolls", () => {
   assert.ok(seen.size >= 15, `only ${seen.size} distinct faces`);
 });
 
+// ---- Family Moves ----------------------------------------------------------
+
+const request = {
+  characterId: "mira",
+  characterName: "Mira",
+  stat: "wits" as const,
+  difficulty: "NORMAL" as const,
+  intent: "work out the latch",
+};
+
+test("Lend a Hand adds two to the roll", () => {
+  // Roll 10, no modifier, vs 12: a PARTIAL alone.
+  const alone = resolveCheck(request, averageStats, () => 10);
+  assert.equal(alone.outcome, "PARTIAL");
+
+  const helped = resolveCheck(request, averageStats, () => 10, {
+    key: "lend_a_hand",
+    moveName: "Lend a Hand",
+    helperName: "Rowan",
+  });
+  assert.equal(helped.total, 12);
+  assert.equal(helped.outcome, "SUCCESS");
+  assert.match(helped.move!.note, /Rowan lends a hand/);
+});
+
+test("Stand Together keeps the better of two rolls", () => {
+  const rolls = [4, 17];
+  const result = resolveCheck(request, averageStats, () => rolls.shift()!, {
+    key: "stand_together",
+    moveName: "Stand Together",
+    helperName: "Rowan",
+  });
+  assert.equal(result.roll, 17);
+  assert.equal(result.outcome, "CRITICAL");
+  assert.match(result.move!.note, /rolled 4 and 17, kept 17/);
+});
+
+test("Never Alone rerolls only a complication", () => {
+  const rolls = [2, 18];
+  const rescued = resolveCheck(request, averageStats, () => rolls.shift()!, {
+    key: "never_alone",
+    moveName: "Never Alone",
+    helperName: "Rowan",
+  });
+  assert.equal(rescued.roll, 18);
+  assert.match(rescued.move!.note, /2 became 18/);
+
+  // A roll that already succeeded must not be rerolled into something worse.
+  const spare = [15, 1];
+  const untouched = resolveCheck(request, averageStats, () => spare.shift()!, {
+    key: "never_alone",
+    moveName: "Never Alone",
+    helperName: "Rowan",
+  });
+  assert.equal(untouched.roll, 15);
+  assert.equal(untouched.outcome, "SUCCESS");
+  assert.match(untouched.move!.note, /did not need to be/);
+});
+
+test("Two as One lifts a near miss to a success", () => {
+  const lifted = resolveCheck(request, averageStats, () => 10, {
+    key: "two_as_one",
+    moveName: "Two as One",
+    helperName: "Rowan",
+  });
+  assert.equal(lifted.outcome, "SUCCESS");
+
+  // It does not rescue an outright failure — that is what Never Alone is for.
+  const stillFailed = resolveCheck(request, averageStats, () => 3, {
+    key: "two_as_one",
+    moveName: "Two as One",
+    helperName: "Rowan",
+  });
+  assert.equal(stillFailed.outcome, "COMPLICATION");
+});
+
+test("Hearthlight simply works", () => {
+  const result = resolveCheck(
+    { ...request, difficulty: "HARD" },
+    { might: 1, wits: 1, heart: 1, spark: 1 },
+    () => 2,
+    { key: "hearthlight", moveName: "Hearthlight", helperName: "Rowan" },
+  );
+  assert.equal(result.outcome, "SUCCESS");
+});
+
+test("a check with no move is unchanged", () => {
+  const plain = resolveCheck(request, averageStats, () => 14);
+  assert.equal(plain.move, undefined);
+  assert.equal(plain.outcome, "SUCCESS");
+});
+
+test("the Game Master is told a move was spent", () => {
+  const result = resolveCheck(request, averageStats, () => 10, {
+    key: "lend_a_hand",
+    moveName: "Lend a Hand",
+    helperName: "Rowan",
+  });
+  assert.match(describeResult(result), /FAMILY MOVE — Lend a Hand/);
+});
+
 // ---- JSON extraction -------------------------------------------------------
 
 test("reads clean JSON", () => {

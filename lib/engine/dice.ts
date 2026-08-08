@@ -43,6 +43,20 @@ export type CheckRequest = {
   skillName?: string;
 };
 
+/**
+ * A Family Move spent on this check.
+ *
+ * Applied here rather than in narration because the effect has to be real: if
+ * a move only changed the wording, bonds would be decoration and the children
+ * would work that out within two sessions.
+ */
+export type MoveEffect = {
+  key: string;
+  moveName: string;
+  /** The character lending the help. */
+  helperName: string;
+};
+
 export type CheckResult = CheckRequest & {
   roll: number;
   modifier: number;
@@ -50,6 +64,8 @@ export type CheckResult = CheckRequest & {
   total: number;
   target: number;
   outcome: CheckOutcome;
+  /** Set when a Family Move altered this check. */
+  move?: MoveEffect & { note: string };
 };
 
 /** Rolls a fair d20 using a cryptographic source, not Math.random. */
@@ -72,26 +88,80 @@ export function resolveOutcome(roll: number, total: number, target: number): Che
 
 /**
  * Resolves one check. `roller` is injectable so tests can be deterministic.
+ *
+ * When a Family Move is supplied its effect is applied here, and `move.note`
+ * records what it actually did so both the transcript and the Game Master can
+ * say so.
  */
 export function resolveCheck(
   request: CheckRequest,
   stats: Record<StatKey, number>,
   roller: () => number = rollD20,
+  move?: MoveEffect,
 ): CheckResult {
-  const roll = roller();
   const modifier = statModifier(stats[request.stat]);
   const skillBonus = request.skillRank ?? 0;
-  const total = roll + modifier + skillBonus;
   const target = DIFFICULTIES[request.difficulty];
+
+  const settle = (roll: number, bonus = 0) => {
+    const total = roll + modifier + skillBonus + bonus;
+    return { roll, total, outcome: resolveOutcome(roll, total, target) };
+  };
+
+  let attempt = settle(roller());
+  let note = "";
+
+  switch (move?.key) {
+    case "lend_a_hand": {
+      attempt = settle(attempt.roll, 2);
+      note = `${move.helperName} lends a hand: +2`;
+      break;
+    }
+    case "stand_together": {
+      const second = settle(roller());
+      const better = second.total > attempt.total ? second : attempt;
+      note = `${move.helperName} stands with them: rolled ${attempt.roll} and ${second.roll}, kept ${better.roll}`;
+      attempt = better;
+      break;
+    }
+    case "never_alone": {
+      if (attempt.outcome === "COMPLICATION") {
+        const retry = settle(roller());
+        note = `${move.helperName} will not let them fail alone: ${attempt.roll} became ${retry.roll}`;
+        attempt = retry;
+      } else {
+        // Spent but not needed. Saying so is fairer than silently wasting it.
+        note = `${move.helperName} was ready to catch them, and did not need to be`;
+      }
+      break;
+    }
+    case "two_as_one": {
+      if (attempt.outcome === "PARTIAL") {
+        note = `${move.helperName} moves as one with them: a near miss becomes a success`;
+        attempt = { ...attempt, outcome: "SUCCESS" };
+      } else {
+        note = `${move.helperName} matched them step for step`;
+      }
+      break;
+    }
+    case "hearthlight": {
+      note = `${move.helperName} and everything they have been through together: it simply works`;
+      attempt = { ...attempt, outcome: "SUCCESS" };
+      break;
+    }
+    default:
+      break;
+  }
 
   return {
     ...request,
-    roll,
+    roll: attempt.roll,
     modifier,
     skillBonus,
-    total,
+    total: attempt.total,
     target,
-    outcome: resolveOutcome(roll, total, target),
+    outcome: attempt.outcome,
+    ...(move ? { move: { ...move, note } } : {}),
   };
 }
 
@@ -107,12 +177,15 @@ export function describeResult(result: CheckResult): string {
     COMPLICATION: "COMPLICATION — it does not work; something new gets in the way",
   };
 
+  const moveLine = result.move ? `\n  FAMILY MOVE — ${result.move.moveName}: ${result.move.note}` : "";
+
   return (
     `${result.characterName} attempts: ${result.intent}\n` +
     `  ${STAT_INFO[result.stat].label} check` +
     (result.skillName ? ` (using ${result.skillName})` : "") +
     ` vs ${result.difficulty} (${result.target})\n` +
-    `  rolled ${result.roll}${bonusText} = ${result.total} → ${outcomeText[result.outcome]}`
+    `  rolled ${result.roll}${bonusText} = ${result.total} → ${outcomeText[result.outcome]}` +
+    moveLine
   );
 }
 

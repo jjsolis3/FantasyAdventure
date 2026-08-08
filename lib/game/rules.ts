@@ -191,3 +191,109 @@ export function levelFor(xp: number): number {
   }
   return level;
 }
+
+// ---- Skill growth ----------------------------------------------------------
+
+/// Skill xp needed for each rank. Index 0 is unused; ranks start at 1.
+const SKILL_THRESHOLDS = [0, 0, 6, 16, 32];
+
+export const MAX_SKILL_RANK = SKILL_THRESHOLDS.length - 1;
+
+export function skillRankFor(xp: number): number {
+  let rank = 1;
+  for (let index = 2; index < SKILL_THRESHOLDS.length; index += 1) {
+    if (xp >= SKILL_THRESHOLDS[index]) rank = index;
+  }
+  return rank;
+}
+
+export function skillProgress(xp: number): { rank: number; into: number; needed: number | null } {
+  const rank = skillRankFor(xp);
+  if (rank >= MAX_SKILL_RANK) return { rank, into: 0, needed: null };
+
+  const floor = SKILL_THRESHOLDS[rank];
+  const ceiling = SKILL_THRESHOLDS[rank + 1];
+  return { rank, into: xp - floor, needed: ceiling - floor };
+}
+
+/**
+ * Skill xp for using a skill on a check.
+ *
+ * Deliberately flat rather than outcome-weighted: a skill improves because it
+ * was used, and a child whose roll went badly should still see the thing they
+ * are good at getting better.
+ */
+export const SKILL_XP_PER_USE = 1;
+
+// ---- Family Moves ----------------------------------------------------------
+
+/**
+ * What bonds are *for*.
+ *
+ * Every move needs two characters, so none of them can be used alone — that is
+ * the whole point. Each is spendable once per scene, which keeps it a moment
+ * rather than a routine, and each maps onto something the dice already do so
+ * the effect is real rather than narrated flavour.
+ */
+export type FamilyMove = {
+  key: string;
+  name: string;
+  /** Bond level required between the two characters. */
+  requires: number;
+  /** Shown to the player. */
+  blurb: string;
+  /** Told to the Game Master so it narrates the moment properly. */
+  narrationHint: string;
+};
+
+export const FAMILY_MOVES: FamilyMove[] = [
+  {
+    key: "lend_a_hand",
+    name: "Lend a Hand",
+    requires: 1,
+    blurb: "Add +2 to what they are trying to do.",
+    narrationHint: "helped directly, hands-on, at just the right moment",
+  },
+  {
+    key: "stand_together",
+    name: "Stand Together",
+    requires: 2,
+    blurb: "Roll twice and keep the better roll.",
+    narrationHint: "stood shoulder to shoulder and tried it together",
+  },
+  {
+    key: "never_alone",
+    name: "Never Alone",
+    requires: 3,
+    blurb: "If it goes wrong, try once more.",
+    narrationHint: "refused to let them fail alone, and they went again",
+  },
+  {
+    key: "two_as_one",
+    name: "Two as One",
+    requires: 4,
+    blurb: "A near miss becomes a success.",
+    narrationHint: "moved as though they shared one mind",
+  },
+  {
+    key: "hearthlight",
+    name: "Hearthlight",
+    requires: 5,
+    blurb: "It simply works. Once, when it matters most.",
+    narrationHint: "drew on everything they have been through together",
+  },
+];
+
+export function familyMoveByKey(key: string): FamilyMove | undefined {
+  return FAMILY_MOVES.find((move) => move.key === key);
+}
+
+/** Which moves a given bond level has unlocked. */
+export function movesUnlockedAt(bondLevel: number): FamilyMove[] {
+  return FAMILY_MOVES.filter((move) => move.requires <= bondLevel);
+}
+
+/** Moves unlocked by crossing from one bond level to another. */
+export function movesUnlockedBetween(before: number, after: number): FamilyMove[] {
+  return FAMILY_MOVES.filter((move) => move.requires > before && move.requires <= after);
+}

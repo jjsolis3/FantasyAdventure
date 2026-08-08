@@ -45,6 +45,25 @@ async function adjustStat(page: Page, label: string, direction: "Raise" | "Lower
   }
 }
 
+
+/**
+ * Picks a race/calling and confirms it registered.
+ *
+ * These selects are controlled by React and write through to a hidden input.
+ * Selecting before hydration completes silently does nothing — the change
+ * event has no handler yet and React then resets the select to its own state.
+ * Retrying until the hidden input agrees removes the race.
+ */
+async function chooseOption(page: Page, selectId: string, hiddenName: string, value: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.selectOption(selectId, value);
+    const applied = await page.inputValue(`input[name="${hiddenName}"]`).catch(() => "");
+    if (applied === value || (value === "__other__" && applied === "")) return;
+    await page.waitForTimeout(150);
+  }
+  throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
+}
+
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
 });
@@ -78,8 +97,8 @@ try {
   // ---- Build the first character -----------------------------------------
   await page.goto(`${BASE}/characters/new`);
   await page.fill('input[name="name"]', "Mira Thistledown");
-  await page.selectOption('select#choice-race', "Halfling");
-  await page.selectOption('select#choice-archetype', "Beastfriend");
+  await chooseOption(page, "select#choice-race", "race", "Halfling");
+  await chooseOption(page, "select#choice-archetype", "archetype", "Beastfriend");
   await page.selectOption('select[name="ageBand"]', "CHILD");
   await page.fill('input[name="gender"]', "girl");
   await page.click('button:has-text("she/her")');
@@ -114,9 +133,9 @@ try {
   // ---- A custom race is allowed ------------------------------------------
   await page.goto(`${BASE}/characters/new`);
   await page.fill('input[name="name"]', "Pip");
-  await page.selectOption('select#choice-race', "__other__");
+  await chooseOption(page, "select#choice-race", "race", "__other__");
   await page.fill('input[placeholder="Type your own"]', "Cloud Baker");
-  await page.selectOption('select#choice-archetype', "Maker");
+  await chooseOption(page, "select#choice-archetype", "archetype", "Maker");
   await page.selectOption('select[name="ageBand"]', "GROWNUP");
   await submitAndSettle(page, 'button:has-text("Create adventurer")');
 

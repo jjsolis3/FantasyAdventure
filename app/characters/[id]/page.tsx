@@ -21,6 +21,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
     where: { id, userId: user.id },
     include: {
       skills: { orderBy: { name: "asc" } },
+      inventory: { orderBy: { name: "asc" } },
       relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
       relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
     },
@@ -65,6 +66,42 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="space-y-6">
+        {character.skills.length > 0 || character.inventory.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-4 text-xl text-hearth-100">What they can do</h2>
+
+            {character.skills.length > 0 ? (
+              <ul className="space-y-1">
+                {character.skills.map((skill) => (
+                  <li key={skill.id} className="text-sm text-hearth-200/80">
+                    {skill.name}
+                    <span className="ml-2 text-hearth-400">rank {skill.rank}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {character.inventory.length > 0 ? (
+              <>
+                <h3 className="mt-5 mb-2 text-sm font-medium tracking-wide text-hearth-400 uppercase">
+                  Carrying
+                </h3>
+                <ul className="space-y-1">
+                  {character.inventory.map((item) => (
+                    <li key={item.id} className="text-sm text-hearth-200/80">
+                      {item.name}
+                      {item.quantity > 1 ? <span className="text-hearth-400"> ×{item.quantity}</span> : null}
+                      {item.description ? (
+                        <span className="text-hearth-400"> — {item.description}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </Card>
+        ) : null}
+
         <Card>
           <h2 className="font-display mb-5 text-xl text-hearth-100">Family ties</h2>
           <RelationshipEditor

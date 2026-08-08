@@ -15,7 +15,16 @@ import { chat, readAiConfig, type AiConfig } from "@/lib/ai/provider";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
 import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { xpForOutcome } from "@/lib/engine/dice";
-import { bondLevelFor, kindFromPerspective, levelFor, type StatKey } from "@/lib/game/rules";
+import {
+  SKILL_XP_PER_USE,
+  bondLevelFor,
+  familyMoveByKey,
+  kindFromPerspective,
+  levelFor,
+  movesUnlockedBetween,
+  skillRankFor,
+  type StatKey,
+} from "@/lib/game/rules";
 
 /** How many recent turns are offered to the context builder before trimming. */
 const RECENT_TURN_WINDOW = 12;
@@ -314,12 +323,60 @@ export async function beginCampaign(
 
 export type PlayerAction = { characterId: string; text: string };
 
+/** A Family Move the table wants to spend this turn. */
+export type FamilyMoveChoice = { key: string; helperId: string; targetId: string };
+
+/**
+ * Checks a requested Family Move is actually available.
+ *
+ * The UI only offers legal moves, but the UI is not a security boundary, and
+ * an unavailable move that silently worked would quietly devalue every bond in
+ * the game.
+ */
+async function validateFamilyMove(
+  campaign: LoadedCampaign,
+  choice: FamilyMoveChoice,
+  sceneId: string,
+): Promise<{ relationshipId: string; moveName: string } | null> {
+  const move = familyMoveByKey(choice.key);
+  if (!move) return null;
+
+  const inParty = new Set(campaign.party.map((member) => member.characterId));
+  if (!inParty.has(choice.helperId) || !inParty.has(choice.targetId)) return null;
+  if (choice.helperId === choice.targetId) return null;
+
+  const [a, b] =
+    choice.helperId < choice.targetId
+      ? [choice.helperId, choice.targetId]
+      : [choice.targetId, choice.helperId];
+
+  const relationship = await db.relationship.findUnique({
+    where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
+  });
+  if (!relationship || relationship.bondLevel < move.requires) return null;
+
+  // Once per scene, so it stays a moment rather than a routine.
+  const alreadyUsed = await db.familyMoveUse.findUnique({
+    where: {
+      sceneId_relationshipId_moveKey: {
+        sceneId,
+        relationshipId: relationship.id,
+        moveKey: move.key,
+      },
+    },
+  });
+  if (alreadyUsed) return null;
+
+  return { relationshipId: relationship.id, moveName: move.name };
+}
+
 /** Runs one party turn and commits everything it produced. */
 export async function playTurn(
   campaignId: string,
   userId: string,
   actions: PlayerAction[],
   onProgress?: (event: TurnProgress) => void,
+  familyMove?: FamilyMoveChoice | null,
 ) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
@@ -335,6 +392,8 @@ export async function playTurn(
   // Children test boundaries. Rather than refusing, the Game Master is told to
   // bend the moment in-story.
   const flagged = accepted.some((action) => !checkPlayerInput(action.text).ok);
+
+  const validMove = familyMove ? await validateFamilyMove(campaign, familyMove, scene.id) : null;
 
   const config = readAiConfig();
   const records: AiCallRecord[] = [];
@@ -365,6 +424,15 @@ export async function playTurn(
         skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
       })),
       actions: accepted,
+      familyMove:
+        validMove && familyMove
+          ? {
+              key: familyMove.key,
+              moveName: validMove.moveName,
+              helperId: familyMove.helperId,
+              targetId: familyMove.targetId,
+            }
+          : null,
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
     },
     calls,
@@ -407,6 +475,9 @@ export async function playTurn(
             target: check.target,
             outcome: check.outcome,
             intent: check.intent,
+            // Carried so the transcript can show what a Family Move did, long
+            // after the turn that spent it.
+            ...(check.move ? { move: check.move } : {}),
           },
         },
       });
@@ -416,6 +487,10 @@ export async function playTurn(
       data: { sceneId: scene.id, ordinal: ordinal++, type: "NARRATION", content: result.narration.trim() },
     });
 
+    // Growth is announced, not just recorded. A number quietly ticking up in a
+    // database is not a reward; being told "Mira reached level 2" is.
+    const milestones: string[] = [];
+
     // Experience for anyone who rolled. Level is always derived, never set.
     const xpByCharacter = new Map<string, number>();
     for (const check of result.checks) {
@@ -424,7 +499,30 @@ export async function playTurn(
     for (const [characterId, gained] of xpByCharacter) {
       const character = await tx.character.findUniqueOrThrow({ where: { id: characterId } });
       const xp = character.xp + gained;
-      await tx.character.update({ where: { id: characterId }, data: { xp, level: levelFor(xp) } });
+      const level = levelFor(xp);
+      await tx.character.update({ where: { id: characterId }, data: { xp, level } });
+
+      if (level > character.level) {
+        milestones.push(`${character.name} reached level ${level}!`);
+      }
+    }
+
+    // A skill improves because it was used, whatever the dice said.
+    for (const check of result.checks) {
+      if (!check.skillName) continue;
+
+      const skill = await tx.characterSkill.findUnique({
+        where: { characterId_name: { characterId: check.characterId, name: check.skillName } },
+      });
+      if (!skill) continue;
+
+      const skillXp = skill.xp + SKILL_XP_PER_USE;
+      const rank = skillRankFor(skillXp);
+      await tx.characterSkill.update({ where: { id: skill.id }, data: { xp: skillXp, rank } });
+
+      if (rank > skill.rank) {
+        milestones.push(`${check.characterName} is getting really good at ${skill.name} — rank ${rank}.`);
+      }
     }
 
     // Bonds, from moments the extraction identified.
@@ -442,9 +540,66 @@ export async function playTurn(
       if (!existing) continue;
 
       const bondXp = existing.bondXp + 1;
+      const bondLevel = bondLevelFor(bondXp);
       await tx.relationship.update({
         where: { id: existing.id },
-        data: { bondXp, bondLevel: bondLevelFor(bondXp) },
+        data: { bondXp, bondLevel },
+      });
+
+      const unlocked = movesUnlockedBetween(existing.bondLevel, bondLevel);
+      for (const move of unlocked) {
+        milestones.push(
+          `${moment.from} and ${moment.to} can now use ${move.name} together — ${move.blurb}`,
+        );
+      }
+    }
+
+    // Items the party is now carrying.
+    for (const item of result.extraction.itemsGained) {
+      const characterId = campaign.party.find(
+        (member) => member.character.name === item.character,
+      )?.characterId;
+      if (!characterId) continue;
+
+      // Picking up a second rope should raise the count, not create a duplicate.
+      const already = await tx.inventoryItem.findUnique({
+        where: { characterId_name: { characterId, name: item.name } },
+      });
+
+      await tx.inventoryItem.upsert({
+        where: { characterId_name: { characterId, name: item.name } },
+        create: {
+          characterId,
+          name: item.name,
+          description: item.description ?? null,
+          foundInCampaignId: campaign.id,
+        },
+        update: { quantity: { increment: 1 } },
+      });
+
+      milestones.push(
+        already
+          ? `${item.character} picks up another ${item.name}.`
+          : `${item.character} is now carrying: ${item.name}`,
+      );
+    }
+
+    // Spend the Family Move only once the turn has actually committed.
+    if (validMove && familyMove) {
+      await tx.familyMoveUse.create({
+        data: {
+          campaignId: campaign.id,
+          sceneId: scene.id,
+          relationshipId: validMove.relationshipId,
+          moveKey: familyMove.key,
+          usedAtTurn: turnCounter,
+        },
+      });
+    }
+
+    for (const milestone of milestones) {
+      await tx.turnEvent.create({
+        data: { sceneId: scene.id, ordinal: ordinal++, type: "SYSTEM", content: milestone },
       });
     }
 

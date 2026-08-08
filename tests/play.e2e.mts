@@ -54,9 +54,28 @@ async function waitFor(label: string, condition: () => Promise<boolean>, timeout
 async function buildCharacter(page: Page, name: string, race: string, archetype: string) {
   await page.goto(`${BASE}/characters/new`);
   await page.fill('input[name="name"]', name);
-  await page.selectOption("select#choice-race", race);
-  await page.selectOption("select#choice-archetype", archetype);
+  await chooseOption(page, "select#choice-race", "race", race);
+  await chooseOption(page, "select#choice-archetype", "archetype", archetype);
   await submitAndSettle(page, 'button:has-text("Create adventurer")');
+}
+
+
+/**
+ * Picks a race/calling and confirms it registered.
+ *
+ * These selects are controlled by React and write through to a hidden input.
+ * Selecting before hydration completes silently does nothing — the change
+ * event has no handler yet and React then resets the select to its own state.
+ * Retrying until the hidden input agrees removes the race.
+ */
+async function chooseOption(page: Page, selectId: string, hiddenName: string, value: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.selectOption(selectId, value);
+    const applied = await page.inputValue(`input[name="${hiddenName}"]`).catch(() => "");
+    if (applied === value || (value === "__other__" && applied === "")) return;
+    await page.waitForTimeout(150);
+  }
+  throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
 }
 
 const browser = await chromium.launch({
@@ -187,6 +206,7 @@ try {
   check("the narration is in the transcript", /hums, low and steady/i.test(body));
 
   // ---- Another household cannot reach the table ---------------------------
+  const turnsBeforeStranger = await db.turnEvent.count();
   {
     const invite = await db.inviteCode.create({ data: { code: "HEARTH-TEST-7777" } });
     const stranger = await (await browser.newContext()).newPage();
@@ -219,8 +239,12 @@ try {
     await stranger.close();
   }
 
-  const turnsBefore = await db.turnEvent.count();
-  check("no extra turns were written by the stranger", turnsBefore === actions.length + rolls.length + 2);
+  // Compared against a snapshot rather than a computed total: milestone events
+  // are also turn events, so any fixed arithmetic here goes stale.
+  check(
+    "no extra turns were written by the stranger",
+    (await db.turnEvent.count()) === turnsBeforeStranger,
+  );
 
   await page.close();
 } finally {
