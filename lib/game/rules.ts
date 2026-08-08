@@ -169,6 +169,21 @@ const LEVEL_THRESHOLDS = [0, 0, 10, 25, 45, 70, 100, 140, 190, 250];
 
 export const MAX_LEVEL = LEVEL_THRESHOLDS.length - 1;
 
+/**
+ * How far a character is through their current level.
+ *
+ * `needed` is null at the cap, so callers can render "as far as it goes"
+ * rather than a full bar that never moves.
+ */
+export function levelProgress(xp: number): { level: number; into: number; needed: number | null } {
+  const level = levelFor(xp);
+  if (level >= MAX_LEVEL) return { level, into: 0, needed: null };
+
+  const floor = LEVEL_THRESHOLDS[level];
+  const ceiling = LEVEL_THRESHOLDS[level + 1];
+  return { level, into: xp - floor, needed: ceiling - floor };
+}
+
 export function levelFor(xp: number): number {
   let level = 1;
   for (let index = 2; index < LEVEL_THRESHOLDS.length; index += 1) {

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { PlayClient } from "@/components/play/play-client";
 import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
+import { LevelPip } from "@/components/character/level-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,9 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           {campaign.party.map((member) => (
             <li key={member.id} className="text-sm">
               <span className="text-hearth-100">{member.character.name}</span>
-              <span className="ml-2 text-hearth-500">lv {member.character.level}</span>
+              <span className="ml-2 align-middle">
+                <LevelPip xp={member.character.xp} />
+              </span>
               <span className="ml-2 text-hearth-400">
                 {STATS.map((stat) => `${STAT_INFO[stat].label[0]}${member.character[stat]}`).join(" ")}
               </span>

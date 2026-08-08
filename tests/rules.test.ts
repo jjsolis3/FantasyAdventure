@@ -7,6 +7,7 @@ import {
   canonicalPair,
   kindFromPerspective,
   levelFor,
+  levelProgress,
   pointsRemaining,
   reciprocalOf,
   statModifier,
@@ -123,6 +124,31 @@ test("bond progress reports position within the current level", () => {
   assert.deepEqual(bondProgress(5), { level: 1, into: 2, needed: 5 });
   // At the cap there is nothing left to earn.
   assert.deepEqual(bondProgress(1000), { level: 5, into: 0, needed: null });
+});
+
+test("level progress reports position within the current level", () => {
+  // Level 1 spans 0..9, level 2 starts at 10.
+  assert.deepEqual(levelProgress(0), { level: 1, into: 0, needed: 10 });
+  assert.deepEqual(levelProgress(7), { level: 1, into: 7, needed: 10 });
+  // Level 2 spans 10..24.
+  assert.deepEqual(levelProgress(10), { level: 2, into: 0, needed: 15 });
+  assert.deepEqual(levelProgress(20), { level: 2, into: 10, needed: 15 });
+});
+
+test("level progress reports no further to go at the cap", () => {
+  const capped = levelProgress(10_000);
+  assert.equal(capped.level, 9);
+  assert.equal(capped.needed, null, "a capped character must not show a bar that never moves");
+});
+
+test("progress never exceeds the level it belongs to", () => {
+  for (let xp = 0; xp <= 300; xp += 1) {
+    const { level, into, needed } = levelProgress(xp);
+    assert.equal(level, levelFor(xp), `level disagreed at xp=${xp}`);
+    if (needed !== null) {
+      assert.ok(into >= 0 && into < needed, `xp=${xp} gave into=${into} of ${needed}`);
+    }
+  }
 });
 
 test("character levels rise with experience", () => {
