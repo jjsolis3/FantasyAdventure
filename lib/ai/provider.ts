@@ -197,8 +197,10 @@ export async function chat(config: AiConfig, options: ChatOptions): Promise<stri
       );
     }
     throw new AiUnavailableError(
-      `Could not reach the model server at ${config.baseUrl}. Check that it is running ` +
-        "and reachable from the app container.",
+      `Could not reach the model server at ${config.baseUrl}. Check that it is running, ` +
+        "that the address is the server's LAN address rather than localhost, and that " +
+        "the server listens on more than loopback — Ollama binds to 127.0.0.1 by default, " +
+        "which refuses connections from this container. See docs/ollama.md.",
       error,
     );
   } finally {
