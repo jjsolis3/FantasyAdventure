@@ -35,6 +35,15 @@ export type TurnInput = {
     skills: { name: string; rank: number }[];
   }[];
   actions: { characterId: string; text: string }[];
+  /** A Family Move the table chose to spend this turn, if any. */
+  familyMove?: {
+    key: string;
+    moveName: string;
+    /** Who is lending the help. */
+    helperId: string;
+    /** Whose check it applies to. */
+    targetId: string;
+  } | null;
   /** Set when player input tripped the safety screen. */
   deflectionNote?: string | null;
 };
@@ -156,7 +165,19 @@ export async function runTurn(
       skillName: skill?.name,
     };
 
-    checks.push(resolveCheck(request, member.stats, roller));
+    // The move applies to the one check it was aimed at, and only if that
+    // character actually ended up rolling.
+    const move =
+      input.familyMove && input.familyMove.targetId === member.id
+        ? {
+            key: input.familyMove.key,
+            moveName: input.familyMove.moveName,
+            helperName:
+              input.party.find((entry) => entry.id === input.familyMove!.helperId)?.name ?? "Someone",
+          }
+        : undefined;
+
+    checks.push(resolveCheck(request, member.stats, roller, move));
   }
 
   // The dice go out before the narration is written. On a local model that
@@ -202,6 +223,7 @@ export async function runTurn(
     location: null,
     memories: [],
     bondMoments: [],
+    itemsGained: [],
     actComplete: false,
     sceneComplete: false,
   };
@@ -229,6 +251,11 @@ export async function runTurn(
 
   // Bond moments must be between two different, real party members. A model
   // will occasionally credit someone with helping themselves.
+  // Items can only be gained by someone actually present.
+  extraction.itemsGained = extraction.itemsGained.filter(
+    (item) => findMember(input.party, item.character) !== undefined,
+  );
+
   extraction.bondMoments = extraction.bondMoments.filter((moment) => {
     const from = findMember(input.party, moment.from);
     const to = findMember(input.party, moment.to);

@@ -24,6 +24,8 @@ export type DiceDetail = {
   outcome: "CRITICAL" | "SUCCESS" | "PARTIAL" | "COMPLICATION";
   intent: string;
   skillName?: string;
+  /** Present when a Family Move altered this check. */
+  move?: { moveName: string; note: string } | null;
 };
 
 const OUTCOME_STYLE: Record<DiceDetail["outcome"], { label: string; className: string }> = {
@@ -76,6 +78,13 @@ export function DiceCard({ dice, animate = false }: { dice: DiceDetail; animate?
         </span>
       </div>
       <p className="mt-1.5 text-sm opacity-80">{dice.intent}</p>
+
+      {dice.move ? (
+        <p className="mt-2 border-t border-current/20 pt-2 text-sm">
+          <span className="font-medium">{dice.move.moveName}</span>
+          <span className="opacity-80"> — {dice.move.note}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -146,8 +155,14 @@ export function Transcript({ entries }: { entries: TranscriptEntry[] }) {
           return <DiceCard key={entry.id} dice={entry.dice} />;
         }
 
+        // SYSTEM events are growth: levels, skill ranks, unlocked Family
+        // Moves, things picked up. They get to look like an occasion, because
+        // for a ten-year-old that is exactly what they are.
         return (
-          <p key={entry.id} className="text-sm text-hearth-400">
+          <p
+            key={entry.id}
+            className="rounded-lg border border-moss-600/40 bg-moss-800/20 px-4 py-2 text-sm text-moss-400"
+          >
             {entry.content}
           </p>
         );

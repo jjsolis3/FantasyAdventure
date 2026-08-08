@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
-import { beginCampaign, playTurn, type PlayerAction } from "@/lib/engine/play";
+import { beginCampaign, playTurn, type FamilyMoveChoice, type PlayerAction } from "@/lib/engine/play";
 import type { TurnProgress } from "@/lib/engine/gm";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = (await request.json().catch(() => ({}))) as {
     mode?: "begin" | "turn";
     actions?: PlayerAction[];
+    familyMove?: FamilyMoveChoice | null;
   };
 
   const encoder = new TextEncoder();
@@ -49,7 +50,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           send("narration", { text: result.narration });
           send("done", { sceneId: result.sceneId });
         } else {
-          const result = await playTurn(id, user.id, body.actions ?? [], onProgress);
+          const result = await playTurn(
+            id,
+            user.id,
+            body.actions ?? [],
+            onProgress,
+            body.familyMove ?? null,
+          );
           send("narration", { text: result.narration });
           send("done", {
             checks: result.checks,

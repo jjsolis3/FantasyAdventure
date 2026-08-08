@@ -6,6 +6,8 @@ import { PlayClient } from "@/components/play/play-client";
 import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
+import type { AvailableMove } from "@/components/play/family-move-picker";
+import { movesUnlockedAt } from "@/lib/game/rules";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,18 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     where: { id, ownerId: user.id },
     include: {
       storyline: { include: { acts: { orderBy: { index: "asc" } } } },
-      party: { orderBy: { position: "asc" }, include: { character: true } },
+      party: {
+        orderBy: { position: "asc" },
+        include: {
+          character: {
+            include: {
+              inventory: { orderBy: { name: "asc" } },
+              relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
+              relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+            },
+          },
+        },
+      },
       scenes: { orderBy: { index: "asc" } },
     },
   });
@@ -45,6 +58,49 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   for (const entry of entries) {
     if (entry.dice && entry.actorName) entry.dice.characterName = entry.actorName;
   }
+
+  // Which Family Moves the party can spend right now: unlocked by bond level,
+  // between two travellers, and not already used in this scene.
+  const inParty = new Set(campaign.party.map((member) => member.characterId));
+  const spent = openScene
+    ? await db.familyMoveUse.findMany({ where: { sceneId: openScene.id } })
+    : [];
+  const spentKeys = new Set(spent.map((use) => `${use.relationshipId}:${use.moveKey}`));
+
+  const availableMoves: AvailableMove[] = campaign.party.flatMap((member) =>
+    [...member.character.relationshipsA, ...member.character.relationshipsB]
+      .filter((row) => {
+        const other = "characterB" in row ? row.characterB : row.characterA;
+        // Each pair appears from both sides; take it once.
+        return inParty.has(other.id) && member.characterId < other.id;
+      })
+      .flatMap((row) => {
+        const other = "characterB" in row ? row.characterB : row.characterA;
+        const helperName = member.character.name;
+
+        // A move is between two people, and either can be the one helping.
+        return movesUnlockedAt(row.bondLevel)
+          .filter((move) => !spentKeys.has(`${row.id}:${move.key}`))
+          .flatMap((move) => [
+            {
+              key: move.key,
+              helperId: member.characterId,
+              helperName,
+              targetId: other.id,
+              targetName: other.name,
+            },
+            {
+              key: move.key,
+              helperId: other.id,
+              helperName: other.name,
+              targetId: member.characterId,
+              targetName: helperName,
+            },
+          ]);
+      }),
+  );
+
+  const carrying = campaign.party.filter((member) => member.character.inventory.length > 0);
 
   const recap = campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary);
   const act = campaign.storyline.acts.find((entry) => entry.index === campaign.currentActIndex);
@@ -79,6 +135,26 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </ul>
       </div>
 
+      {carrying.length > 0 ? (
+        <details className="mb-4 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
+          <summary className="cursor-pointer text-sm text-hearth-300">
+            What you are carrying
+          </summary>
+          <div className="mt-3 space-y-2">
+            {carrying.map((member) => (
+              <div key={member.id}>
+                <p className="text-sm font-medium text-hearth-300">{member.character.name}</p>
+                <p className="text-sm text-hearth-200/70">
+                  {member.character.inventory
+                    .map((item) => (item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name))
+                    .join(" · ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
+
       {recap.length > 0 ? (
         <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
           <summary className="cursor-pointer text-sm text-hearth-300">
@@ -108,6 +184,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           pronouns: member.character.pronouns,
         }))}
         initialEntries={entries}
+        availableMoves={availableMoves}
       />
     </main>
   );

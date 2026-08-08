@@ -8,6 +8,10 @@ import {
   kindFromPerspective,
   levelFor,
   levelProgress,
+  movesUnlockedAt,
+  movesUnlockedBetween,
+  skillProgress,
+  skillRankFor,
   pointsRemaining,
   reciprocalOf,
   statModifier,
@@ -157,4 +161,48 @@ test("character levels rise with experience", () => {
   assert.equal(levelFor(10), 2);
   assert.equal(levelFor(25), 3);
   assert.equal(levelFor(10_000), 9);
+});
+
+// ---- Skill growth ----------------------------------------------------------
+
+test("skills rank up with use", () => {
+  assert.equal(skillRankFor(0), 1);
+  assert.equal(skillRankFor(5), 1);
+  assert.equal(skillRankFor(6), 2);
+  assert.equal(skillRankFor(16), 3);
+  assert.equal(skillRankFor(1000), 4);
+});
+
+test("skill progress reports position within the rank", () => {
+  assert.deepEqual(skillProgress(0), { rank: 1, into: 0, needed: 6 });
+  assert.deepEqual(skillProgress(8), { rank: 2, into: 2, needed: 10 });
+  assert.deepEqual(skillProgress(1000), { rank: 4, into: 0, needed: null });
+});
+
+// ---- Family Moves ----------------------------------------------------------
+
+test("a bond of zero unlocks nothing", () => {
+  assert.deepEqual(movesUnlockedAt(0), []);
+});
+
+test("moves unlock cumulatively as a bond deepens", () => {
+  assert.equal(movesUnlockedAt(1).length, 1);
+  assert.equal(movesUnlockedAt(3).length, 3);
+  assert.equal(movesUnlockedAt(5).length, 5);
+});
+
+test("crossing a bond level reports only the newly unlocked moves", () => {
+  const gained = movesUnlockedBetween(1, 3);
+  assert.equal(gained.length, 2);
+  assert.deepEqual(gained.map((move) => move.requires), [2, 3]);
+});
+
+test("a bond that did not change unlocks nothing new", () => {
+  assert.deepEqual(movesUnlockedBetween(2, 2), []);
+});
+
+test("every move needs a bond, so none can be used alone", () => {
+  for (const move of movesUnlockedAt(5)) {
+    assert.ok(move.requires >= 1, `${move.key} would be usable with no bond at all`);
+  }
 });

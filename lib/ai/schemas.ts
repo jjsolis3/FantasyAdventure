@@ -72,6 +72,18 @@ export const extractionSchema = z.object({
     .max(6)
     .default([]),
 
+  /** Things the party picked up, was given, or made. */
+  itemsGained: z
+    .array(
+      z.object({
+        character: z.string().min(1),
+        name: z.string().min(1).max(60),
+        description: z.string().max(200).nullish(),
+      }),
+    )
+    .max(6)
+    .default([]),
+
   /** True when the party has clearly finished what this act was about. */
   actComplete: z.coerce.boolean().default(false),
   /** True when the scene has changed place or time enough to close it. */
