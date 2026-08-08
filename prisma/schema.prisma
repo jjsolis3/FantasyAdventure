@@ -257,7 +257,13 @@ model Campaign {
   /// threads. Empty until the engine lands in M4.
   worldState Json @default("{}")
 
-  party PartyMember[]
+  party  PartyMember[]
+  scenes Scene[]
+  memories Memory[]
+  aiCalls  AiCall[]
+
+  /// Increments once per completed party turn. Used for memory recency.
+  turnCounter Int @default(0)
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -284,6 +290,140 @@ model PartyMember {
 
   @@unique([campaignId, characterId])
   @@index([characterId])
+}
+
+enum SceneStatus {
+  OPEN
+  /// Closed scenes have been summarised and their turns collapsed into memory.
+  CLOSED
+}
+
+/// A chapter of play. Scenes exist so that history can be compressed: once a
+/// scene closes, its turns are summarised and only the summary travels forward
+/// in the prompt.
+model Scene {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// 1-based, within the campaign.
+  index    Int
+  title    String
+  /// Where this is happening, in the GM's words.
+  location String?
+
+  /// Rolling summary, rewritten when the scene closes.
+  summary String?
+
+  actIndex Int         @default(1)
+  status   SceneStatus @default(OPEN)
+
+  turns TurnEvent[]
+
+  createdAt DateTime  @default(now())
+  closedAt  DateTime?
+
+  @@unique([campaignId, index])
+  @@index([campaignId, status])
+}
+
+enum TurnEventType {
+  /// Prose from the Game Master.
+  NARRATION
+  /// What a player typed.
+  PLAYER_ACTION
+  /// A resolved dice check.
+  DICE_ROLL
+  /// Scene changes, act advances, notes to the table.
+  SYSTEM
+}
+
+/// The append-only record of everything that happened.
+///
+/// This is the source of truth for a campaign; scene summaries, memories and
+/// world state are all projections of it. Nothing here is ever updated in
+/// place, which is what makes "undo the last turn" tractable later.
+model TurnEvent {
+  id      String @id @default(cuid())
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  /// Monotonic within the scene.
+  ordinal Int
+  type    TurnEventType
+
+  /// Which character this is about. Null for narration and system events.
+  actorCharacterId String?
+
+  content String
+
+  /// Type-specific extras: dice detail, stat used, difficulty, outcome.
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now())
+
+  @@unique([sceneId, ordinal])
+  @@index([sceneId])
+}
+
+enum MemoryKind {
+  FACT
+  NPC
+  PLACE
+  PLOT_THREAD
+}
+
+/// Durable things the Game Master should not forget.
+///
+/// A local model cannot be handed twenty sessions of transcript, so the prompt
+/// carries a ranked selection of these instead. Importance is set by the
+/// extraction step and decays in ranking as turns pass without a mention.
+model Memory {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  kind MemoryKind
+  /// Short handle used for de-duplication, e.g. "the beekeeper".
+  key  String
+  content String
+
+  /// 1 (incidental) to 5 (central to the story).
+  importance Int @default(3)
+  /// Global turn counter at last mention, for recency ranking.
+  lastSeenAt Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, kind, key])
+  @@index([campaignId, importance])
+}
+
+/// Every call to the model, kept so that "the Game Master went weird" is a
+/// debuggable event rather than a mystery.
+model AiCall {
+  id         String    @id @default(cuid())
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  /// adjudicate | narrate | extract | summarise
+  stage String
+  model String
+
+  latencyMs Int
+  ok        Boolean
+  /// How many repair attempts were needed before the response parsed.
+  repairs   Int     @default(0)
+  error     String?
+
+  /// Truncated prompt and response, for reading back what actually happened.
+  promptPreview   String?
+  responsePreview String?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt])
 }
 
 /// A pre-authored adventure template. The AI improvises freely inside it,
