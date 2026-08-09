@@ -8,7 +8,14 @@
  */
 
 import { db } from "@/lib/db";
-import { AiUnavailableError, readAiConfig, type AiConfig, type ProviderKind } from "@/lib/ai/provider";
+import {
+  AiUnavailableError,
+  parseReasoningEffort,
+  readAiConfig,
+  type AiConfig,
+  type ProviderKind,
+  type ReasoningEffort,
+} from "@/lib/ai/provider";
 import { decryptSecret, encryptionSecret } from "@/lib/settings/secret-box";
 
 export const SETTINGS_ID = "singleton";
@@ -22,6 +29,8 @@ export type ProviderPreset = {
   /** Suggested models, best first. */
   models: string[];
   needsKey: boolean;
+  /** Suggested reasoning effort; "" leaves the field off the request. */
+  reasoningEffort: "" | ReasoningEffort;
   blurb: string;
 };
 
@@ -31,8 +40,13 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "Ollama (on your network)",
     kind: "OPENAI_COMPATIBLE",
     baseUrl: "http://192.168.1.50:11434/v1",
-    models: ["qwen2.5:latest", "llama3.1:latest", "gemma3:latest", "phi3:latest"],
+    models: ["qwen2.5:7b-instruct", "qwen3:8b", "llama3.1:latest", "gemma3:latest"],
     needsKey: false,
+    // Ollama turns thinking on by default for models that support it, and the
+    // thinking comes out of the same budget as the answer. At 700 tokens a
+    // turn, a hybrid reasoning model can think until it runs out and reply
+    // with nothing at all.
+    reasoningEffort: "none",
     blurb: "Free, private, and only as good as the hardware it runs on.",
   },
   {
@@ -42,6 +56,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: "https://api.anthropic.com/v1",
     models: ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5-20251001"],
     needsKey: true,
+    reasoningEffort: "",
     blurb: "Strongest narration for a young table, and very reliable at JSON.",
   },
   {
@@ -51,6 +66,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: "https://api.openai.com/v1",
     models: ["gpt-4o-mini", "gpt-4o"],
     needsKey: true,
+    reasoningEffort: "",
     blurb: "Widely available, and cheap at the smaller sizes.",
   },
   {
@@ -60,6 +76,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: "https://openrouter.ai/api/v1",
     models: ["anthropic/claude-sonnet-4.5", "meta-llama/llama-3.1-70b-instruct"],
     needsKey: true,
+    reasoningEffort: "",
     blurb: "One key, many models — useful for comparing before committing.",
   },
   {
@@ -69,6 +86,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: "https://api.groq.com/openai/v1",
     models: ["llama-3.3-70b-versatile"],
     needsKey: true,
+    reasoningEffort: "",
     blurb: "Very fast, which matters when a turn is three calls.",
   },
 ];
@@ -80,6 +98,7 @@ export type StoredSettings = {
   narrationModel: string;
   maxContextTokens: number;
   timeoutMs: number;
+  reasoningEffort: ReasoningEffort | null;
   /** Never the key itself — only enough to recognise it. */
   apiKeyHint: string | null;
   hasApiKey: boolean;
@@ -100,6 +119,7 @@ export async function readStoredSettings(): Promise<StoredSettings | null> {
     narrationModel: row.narrationModel ?? "",
     maxContextTokens: row.maxContextTokens,
     timeoutMs: row.timeoutMs,
+    reasoningEffort: parseReasoningEffort(row.reasoningEffort),
     apiKeyHint: row.apiKeyHint,
     hasApiKey: row.apiKeyCipher !== null,
     lastTestedAt: row.lastTestedAt,
@@ -145,6 +165,7 @@ export async function resolveAiConfig(): Promise<AiConfig> {
     narrationModel: row.narrationModel?.trim() || row.model,
     timeoutMs: row.timeoutMs,
     maxContextTokens: row.maxContextTokens,
+    reasoningEffort: parseReasoningEffort(row.reasoningEffort),
   };
 }
 

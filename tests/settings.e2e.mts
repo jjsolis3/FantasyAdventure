@@ -29,6 +29,22 @@ async function submitAndSettle(page: Page, selector = 'button[type="submit"]') {
   await page.waitForLoadState("networkidle").catch(() => {});
 }
 
+/**
+ * Selects an option, retrying until it sticks.
+ *
+ * React controls this select, so a `selectOption` that lands before hydration
+ * is silently reverted on the first render — which shows up much later as a
+ * saved setting that never changed.
+ */
+async function chooseOption(page: Page, selector: string, value: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.selectOption(selector, value);
+    if ((await page.inputValue(selector).catch(() => null)) === value) return;
+    await page.waitForTimeout(150);
+  }
+  throw new Error(`${selector} never accepted "${value}" — hydration may have failed.`);
+}
+
 async function waitFor(label: string, condition: () => Promise<boolean>, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -140,6 +156,47 @@ try {
 
   // Put it back so the practice turn below runs against a working pair.
   await page.fill('input[name="narrationModel"]', "");
+  await submitAndSettle(page, 'button:has-text("Save settings")');
+
+  // ---- A thinking model that answers with nothing must fail ---------------
+  //
+  // Ollama leaves thinking on by default for models like Qwen3, and the
+  // thinking spends the same budget as the reply — so the model returns an
+  // empty string. `typeof "" === "string"` used to pass the content check, and
+  // the page reported a reachable model with a blank answer.
+  await page.fill('input[name="model"]', "thinks-forever");
+  await chooseOption(page, 'select[name="reasoningEffort"]', "");
+  await submitAndSettle(page, 'button:has-text("Save settings")');
+
+  await page.click('button:has-text("Quick check")');
+  await page.waitForSelector("text=/failed —/", { timeout: 30_000 });
+  const whenThinking = (await page.textContent("body")) ?? "";
+  check(
+    "an empty reply is reported as a failure",
+    /failed —/.test(whenThinking) && !/answered in/.test(whenThinking),
+  );
+  check(
+    "the failure explains that the model reasoned instead of answering",
+    /reasoned/i.test(whenThinking),
+    whenThinking.match(/reasoned[^<]{0,80}/i)?.[0],
+  );
+
+  // ---- Turning reasoning off fixes it -------------------------------------
+  await chooseOption(page, 'select[name="reasoningEffort"]', "none");
+  await submitAndSettle(page, 'button:has-text("Save settings")');
+
+  const savedEffort = await db.aiSetting.findUnique({ where: { id: "singleton" } });
+  check("the reasoning setting was stored", savedEffort?.reasoningEffort === "none", savedEffort?.reasoningEffort ?? "null");
+
+  await page.click('button:has-text("Quick check")');
+  await page.waitForSelector("text=/answered in/", { timeout: 30_000 });
+  check(
+    "the same model answers once reasoning is off",
+    /answered in \d+ms/.test((await page.textContent("body")) ?? ""),
+  );
+
+  // Back to the working model for the practice turn below.
+  await page.fill('input[name="model"]', "mock-model");
   await submitAndSettle(page, 'button:has-text("Save settings")');
 
   // ---- The practice turn runs the whole pipeline --------------------------

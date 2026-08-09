@@ -571,6 +571,70 @@ Modelfiles until the measurement says the hardware can keep up.
 
 ---
 
+## 4c. Thinking models return nothing unless you turn thinking off
+
+A model can pass every reachability test and still hand back an empty answer.
+The symptom is the game hanging at *Writing what happens next…*, or a practice
+turn that reports a reply of `""`.
+
+**Ollama enables thinking by default for models that support it** — Qwen3,
+DeepSeek-R1 and similar hybrid reasoning models. The thinking does not come out
+of a separate allowance: it is charged against the same output budget as the
+answer, and it is returned in a separate `reasoning` field that no
+OpenAI-compatible client reads. Hearthlight gives each call 700 output tokens.
+A model that thinks for 700 tokens has nothing left, so it returns:
+
+```json
+{ "message": { "content": "", "reasoning": "Okay, the user wants…" },
+  "finish_reason": "length" }
+```
+
+Reachable, responding, and useless.
+
+### Check whether your model does it
+
+On the Ollama machine, with and without the setting:
+
+```bat
+curl.exe http://localhost:11434/v1/chat/completions ^
+  -H "Content-Type: application/json" ^
+  -d "{\"model\":\"qwen3:8b\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with only the word ready\"}],\"max_tokens\":20,\"stream\":false}"
+```
+
+If `content` comes back empty — or the reply is wrapped in `<think>` tags — add
+`\"reasoning_effort\":\"none\"` to that body and run it again. Ollama's
+OpenAI-compatible layer maps that to thinking disabled, and the answer should
+become a plain `"content":"ready"`.
+
+### Then set it in the app
+
+`/settings/storyteller` has a **Reasoning** field. Choose **None** for Ollama;
+the Ollama preset now fills that in for you. It is sent as `reasoning_effort` on
+every request.
+
+Leave it on the first option for OpenAI, which rejects values it does not
+recognise — blank means the field is left off the request entirely. The
+environment equivalent is `AI_REASONING_EFFORT=none`.
+
+**This game does not need chain-of-thought.** The pipeline already separates
+judgement from prose: the model decides whether an action needs a roll, the
+*server* rolls the dice, and the model then narrates a result it has been
+handed. Thinking adds latency to all three stages and improves none of them.
+
+### The simpler alternative
+
+`qwen2.5:7b-instruct` does not think at all, and is the more reliable choice for
+the JSON stages regardless:
+
+```bash
+ollama pull qwen2.5:7b-instruct
+```
+
+Getting the whole pipeline working on one predictable model first, then changing
+only the narration model, isolates problems instead of moving several at once.
+
+---
+
 ## 5. Which models to pull
 
 You already have `phi3:latest`, `gemma3`, `qwen2.5:latest` and `llama3.1`.

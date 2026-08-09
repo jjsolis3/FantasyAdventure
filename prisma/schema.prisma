@@ -500,6 +500,12 @@ model AiSetting {
   maxContextTokens Int @default(3000)
   timeoutMs        Int @default(120000)
 
+  /// Sent as `reasoning_effort`. Null leaves the field off the request entirely,
+  /// because OpenAI rejects values it does not recognise. "none" is what stops a
+  /// thinking model such as Qwen3 spending its whole output budget on
+  /// chain-of-thought and returning an empty answer.
+  reasoningEffort String?
+
   /// Result of the last connection test, so the page can show the state it was
   /// left in rather than looking untested after every reload.
   lastTestedAt DateTime?

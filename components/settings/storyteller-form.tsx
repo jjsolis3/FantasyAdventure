@@ -29,6 +29,7 @@ export function StorytellerForm({
   const [baseUrl, setBaseUrl] = useState(settings?.baseUrl ?? envFallback?.baseUrl ?? "");
   const [model, setModel] = useState(settings?.model ?? envFallback?.model ?? "");
   const [narrationModel, setNarrationModel] = useState(settings?.narrationModel ?? "");
+  const [reasoningEffort, setReasoningEffort] = useState<string>(settings?.reasoningEffort ?? "");
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
 
@@ -37,6 +38,7 @@ export function StorytellerForm({
     setBaseUrl(preset.baseUrl);
     setModel(preset.models[0]);
     setNarrationModel("");
+    setReasoningEffort(preset.reasoningEffort);
   }
 
   return (
@@ -122,6 +124,39 @@ export function StorytellerForm({
             error={state?.fieldErrors?.narrationModel}
             hint="Optional. A second model used only for the story text — useful when one model writes better prose and another follows JSON more reliably."
           />
+
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-hearth-200">Reasoning</span>
+            <select
+              name="reasoningEffort"
+              value={reasoningEffort}
+              onChange={(event) => setReasoningEffort(event.target.value)}
+              className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
+            >
+              <option value="" className="bg-hearth-950">
+                Leave it to the model (don&rsquo;t send the setting)
+              </option>
+              <option value="none" className="bg-hearth-950">
+                None — recommended for Ollama
+              </option>
+              <option value="low" className="bg-hearth-950">
+                Low
+              </option>
+              <option value="medium" className="bg-hearth-950">
+                Medium
+              </option>
+              <option value="high" className="bg-hearth-950">
+                High
+              </option>
+            </select>
+            <p className="mt-1.5 text-sm text-hearth-400">
+              Models like Qwen3 think before answering, and the thinking spends the same budget as
+              the reply — so a turn can end with an empty answer. Choose <em>None</em> for those. The
+              game does its own reasoning: the model only decides whether a roll is needed, the
+              server rolls, and the model narrates the result. Leave the first option selected for
+              OpenAI, which rejects settings it does not recognise.
+            </p>
+          </label>
 
           <div>
             <Field

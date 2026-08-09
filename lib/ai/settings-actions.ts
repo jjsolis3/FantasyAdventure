@@ -18,6 +18,9 @@ const settingsSchema = z.object({
   model: z.string().trim().min(1, "Which model should it use?").max(120),
   narrationModel: z.string().trim().max(120).optional(),
   maxContextTokens: z.coerce.number().int().min(500).max(200_000),
+  // "" means leave the field off the request — required for providers that
+  // reject values they do not recognise.
+  reasoningEffort: z.enum(["", "none", "low", "medium", "high"]).optional(),
   timeoutMs: z.coerce.number().int().min(5_000).max(600_000),
   // Empty means "leave whatever is stored alone"; the field is write-only.
   apiKey: z.string().optional(),
@@ -42,6 +45,7 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     model: formData.get("model"),
     narrationModel: formData.get("narrationModel") ?? undefined,
     maxContextTokens: formData.get("maxContextTokens"),
+    reasoningEffort: formData.get("reasoningEffort") ?? undefined,
     timeoutMs: formData.get("timeoutMs"),
     apiKey: formData.get("apiKey") ?? undefined,
     clearApiKey: formData.get("clearApiKey") ?? undefined,
@@ -51,7 +55,7 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  const { apiKey, clearApiKey, narrationModel, ...rest } = parsed.data;
+  const { apiKey, clearApiKey, narrationModel, reasoningEffort, ...rest } = parsed.data;
 
   // Three cases for the key: clear it, replace it, or leave it untouched.
   let keyFields: { apiKeyCipher?: string | null; apiKeyHint?: string | null } = {};
@@ -73,6 +77,7 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
   const data = {
     ...rest,
     narrationModel: narrationModel?.trim() || null,
+    reasoningEffort: reasoningEffort || null,
     ...keyFields,
     updatedById: admin.id,
     // Any change invalidates the previous test result.
