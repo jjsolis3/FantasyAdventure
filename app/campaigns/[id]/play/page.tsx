@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { PlayClient } from "@/components/play/play-client";
+import { UndoTurn } from "@/components/play/undo-turn";
 import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
@@ -103,6 +104,11 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const carrying = campaign.party.filter((member) => member.character.inventory.length > 0);
 
   const recap = campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary);
+
+  // Offered only once a turn has actually been played — the snapshot is
+  // written by a turn and cleared when it is used, so its presence is the
+  // honest answer to "is there something to take back?".
+  const canUndo = (await db.turnSnapshot.count({ where: { campaignId: campaign.id } })) > 0;
   const act = campaign.storyline.acts.find((entry) => entry.index === campaign.currentActIndex);
 
   return (
@@ -186,6 +192,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         initialEntries={entries}
         availableMoves={availableMoves}
       />
+
+      {canUndo ? <UndoTurn campaignId={campaign.id} /> : null}
     </main>
   );
 }

@@ -29,7 +29,8 @@ they can only use together. Polish is M7.
 | ✅ | **M5** The table — streaming turn progress, dice reveals, transcript |
 | ✅ | **M6** Skill growth, inventory, milestone announcements, Family Moves |
 | ✅ | **M6** Adventures now end — the final act closes the story rather than looping |
-| ⬜ | M7 polish — undo a turn, printable journal, portraits |
+| ✅ | **M7** Take back the last turn — the whole turn, not just the words |
+| ⬜ | M7 printable journal, portraits |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.

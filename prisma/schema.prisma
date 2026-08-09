@@ -290,6 +290,7 @@ model Campaign {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastPlayedAt DateTime?
+  snapshot     TurnSnapshot?
   /// Set when the final act closes, so a finished adventure reads as finished
   /// rather than as one nobody has opened in a while.
   completedAt  DateTime?
@@ -563,4 +564,26 @@ model StorylineAct {
 
   @@unique([storylineId, index])
   @@index([storylineId])
+}
+
+/// The state a campaign was in immediately before its most recent turn.
+///
+/// One row per campaign, overwritten each turn: undo reaches exactly one turn
+/// into the past, which is what a table actually asks for when a child mistypes
+/// or a beat lands wrong. Keeping a history would grow without bound and invite
+/// a much harder question about how far back is safe.
+model TurnSnapshot {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// The turn number this restores to, so the table can be told what it undoes.
+  turnCounter Int
+  /// First TurnEvent ordinal the turn wrote. Everything from here is removed.
+  fromOrdinal Int
+  /// Everything a turn can change. JSON because the shape is an implementation
+  /// detail of the undo rather than something anything else queries.
+  state Json
+
+  createdAt DateTime @default(now())
 }
