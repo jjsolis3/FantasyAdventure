@@ -453,6 +453,8 @@ export async function playTurn(
   );
 
   const turnCounter = campaign.turnCounter + 1;
+  /** Set inside the transaction; the caller needs it to show the ending. */
+  let campaignComplete = false;
 
   await db.$transaction(async (tx) => {
     let ordinal = await nextOrdinal(scene.id);
@@ -644,8 +646,27 @@ export async function playTurn(
       });
     }
 
-    const advancesAct =
-      result.extraction.actComplete && campaign.currentActIndex < campaign.storyline.acts.length;
+    // Acts are zero-indexed, so the final one sits at `length - 1`. Comparing
+    // against `length` let the last act advance to an index that does not
+    // exist — where buildCampaignContext falls back to acts[0] and quietly
+    // steers the story back to its opening goals. An adventure could never
+    // end; it looped, and nothing ever set the COMPLETE status the schema
+    // already had.
+    const isFinalAct = campaign.currentActIndex >= campaign.storyline.acts.length - 1;
+    const advancesAct = result.extraction.actComplete && !isFinalAct;
+    const finishes = result.extraction.actComplete && isFinalAct;
+    campaignComplete = finishes;
+
+    if (finishes) {
+      await tx.turnEvent.create({
+        data: {
+          sceneId: scene.id,
+          ordinal: ordinal++,
+          type: "SYSTEM",
+          content: `${campaign.storyline.title} is complete. What a journey.`,
+        },
+      });
+    }
 
     await tx.campaign.update({
       where: { id: campaign.id },
@@ -653,6 +674,7 @@ export async function playTurn(
         turnCounter,
         lastPlayedAt: new Date(),
         ...(advancesAct ? { currentActIndex: campaign.currentActIndex + 1 } : {}),
+        ...(finishes ? { status: "COMPLETE" as const, completedAt: new Date() } : {}),
       },
     });
   });
@@ -670,10 +692,10 @@ export async function playTurn(
     await closeScene(campaign.id, scene.id, config, calls).catch(() => {});
   }
 
-  return result;
+  return { ...result, campaignComplete };
 }
 
-/** Summarises a scene and opens the next one. */
+/** Summarises a scene and, unless the story is over, opens the next one. */
 async function closeScene(campaignId: string, sceneId: string, config: AiConfig, calls: ModelCalls) {
   const scene = await db.scene.findUniqueOrThrow({
     where: { id: sceneId },
@@ -706,6 +728,12 @@ async function closeScene(campaignId: string, sceneId: string, config: AiConfig,
     });
 
     const campaign = await tx.campaign.findUniqueOrThrow({ where: { id: campaignId } });
+
+    // A finished adventure gets no next chapter. Opening one would leave an
+    // empty scene hanging after the ending, waiting for a turn nobody is
+    // going to take.
+    if (campaign.status === "COMPLETE") return;
+
     await tx.scene.create({
       data: {
         campaignId,

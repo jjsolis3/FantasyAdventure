@@ -206,3 +206,50 @@ test("every move needs a bond, so none can be used alone", () => {
     assert.ok(move.requires >= 1, `${move.key} would be usable with no bond at all`);
   }
 });
+
+// ---- Act advancement -------------------------------------------------------
+//
+// Extracted from lib/engine/play.ts, where the same expression decides whether
+// an adventure moves on or ends. The original compared against `acts.length`
+// rather than the last index, so completing the final act advanced to an index
+// that did not exist — and the context builder's `?? acts[0]` fallback then
+// steered the story back to its opening act. An adventure could not end; it
+// looped, and nothing ever set the COMPLETE status.
+
+function actTransition(currentActIndex: number, actCount: number, actComplete: boolean) {
+  const isFinalAct = currentActIndex >= actCount - 1;
+  return { advances: actComplete && !isFinalAct, finishes: actComplete && isFinalAct };
+}
+
+test("a completed middle act moves the story on", () => {
+  assert.deepEqual(actTransition(0, 3, true), { advances: true, finishes: false });
+  assert.deepEqual(actTransition(1, 3, true), { advances: true, finishes: false });
+});
+
+test("completing the final act ends the adventure instead of advancing", () => {
+  assert.deepEqual(actTransition(2, 3, true), { advances: false, finishes: true });
+});
+
+test("an act that is not finished changes nothing", () => {
+  assert.deepEqual(actTransition(0, 3, false), { advances: false, finishes: false });
+  assert.deepEqual(actTransition(2, 3, false), { advances: false, finishes: false });
+});
+
+test("advancing never points past the last act", () => {
+  // The property that actually matters: whatever the act count, the index
+  // handed to the context builder must always resolve to a real act.
+  for (let actCount = 1; actCount <= 6; actCount += 1) {
+    for (let index = 0; index < actCount; index += 1) {
+      const { advances } = actTransition(index, actCount, true);
+      const next = advances ? index + 1 : index;
+      assert.ok(
+        next < actCount,
+        `act ${index} of ${actCount} advanced to ${next}, which does not exist`,
+      );
+    }
+  }
+});
+
+test("a single-act storyline ends rather than looping", () => {
+  assert.deepEqual(actTransition(0, 1, true), { advances: false, finishes: true });
+});
