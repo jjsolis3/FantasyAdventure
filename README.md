@@ -31,7 +31,11 @@ they can only use together. Polish is M7.
 | ✅ | **M6** Adventures now end — the final act closes the story rather than looping |
 | ✅ | **M7** Take back the last turn — the whole turn, not just the words |
 | ✅ | **M7** "The storyteller got that wrong" — retell a turn with a correction |
-| ⬜ | M7 printable journal, portraits |
+| ✅ | **M7** "The storyteller got that wrong" — retell a turn with a correction |
+| ✅ | **M7** Talk-to-each-other turns — no dice, no consequences, one model call |
+| ✅ | **M7** "I don't know what to do" — three ideas grounded in the scene |
+| ✅ | **M7** Stopping points, so next week can pick up the thread |
+| ⬜ | M7 adventure length, printable journal, portraits |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
 import { undoLastTurn } from "@/lib/engine/undo";
+import { markStoppingPoint } from "@/lib/engine/play";
 import type { FormState } from "@/lib/auth/actions";
 
 export type UndoOutcome =
@@ -46,4 +47,23 @@ export async function retellLastTurnAction(campaignId: string): Promise<UndoOutc
 
   revalidatePath(`/campaigns/${campaignId}/play`);
   return { ok: true, actions: result.actions };
+}
+
+/** Records where a play session stopped, so next time can pick it up. */
+export async function markStoppingPointAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const campaignId = String(formData.get("campaignId") ?? "");
+  if (!campaignId) return { error: "Which adventure?" };
+
+  try {
+    await markStoppingPoint(campaignId, user.id);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not mark the spot." };
+  }
+
+  revalidatePath(`/campaigns/${campaignId}/play`);
+  return { error: "" };
 }

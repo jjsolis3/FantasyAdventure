@@ -203,3 +203,61 @@ are here. End with the party facing the situation — do not ask what they do.
 
 Write only the story.`;
 }
+
+/**
+ * A turn where the party talks rather than acts.
+ *
+ * No dice, no consequences, no act progress — the storyteller listens and the
+ * world responds. This exists because the best part of a tabletop game is two
+ * children planning together, and a loop that only ever asks "what do you do?"
+ * quietly teaches them that talking is not a move.
+ */
+export function conversationPrompt(options: {
+  context: string;
+  said: { character: string; text: string }[];
+}): string {
+  return `${options.context}
+
+WHAT THE CHARACTERS SAY TO EACH OTHER:
+${options.said.map((line) => `- ${line.character}: ${line.text}`).join("\n")}
+
+Respond to this conversation. Nothing is being attempted yet, so nothing
+succeeds or fails — do not invent an outcome, and do not move the story on.
+
+You may: have someone present react, add a sound or a detail that answers what
+they wondered about, or let a character notice something while they talk. Keep
+it short — a paragraph at most. Leave them exactly where they are, still free
+to decide what to do.
+
+Write only the story. No headings, no lists, no questions to the players.`;
+}
+
+/**
+ * Three things a character might try, for a player who has gone blank.
+ *
+ * Deliberately grounded in the scene and in who this character is, because a
+ * generic list ("attack it", "run away") teaches nothing and fits no story.
+ */
+export function suggestionPrompt(options: {
+  sceneText: string;
+  characterName: string;
+  characterSummary: string;
+}): string {
+  return `A player is stuck and would like some ideas.
+
+THE SCENE:
+${options.sceneText}
+
+THE CHARACTER:
+${options.characterName} — ${options.characterSummary}
+
+Suggest three different things ${options.characterName} could try. Make them
+genuinely different from each other: one careful, one bold, one kind or
+curious. Each must fit this scene and suit this character.
+
+Write each as ${options.characterName} would say it, in the first person, in
+under fifteen words. No numbering, no explanation.
+
+Reply with JSON only:
+{"suggestions": ["...", "...", "..."]}`;
+}

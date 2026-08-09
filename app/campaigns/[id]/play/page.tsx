@@ -52,6 +52,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     actorName: turn.actorCharacterId ? namesById.get(turn.actorCharacterId) : null,
     content: turn.content,
     dice: turn.type === "DICE_ROLL" ? ((turn.metadata as unknown as DiceDetail) ?? null) : null,
+    spoken: (turn.metadata as { spoken?: boolean } | null)?.spoken === true,
+    bookmark: (turn.metadata as { bookmark?: boolean } | null)?.bookmark === true,
   }));
 
   // The metadata blob does not carry the character name; fill it from the party.

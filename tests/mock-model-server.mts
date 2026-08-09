@@ -68,7 +68,16 @@ const server = createServer((request, response) => {
 
     let content: string;
 
-    if (prompt.includes("decide which attempts need a dice roll")) {
+    if (prompt.includes("Suggest three different things")) {
+      content =
+        '{"suggestions":["I creep closer and hold out my hand.",' +
+        '"I call out to it, loud and friendly.",' +
+        '"I look for what frightened it in the first place."]}';
+    } else if (prompt.includes("WHAT THE CHARACTERS SAY TO EACH OTHER")) {
+      content =
+        "The barley shifts while you talk, and whatever is in there goes very still, as though " +
+        "it is listening to every word.";
+    } else if (prompt.includes("decide which attempts need a dice roll")) {
       // Fenced, with a preamble — exactly what a 7B model tends to emit.
       content =
         'Sure, here you go:\n```json\n{"checks":[{"character":"Mira","stat":"heart","difficulty":"NORMAL",' +

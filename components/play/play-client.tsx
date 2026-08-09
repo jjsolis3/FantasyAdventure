@@ -100,6 +100,13 @@ export function PlayClient({
   const [correction, setCorrection] = useState("");
   /** True between taking a turn back to retell it and sending the retelling. */
   const [retelling, setRetelling] = useState(false);
+  /**
+   * True when the party is talking rather than acting.
+   *
+   * The same ask-everyone flow, sent to a different pipeline: talk costs one
+   * model call, rolls nothing, and does not move the story on.
+   */
+  const [talking, setTalking] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const hasBegun = status !== "SETUP";
@@ -156,6 +163,7 @@ export function PlayClient({
         setMove(null);
         setCorrection("");
         setRetelling(false);
+        setTalking(false);
         router.refresh();
       } catch (error) {
         setPhase({
@@ -265,6 +273,8 @@ export function PlayClient({
           </button>
         ) : phase.kind === "asking" ? (
           <AskCharacter
+            campaignId={campaignId}
+            talking={talking}
             character={party[phase.index]}
             index={phase.index}
             total={party.length}
@@ -317,19 +327,25 @@ export function PlayClient({
               </label>
             ) : null}
 
-            <FamilyMovePicker available={availableMoves} chosen={move} onChoose={setMove} />
+            {talking ? null : (
+              <FamilyMovePicker available={availableMoves} chosen={move} onChoose={setMove} />
+            )}
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 disabled={filledActions.length === 0}
                 onClick={() =>
-                  run({
-                    mode: "turn",
-                    actions: filledActions,
-                    familyMove: move,
-                    correction: correction.trim() || null,
-                  })
+                  run(
+                    talking
+                      ? { mode: "talk", actions: filledActions }
+                      : {
+                          mode: "turn",
+                          actions: filledActions,
+                          familyMove: move,
+                          correction: correction.trim() || null,
+                        },
+                  )
                 }
                 className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500 disabled:opacity-40"
               >
@@ -345,19 +361,35 @@ export function PlayClient({
             </div>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={startAsking}
-            className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
-          >
-            What do you do?
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setTalking(false);
+                startAsking();
+              }}
+              className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
+            >
+              What do you do?
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTalking(true);
+                startAsking();
+              }}
+              className="rounded-lg border border-hearth-700 px-5 py-2.5 text-hearth-200 hover:bg-hearth-800/50"
+            >
+              Talk to each other
+            </button>
+          </div>
         )}
       </div>
 
-      {canUndo && !finished && phase.kind !== "running" ? (
+      {hasBegun && !finished && phase.kind !== "running" ? (
         <UndoTurn
           campaignId={campaignId}
+          canUndo={canUndo}
           onRestore={(actions) => {
             setDrafts(Object.fromEntries(actions.map((a) => [a.characterId, a.text])));
             setRetelling(true);
@@ -394,6 +426,8 @@ function countTurnEntries(entries: TranscriptEntry[]): number {
 }
 
 function AskCharacter({
+  campaignId,
+  talking,
   character,
   index,
   total,
@@ -403,6 +437,8 @@ function AskCharacter({
   onBack,
   inputRef,
 }: {
+  campaignId: string;
+  talking: boolean;
   character: PlayCharacter;
   index: number;
   total: number;
@@ -412,6 +448,32 @@ function AskCharacter({
   onBack?: () => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
+  const [ideas, setIdeas] = useState<string[] | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const [noIdeas, setNoIdeas] = useState("");
+
+  async function askForIdeas() {
+    setThinking(true);
+    setNoIdeas("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId: character.id }),
+      });
+      const data = (await response.json()) as { suggestions?: string[]; error?: string };
+      if (!response.ok || !data.suggestions?.length) {
+        setNoIdeas(data.error ?? "No ideas just now — but anything you type will work.");
+        return;
+      }
+      setIdeas(data.suggestions);
+    } catch {
+      setNoIdeas("No ideas just now — but anything you type will work.");
+    } finally {
+      setThinking(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -419,10 +481,12 @@ function AskCharacter({
           {index + 1} of {total}
         </p>
         <h2 className="font-display text-2xl text-hearth-100">
-          {character.name}, what do you do?
+          {character.name}, {talking ? "what do you say?" : "what do you do?"}
         </h2>
         <p className="mt-1 text-sm text-hearth-400">
-          Anything at all. Talk, look, try something silly — the storyteller will go with it.
+          {talking
+            ? "Talking to each other. Nothing is being attempted, so nothing can go wrong — plan, wonder, argue."
+            : "Anything at all. Talk, look, try something silly — the storyteller will go with it."}
         </p>
       </div>
 
@@ -439,9 +503,51 @@ function AskCharacter({
           }
         }}
         rows={3}
-        placeholder="I sit down in the barley and start humming, like I do with the goats…"
+        placeholder={
+          talking
+            ? "Do you think it's lost? Maybe if we're quiet it will come out…"
+            : "I sit down in the barley and start humming, like I do with the goats…"
+        }
         className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
       />
+
+      {talking ? null : (
+        <div className="space-y-2">
+          {ideas === null ? (
+            <button
+              type="button"
+              onClick={askForIdeas}
+              disabled={thinking}
+              className="text-sm text-hearth-500 underline underline-offset-4 hover:text-hearth-300 disabled:opacity-50"
+            >
+              {thinking ? "Thinking of some ideas…" : "I don't know what to do"}
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-hearth-400">
+                Some ideas — pick one to start from, or ignore them all.
+              </p>
+              <div className="flex flex-col gap-2">
+                {ideas.map((idea, position) => (
+                  <button
+                    key={position}
+                    type="button"
+                    onClick={() => {
+                      onChange(idea);
+                      setIdeas(null);
+                      inputRef.current?.focus();
+                    }}
+                    className="rounded-lg border border-hearth-800/70 px-3 py-2 text-left text-hearth-200 transition-colors hover:border-hearth-600 hover:bg-hearth-800/30"
+                  >
+                    {idea}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {noIdeas ? <p className="text-sm text-hearth-500">{noIdeas}</p> : null}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <button

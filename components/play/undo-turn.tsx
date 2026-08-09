@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { retellLastTurnAction, undoLastTurnAction } from "@/lib/game/undo-actions";
+import {
+  markStoppingPointAction,
+  retellLastTurnAction,
+  undoLastTurnAction,
+} from "@/lib/game/undo-actions";
 import { Alert } from "@/components/ui";
 
 /**
@@ -23,9 +27,12 @@ import { Alert } from "@/components/ui";
  */
 export function UndoTurn({
   campaignId,
+  canUndo,
   onRestore,
 }: {
   campaignId: string;
+  /** False before the first turn — stopping is still offered, undo is not. */
+  canUndo: boolean;
   /** Puts the removed words back in the boxes so only the correction is typed. */
   onRestore: (actions: { characterId: string; text: string }[]) => void;
 }) {
@@ -45,6 +52,25 @@ export function UndoTurn({
       // A full reload rather than a refresh: refreshing re-fetches server data
       // but leaves the table's own state alone, so the narration that was just
       // streamed would stay on screen after the turn producing it was deleted.
+      window.location.reload();
+    });
+  }
+
+  /**
+   * Marks where this evening ended.
+   *
+   * Not a confirmation-worthy action: it adds a line to the transcript and
+   * removes nothing, so the cost of an accidental press is a stray divider.
+   */
+  function stopHere() {
+    startTransition(async () => {
+      const form = new FormData();
+      form.set("campaignId", campaignId);
+      const result = await markStoppingPointAction(null, form);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
       window.location.reload();
     });
   }
@@ -72,18 +98,30 @@ export function UndoTurn({
         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
           <button
             type="button"
-            onClick={() => setOpen("retell")}
-            className="text-hearth-500 underline underline-offset-4 hover:text-hearth-300"
+            onClick={stopHere}
+            disabled={pending}
+            className="text-hearth-500 underline underline-offset-4 hover:text-hearth-300 disabled:opacity-50"
           >
-            The storyteller got that wrong
+            We&rsquo;ll stop here for today
           </button>
-          <button
-            type="button"
-            onClick={() => setOpen("undo")}
-            className="text-hearth-500 underline underline-offset-4 hover:text-hearth-300"
-          >
-            Take back the last turn
-          </button>
+          {canUndo ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setOpen("retell")}
+                className="text-hearth-500 underline underline-offset-4 hover:text-hearth-300"
+              >
+                The storyteller got that wrong
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen("undo")}
+                className="text-hearth-500 underline underline-offset-4 hover:text-hearth-300"
+              >
+                Take back the last turn
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     );
