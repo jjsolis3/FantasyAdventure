@@ -286,3 +286,81 @@ test("probe reports reachability without throwing", async () => {
   assert.equal(result.ok, false);
   assert.match(result.detail, /Could not reach/);
 });
+
+// ---- Thinking models -------------------------------------------------------
+
+test("an empty reply is a failure, not a success", async () => {
+  // The bug this pins: `typeof "" === "string"`, so an empty answer passed the
+  // content check and the connection test reported a reachable model with a
+  // blank reply — green on a configuration that cannot finish a turn.
+  await withMockServer(
+    () => ({ raw: JSON.stringify({ choices: [{ message: { content: "" } }] }) }),
+    async (baseUrl) => {
+      await assert.rejects(
+        () => chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] }),
+        /empty reply/i,
+      );
+
+      const result = await probe(configFor(baseUrl));
+      assert.equal(result.ok, false, "probe must not call an empty reply reachable");
+    },
+  );
+});
+
+test("a model that reasoned away its budget says so", async () => {
+  // Qwen3 and friends think by default under Ollama, and the thinking is
+  // charged against the same budget as the answer. The message has to name
+  // that, because the fix is a setting rather than anything the family can see.
+  await withMockServer(
+    () => ({
+      raw: JSON.stringify({
+        choices: [
+          {
+            finish_reason: "length",
+            message: { content: "", reasoning: "Okay, the user wants me to…" },
+          },
+        ],
+      }),
+    }),
+    async (baseUrl) => {
+      await assert.rejects(
+        () => chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] }),
+        (error: Error) => {
+          assert.match(error.message, /reasoned/i);
+          assert.match(error.message, /none/i, "must name the setting that fixes it");
+          return true;
+        },
+      );
+    },
+  );
+});
+
+test("reasoning_effort is sent only when configured", async () => {
+  let seen: Record<string, unknown> = {};
+
+  await withMockServer(
+    (body) => {
+      seen = body;
+      return { content: "ready" };
+    },
+    async (baseUrl) => {
+      // Unset: the field must be absent, because OpenAI rejects values it does
+      // not recognise and every provider shares this code path.
+      await chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] });
+      assert.ok(!("reasoning_effort" in seen), "must not send the field when unconfigured");
+
+      await chat(configFor(baseUrl, { AI_REASONING_EFFORT: "none" }), {
+        messages: [{ role: "user", content: "hi" }],
+      });
+      assert.equal(seen.reasoning_effort, "none");
+    },
+  );
+});
+
+test("an unrecognised reasoning effort is ignored rather than forwarded", () => {
+  // Anything invalid must become "off", never reach the wire — a typo in an
+  // environment variable should not start rejecting every request.
+  assert.equal(configFor("http://x/v1", { AI_REASONING_EFFORT: "maximum" }).reasoningEffort, null);
+  assert.equal(configFor("http://x/v1", { AI_REASONING_EFFORT: "" }).reasoningEffort, null);
+  assert.equal(configFor("http://x/v1", { AI_REASONING_EFFORT: " NONE " }).reasoningEffort, "none");
+});

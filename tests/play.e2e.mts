@@ -144,7 +144,16 @@ try {
   const afterOpening = await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
   check("campaign became ACTIVE", afterOpening.status === "ACTIVE", afterOpening.status);
   check("a scene was created", (await db.scene.count({ where: { campaignId: campaign.id } })) === 1);
-  check("the opening is on screen", /flattened in a wide circle/i.test((await page.textContent("body")) ?? ""));
+  // The narration is typed out rather than pasted in, so the database row
+  // appears before the last character does. Snapshotting here caught the
+  // animation mid-word about one run in three.
+  const onScreen = await page
+    .waitForFunction(() => /flattened in a wide circle/i.test(document.body.textContent ?? ""), undefined, {
+      timeout: 30_000,
+    })
+    .then(() => true)
+    .catch(() => false);
+  check("the opening is on screen", onScreen);
 
   // ---- Taking a turn ------------------------------------------------------
   await page.reload();

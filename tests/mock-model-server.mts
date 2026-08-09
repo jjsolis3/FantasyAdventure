@@ -19,7 +19,11 @@ const server = createServer((request, response) => {
   let raw = "";
   request.on("data", (chunk) => (raw += chunk));
   request.on("end", () => {
-    const body = JSON.parse(raw || "{}") as { messages?: { content: string }[]; model?: string };
+    const body = JSON.parse(raw || "{}") as {
+      messages?: { content: string }[];
+      model?: string;
+      reasoning_effort?: string;
+    };
     const prompt = (body.messages ?? []).map((message) => message.content).join("\n");
 
     // Any model named "…cannot-load" fails the way Ollama does when a blob is
@@ -34,6 +38,29 @@ const server = createServer((request, response) => {
             message: `unable to load model: /models/blobs/sha256-${"0".repeat(12)}`,
             type: "api_error",
           },
+        }),
+      );
+      return;
+    }
+
+    // A model named "…thinks-forever" behaves like Qwen3 under Ollama with
+    // thinking left on: it spends the whole output budget reasoning and returns
+    // an empty answer, unless the request asks it not to think.
+    if ((body.model ?? "").includes("thinks-forever") && body.reasoning_effort !== "none") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              index: 0,
+              finish_reason: "length",
+              message: {
+                role: "assistant",
+                content: "",
+                reasoning: "Okay, the user wants me to reply with one word. Let me consider…",
+              },
+            },
+          ],
         }),
       );
       return;
