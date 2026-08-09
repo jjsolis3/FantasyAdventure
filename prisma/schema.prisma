@@ -290,6 +290,9 @@ model Campaign {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastPlayedAt DateTime?
+  /// Set when the final act closes, so a finished adventure reads as finished
+  /// rather than as one nobody has opened in a while.
+  completedAt  DateTime?
 
   @@index([ownerId])
   @@index([storylineId])

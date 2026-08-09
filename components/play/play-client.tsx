@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
@@ -94,6 +95,9 @@ export function PlayClient({
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const hasBegun = status !== "SETUP";
+  // A campaign only reaches COMPLETE when its final act closes. Without this
+  // the table was asked "what do you do?" forever, past the ending.
+  const [finished, setFinished] = useState(status === "COMPLETE");
 
   const run = useCallback(
     async (body: Record<string, unknown>) => {
@@ -123,6 +127,11 @@ export function PlayClient({
             setPhase((current) => (current.kind === "running" ? { ...current, dice } : current));
           } else if (event === "narration") {
             setPhase({ kind: "narrating", text: String(data.text), dice });
+          } else if (event === "done") {
+            // The last act just closed. Said here rather than waiting for the
+            // refresh, so the ending is not preceded by one more "what do you
+            // do?" prompt.
+            if (data.campaignComplete === true) setFinished(true);
           } else if (event === "error") {
             failed = String(data.message);
           }
@@ -221,6 +230,20 @@ export function PlayClient({
             >
               Try again
             </button>
+          </div>
+        ) : finished ? (
+          <div className="rounded-xl border border-moss-700/50 bg-moss-900/20 p-6 text-center">
+            <h2 className="font-display mb-2 text-2xl text-hearth-100">The end</h2>
+            <p className="text-hearth-300">
+              This adventure is complete. The whole story is above, and everything your
+              adventurers learned and found stays with them.
+            </p>
+            <Link
+              href="/campaigns"
+              className="mt-4 inline-block rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
+            >
+              Choose the next adventure
+            </Link>
           </div>
         ) : !hasBegun ? (
           <button

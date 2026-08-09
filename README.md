@@ -28,7 +28,8 @@ they can only use together. Polish is M7.
 | ✅ | **M4** Four-stage turn pipeline, memory pyramid, safety guard, CLI harness |
 | ✅ | **M5** The table — streaming turn progress, dice reveals, transcript |
 | ✅ | **M6** Skill growth, inventory, milestone announcements, Family Moves |
-| ⬜ | M7 polish |
+| ✅ | **M6** Adventures now end — the final act closes the story rather than looping |
+| ⬜ | M7 polish — undo a turn, printable journal, portraits |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.

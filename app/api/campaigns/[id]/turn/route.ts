@@ -60,6 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           checks: result.checks,
           diagnostics: result.diagnostics,
           sceneComplete: result.extraction.sceneComplete,
+          campaignComplete: result.campaignComplete,
         });
       }
     } catch (error) {
