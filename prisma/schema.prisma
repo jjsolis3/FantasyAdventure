@@ -244,6 +244,17 @@ model Relationship {
   @@index([characterBId])
 }
 
+/// How long the family wants an adventure to run. Advice to the storyteller
+/// about when an act has gone on long enough, not a hard limit.
+enum Pacing {
+  /// One evening.
+  BRISK
+  /// A few sessions.
+  STANDARD
+  /// Long and unhurried.
+  LEISURELY
+}
+
 enum CampaignStatus {
   /// Created, party chosen, but the first scene has not been narrated yet.
   SETUP
@@ -290,6 +301,9 @@ model Campaign {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastPlayedAt DateTime?
+  /// Copied onto the campaign at setup, like tone and reading level, so
+  /// changing your mind later cannot rewrite an adventure already under way.
+  pacing       Pacing    @default(STANDARD)
   snapshot     TurnSnapshot?
   /// Set when the final act closes, so a finished adventure reads as finished
   /// rather than as one nobody has opened in a while.

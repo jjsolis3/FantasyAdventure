@@ -145,7 +145,18 @@ Write only the story. No headings, no lists, no questions to the players.`;
 }
 
 /** Stage 4 — pull structured state out of the narration just written. */
-export function extractionPrompt(options: { narration: string; partyNames: string[] }): string {
+export function extractionPrompt(options: {
+  narration: string;
+  partyNames: string[];
+  /**
+   * Where the story is and how long this family likes an act to run.
+   *
+   * Without it the storyteller judged "actComplete" from the passage alone,
+   * with no idea whether the table wanted an evening or a month — so
+   * adventures ran whatever length the model felt like.
+   */
+  pacing?: string;
+}): string {
   return `Read this passage from a story and extract what should be remembered.
 
 PASSAGE:
@@ -163,6 +174,10 @@ Reply with ONLY this JSON, no other text:
   "actComplete": false,
   "sceneComplete": false
 }
+${options.pacing ? `\nHOW LONG THIS SHOULD RUN:\n${options.pacing}\n` : ""}
+Set "sceneComplete" when the party has clearly moved on — somewhere new, or a
+situation that is finished. Set "actComplete" only when the act's own goal is
+met, not merely because a scene ended.
 
 Rules:
 - Only record things that will still matter in an hour. Skip scenery.

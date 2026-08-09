@@ -26,6 +26,7 @@ import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder
 import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
+import { pacingGuidance } from "@/lib/game/pacing";
 import {
   SKILL_XP_PER_USE,
   bondLevelFor,
@@ -449,6 +450,15 @@ export async function playTurn(
       })),
       actions: accepted,
       correction: correction?.trim() || undefined,
+      pacing: pacingGuidance({
+        pacing: campaign.pacing,
+        // Scenes already played in this act, including the one in progress.
+        sceneInAct: campaign.scenes.filter(
+          (entry) => entry.actIndex === campaign.currentActIndex,
+        ).length,
+        actIndex: campaign.currentActIndex,
+        actCount: campaign.storyline.acts.length,
+      }),
       familyMove:
         validMove && familyMove
           ? {

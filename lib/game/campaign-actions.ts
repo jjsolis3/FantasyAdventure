@@ -12,6 +12,7 @@ const campaignSchema = z.object({
   title: z.string().trim().min(1, "Give this adventure a name.").max(80, "That name is very long."),
   tone: z.enum(["COZY", "ADVENTUROUS"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
+  pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
 });
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -39,6 +40,7 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     title: formData.get("title"),
     tone: formData.get("tone"),
     readingLevel: formData.get("readingLevel"),
+    pacing: formData.get("pacing") ?? undefined,
   });
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -78,6 +80,7 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
       title: parsed.data.title,
       tone: parsed.data.tone,
       readingLevel: parsed.data.readingLevel,
+      pacing: parsed.data.pacing,
       party: {
         // Turn order follows the order they were listed in the form.
         create: partyIds.map((characterId, index) => ({ characterId, position: index })),
@@ -145,6 +148,7 @@ const settingsSchema = z.object({
   title: z.string().trim().min(1, "Give this adventure a name.").max(80),
   tone: z.enum(["COZY", "ADVENTUROUS"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
+  pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
 });
 
 export async function updateCampaignSettingsAction(
@@ -158,6 +162,7 @@ export async function updateCampaignSettingsAction(
     title: formData.get("title"),
     tone: formData.get("tone"),
     readingLevel: formData.get("readingLevel"),
+    pacing: formData.get("pacing") ?? undefined,
   });
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
