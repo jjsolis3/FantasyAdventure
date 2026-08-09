@@ -214,6 +214,57 @@ try {
   check("the dice result is in the transcript", /Success|Critical|Partly|Complication/.test(body));
   check("the narration is in the transcript", /hums, low and steady/i.test(body));
 
+  // ---- Taking back the last turn ------------------------------------------
+  //
+  // The point of the test is that undo reverses the *whole* turn, not just the
+  // words on screen. A turn awards experience, ranks up skills, deepens bonds,
+  // adds items and records memories; leaving any of those behind would let a
+  // family farm rewards by undoing and replaying.
+  const beforeUndo = {
+    turns: await db.turnEvent.count(),
+    xp: (await db.character.findMany({ orderBy: { name: "asc" } })).map((c) => c.xp),
+    items: await db.inventoryItem.count(),
+    memories: await db.memory.count(),
+    bondXp: (await db.relationship.findMany()).map((r) => r.bondXp),
+    turnCounter: (await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).turnCounter,
+  };
+  check("the turn awarded something to undo", beforeUndo.xp.some((xp) => xp > 0));
+
+  await page.click('button:has-text("Take back the last turn")');
+  await page.waitForSelector('button:has-text("Yes, take it back")');
+  await submitAndSettle(page, 'button:has-text("Yes, take it back")');
+
+  const undone = await waitFor(
+    "the turn to be taken back",
+    async () => (await db.turnEvent.count()) < beforeUndo.turns,
+  );
+  check("the turn's events were removed", undone);
+
+  const afterUndo = {
+    xp: (await db.character.findMany({ orderBy: { name: "asc" } })).map((c) => c.xp),
+    items: await db.inventoryItem.count(),
+    memories: await db.memory.count(),
+    bondXp: (await db.relationship.findMany()).map((r) => r.bondXp),
+    turnCounter: (await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).turnCounter,
+  };
+
+  check("experience was given back", afterUndo.xp.every((xp) => xp === 0), afterUndo.xp.join(","));
+  check("the item picked up is gone", afterUndo.items === 0, String(afterUndo.items));
+  check("what was learned is forgotten", afterUndo.memories === 0, String(afterUndo.memories));
+  check("bonds went back", afterUndo.bondXp.every((xp) => xp === 0), afterUndo.bondXp.join(","));
+  check(
+    "the turn counter went back",
+    afterUndo.turnCounter === beforeUndo.turnCounter - 1,
+    `${beforeUndo.turnCounter} -> ${afterUndo.turnCounter}`,
+  );
+
+  const afterBody = (await page.textContent("body")) ?? "";
+  check("the narration is gone from the transcript", !/hums, low and steady/i.test(afterBody));
+  check("the opening is still there", /flattened in a wide circle/i.test(afterBody));
+
+  // One turn deep: the snapshot is spent, so there is nothing further back.
+  check("there is nothing left to undo", (await db.turnSnapshot.count()) === 0);
+
   // ---- Another household cannot reach the table ---------------------------
   const turnsBeforeStranger = await db.turnEvent.count();
   {

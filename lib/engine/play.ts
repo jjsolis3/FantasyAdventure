@@ -7,6 +7,7 @@
  */
 
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client.ts";
 import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/context";
 import { openingPrompt, summaryPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
 import { summarySchema, validator } from "@/lib/ai/schemas";
@@ -15,6 +16,7 @@ import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
 import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
+import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
 import {
   SKILL_XP_PER_USE,
@@ -458,6 +460,29 @@ export async function playTurn(
 
   await db.$transaction(async (tx) => {
     let ordinal = await nextOrdinal(scene.id);
+
+    // Before anything is written: what the table can go back to. Inside the
+    // transaction so a turn that fails leaves no snapshot claiming otherwise.
+    const snapshot = await captureSnapshot(
+      tx,
+      campaign.id,
+      campaign.party.map((member) => member.characterId),
+    );
+    await tx.turnSnapshot.upsert({
+      where: { campaignId: campaign.id },
+      create: {
+        campaignId: campaign.id,
+        turnCounter: campaign.turnCounter,
+        fromOrdinal: ordinal,
+        state: snapshot as unknown as Prisma.InputJsonValue,
+      },
+      update: {
+        turnCounter: campaign.turnCounter,
+        fromOrdinal: ordinal,
+        state: snapshot as unknown as Prisma.InputJsonValue,
+        createdAt: new Date(),
+      },
+    });
 
     for (const action of accepted) {
       await tx.turnEvent.create({
