@@ -37,6 +37,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     mode?: "begin" | "turn";
     actions?: PlayerAction[];
     familyMove?: FamilyMoveChoice | null;
+    /** Set when retelling a turn the table took back. */
+    correction?: string | null;
   };
 
   return sseResponse(async (send) => {
@@ -54,6 +56,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           body.actions ?? [],
           onProgress,
           body.familyMove ?? null,
+          body.correction ?? null,
         );
         send("narration", { text: result.narration });
         send("done", {

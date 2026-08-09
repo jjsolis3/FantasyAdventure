@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
+import { UndoTurn } from "./undo-turn";
 
 export type PlayCharacter = {
   id: string;
@@ -78,6 +79,7 @@ export function PlayClient({
   party,
   initialEntries,
   availableMoves,
+  canUndo,
 }: {
   campaignId: string;
   campaignTitle: string;
@@ -85,6 +87,8 @@ export function PlayClient({
   party: PlayCharacter[];
   initialEntries: TranscriptEntry[];
   availableMoves: AvailableMove[];
+  /** True once a turn has been played, so there is something to take back. */
+  canUndo: boolean;
 }) {
   const router = useRouter();
 
@@ -92,6 +96,10 @@ export function PlayClient({
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [move, setMove] = useState<MoveChoice | null>(null);
+  /** What the table says the last telling got wrong; sent with the retold turn. */
+  const [correction, setCorrection] = useState("");
+  /** True between taking a turn back to retell it and sending the retelling. */
+  const [retelling, setRetelling] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const hasBegun = status !== "SETUP";
@@ -146,6 +154,8 @@ export function PlayClient({
         // authoritative transcript rather than trusting what was streamed.
         setDrafts({});
         setMove(null);
+        setCorrection("");
+        setRetelling(false);
         router.refresh();
       } catch (error) {
         setPhase({
@@ -289,13 +299,38 @@ export function PlayClient({
               </ul>
             )}
 
+            {retelling ? (
+              <label className="block rounded-lg border border-hearth-700/60 bg-hearth-950/40 p-4">
+                <span className="mb-1.5 block text-sm font-medium text-hearth-200">
+                  What did the storyteller get wrong?
+                </span>
+                <textarea
+                  value={correction}
+                  onChange={(event) => setCorrection(event.target.value)}
+                  rows={2}
+                  placeholder="Mira was humming to the creature, not to the goats."
+                  className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
+                />
+                <span className="mt-1.5 block text-sm text-hearth-400">
+                  In your own words. The storyteller takes this as what really happened.
+                </span>
+              </label>
+            ) : null}
+
             <FamilyMovePicker available={availableMoves} chosen={move} onChoose={setMove} />
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 disabled={filledActions.length === 0}
-                onClick={() => run({ mode: "turn", actions: filledActions, familyMove: move })}
+                onClick={() =>
+                  run({
+                    mode: "turn",
+                    actions: filledActions,
+                    familyMove: move,
+                    correction: correction.trim() || null,
+                  })
+                }
                 className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500 disabled:opacity-40"
               >
                 Tell the storyteller
@@ -319,8 +354,43 @@ export function PlayClient({
           </button>
         )}
       </div>
+
+      {canUndo && !finished && phase.kind !== "running" ? (
+        <UndoTurn
+          campaignId={campaignId}
+          onRestore={(actions) => {
+            setDrafts(Object.fromEntries(actions.map((a) => [a.characterId, a.text])));
+            setRetelling(true);
+            setEntries((current) => current.slice(0, -countTurnEntries(current)));
+            setPhase({ kind: "review" });
+          }}
+        />
+      ) : null}
     </div>
   );
+}
+
+/**
+ * How many trailing entries belong to the turn just taken back.
+ *
+ * The server has already deleted them; this only stops them lingering on screen
+ * while the table types its correction. Everything from the last run of player
+ * actions onward is one turn's worth.
+ */
+function countTurnEntries(entries: TranscriptEntry[]): number {
+  let count = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    count += 1;
+    if (entries[index].type === "PLAYER_ACTION") {
+      // Keep walking back over the rest of this turn's actions.
+      while (index - 1 >= 0 && entries[index - 1].type === "PLAYER_ACTION") {
+        index -= 1;
+        count += 1;
+      }
+      break;
+    }
+  }
+  return count;
 }
 
 function AskCharacter({
@@ -401,3 +471,4 @@ function AskCharacter({
     </div>
   );
 }
+

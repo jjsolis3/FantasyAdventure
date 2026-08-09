@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { PlayClient } from "@/components/play/play-client";
-import { UndoTurn } from "@/components/play/undo-turn";
 import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
@@ -191,9 +190,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         }))}
         initialEntries={entries}
         availableMoves={availableMoves}
+        canUndo={canUndo}
       />
-
-      {canUndo ? <UndoTurn campaignId={campaign.id} /> : null}
     </main>
   );
 }

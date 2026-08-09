@@ -391,6 +391,8 @@ export async function playTurn(
   actions: PlayerAction[],
   onProgress?: (event: TurnProgress) => void,
   familyMove?: FamilyMoveChoice | null,
+  /** Set when retelling a turn the table took back. */
+  correction?: string | null,
 ) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
@@ -438,6 +440,7 @@ export async function playTurn(
         skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
       })),
       actions: accepted,
+      correction: correction?.trim() || undefined,
       familyMove:
         validMove && familyMove
           ? {

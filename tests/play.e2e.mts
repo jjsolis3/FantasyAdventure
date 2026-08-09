@@ -265,6 +265,51 @@ try {
   // One turn deep: the snapshot is spent, so there is nothing further back.
   check("there is nothing left to undo", (await db.turnSnapshot.count()) === 0);
 
+  // ---- "The storyteller got that wrong" -----------------------------------
+  //
+  // Same machinery as undo, different intent: the words come back so only the
+  // correction has to be typed, and the correction reaches the model.
+  await page.reload();
+  await page.click('button:has-text("What do you do?")');
+  await page.fill("textarea", "I hum to it, like I do with the goats.");
+  await page.click('button:has-text("Next")');
+  await page.fill("textarea", "I stand between it and my sister.");
+  await page.click('button:has-text("Done")');
+  await page.click('button:has-text("Tell the storyteller")');
+
+  await waitFor("the retold turn to commit", async () => (await db.turnSnapshot.count()) === 1);
+
+  await page.click('button:has-text("The storyteller got that wrong")');
+  await page.click('button:has-text("Yes, let us explain")');
+
+  await page.waitForSelector("text=/What did the storyteller get wrong/", { timeout: 30_000 });
+  const restored = (await page.textContent("body")) ?? "";
+  check(
+    "the words everyone said came back",
+    restored.includes("like I do with the goats") && restored.includes("between it and my sister"),
+  );
+
+  await page.fill(
+    'textarea[placeholder*="humming to the creature"]',
+    "Mira was humming to the creature, not to the goats.",
+  );
+  await page.click('button:has-text("Tell the storyteller")');
+
+  const retold = await waitFor(
+    "the retelling to commit",
+    async () => (await db.turnEvent.count({ where: { type: "NARRATION" } })) === 2,
+  );
+  check("the retold turn was committed", retold);
+
+  const correctionReached = await db.aiCall.findFirst({
+    where: { promptPreview: { contains: "not to the goats" } },
+  });
+  check("the correction reached the storyteller", correctionReached !== null);
+  check(
+    "it was given to the storyteller as the truth",
+    correctionReached?.promptPreview?.includes("GOT SOMETHING WRONG") === true,
+  );
+
   // ---- Another household cannot reach the table ---------------------------
   const turnsBeforeStranger = await db.turnEvent.count();
   {

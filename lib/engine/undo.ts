@@ -114,7 +114,16 @@ export async function captureSnapshot(
 }
 
 export type UndoResult =
-  | { ok: true; turnCounter: number }
+  | {
+      ok: true;
+      turnCounter: number;
+      /**
+       * What each character had said, so a retelling can restore it rather than
+       * making everyone type it again. Nobody wants to re-enter three sentences
+       * because the storyteller misread one of them.
+       */
+      actions: { characterId: string; text: string }[];
+    }
   | { ok: false; reason: string };
 
 /**
@@ -137,6 +146,17 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
   const snapshot = campaign.snapshot;
   const state = snapshot.state as unknown as SnapshotState;
   const keptSceneIds = new Set(state.scenes.map((scene) => scene.id));
+
+  // Read before the delete, obviously.
+  const spoken = await db.turnEvent.findMany({
+    where: {
+      sceneId: { in: [...keptSceneIds] },
+      ordinal: { gte: snapshot.fromOrdinal },
+      type: "PLAYER_ACTION",
+    },
+    orderBy: { ordinal: "asc" },
+    select: { actorCharacterId: true, content: true },
+  });
 
   await db.$transaction(async (tx) => {
     // Scenes the turn opened. Deleting them removes their turn events too, so
@@ -232,5 +252,11 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
     await tx.turnSnapshot.delete({ where: { campaignId } });
   });
 
-  return { ok: true, turnCounter: state.campaign.turnCounter };
+  return {
+    ok: true,
+    turnCounter: state.campaign.turnCounter,
+    actions: spoken
+      .filter((event) => event.actorCharacterId !== null)
+      .map((event) => ({ characterId: event.actorCharacterId as string, text: event.content })),
+  };
 }

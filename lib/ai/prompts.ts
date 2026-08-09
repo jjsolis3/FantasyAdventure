@@ -71,10 +71,29 @@ export function systemPrompt(options: {
 const STAT_LIST = STATS.map((stat) => `${stat} (${STAT_INFO[stat].blurb})`).join(", ");
 
 /** Stage 1 — decide which declared actions need a roll. */
+/**
+ * The table's own words about what the last telling misunderstood.
+ *
+ * Placed high, before the actions, because it exists to change how those
+ * actions are read — arriving after them would be a footnote to a
+ * misreading that has already happened.
+ */
+function correctionBlock(correction?: string): string {
+  if (!correction?.trim()) return "";
+  return `
+THE TABLE SAYS THE LAST TELLING GOT SOMETHING WRONG:
+${correction.trim()}
+
+Take that as the truth of what happened and tell it again accordingly.
+`;
+}
+
 export function adjudicationPrompt(options: {
   sceneText: string;
   party: string;
   actions: { character: string; text: string }[];
+  /** The table saying what the previous telling got wrong. */
+  correction?: string;
 }): string {
   return `Read what each character is trying to do and decide which attempts need a dice roll.
 
@@ -86,7 +105,7 @@ Difficulty: EASY for simple-but-uncertain, NORMAL for genuinely tricky, HARD for
 
 THE SCENE:
 ${options.sceneText}
-
+${correctionBlock(options.correction)}
 THE PARTY:
 ${options.party}
 
@@ -107,9 +126,11 @@ export function narrationPrompt(options: {
   context: string;
   actions: { character: string; text: string }[];
   resolutions: string;
+  /** The table saying what the previous telling got wrong. */
+  correction?: string;
 }): string {
   return `${options.context}
-
+${correctionBlock(options.correction)}
 WHAT THE CHARACTERS JUST DID:
 ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join("\n")}
 
