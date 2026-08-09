@@ -62,6 +62,7 @@ model User {
   campaigns      Campaign[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
+  roundAnswers   RoundAnswer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -158,6 +159,7 @@ model Character {
   skills        CharacterSkill[]
   inventory     InventoryItem[]
   partyMemberships PartyMember[]
+  roundAnswers  RoundAnswer[]
   /// Relationships where this character is the "A" side, and the "B" side.
   relationshipsA Relationship[]  @relation("RelationshipA")
   relationshipsB Relationship[]  @relation("RelationshipB")
@@ -263,6 +265,19 @@ enum CampaignStatus {
   COMPLETE
 }
 
+/// Where the answers are typed.
+///
+/// The story is the same either way — one transcript, one turn at a time. This
+/// only decides whether the table shares a keyboard or brings its own.
+enum InputMode {
+  /// Everyone round one screen. The storyteller asks each adventurer in turn,
+  /// one after another, and one person types.
+  SHARED_SCREEN
+  /// Everyone on their own phone or laptop, answering at the same time. The
+  /// turn is taken once every adventurer has said what they are doing.
+  OWN_DEVICE
+}
+
 /// One family's run through a storyline. The storyline is the sheet music;
 /// the campaign is the performance, and it can wander a long way from the page.
 model Campaign {
@@ -274,6 +289,15 @@ model Campaign {
   storyline   Storyline @relation(fields: [storylineId], references: [id])
 
   title String
+
+  /// Typed in by another household to bring one of their adventurers along.
+  /// Shaped like an invite code so the two read the same way out loud.
+  joinCode String @unique
+
+  /// Whether the party shares a screen or answers from their own devices.
+  /// Changeable at any point — a family that plays round the table on Sunday
+  /// and from three bedrooms on Wednesday should not need two adventures.
+  inputMode InputMode @default(SHARED_SCREEN)
 
   /// Copied from the storyline and the owner's preferences at creation, then
   /// owned by the campaign — changing your profile later must not silently
@@ -294,6 +318,7 @@ model Campaign {
   familyMoveUses FamilyMoveUse[]
   memories Memory[]
   aiCalls  AiCall[]
+  rounds   TurnRound[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)
@@ -330,6 +355,110 @@ model PartyMember {
 
   @@unique([campaignId, characterId])
   @@index([characterId])
+}
+
+enum RoundMode {
+  /// A turn: the storyteller adjudicates, dice are rolled, the story moves on.
+  ACTION
+  /// Talking to each other. One model call, no dice, no consequences.
+  TALK
+}
+
+enum RoundStatus {
+  /// Waiting for the party. Answers can still be changed.
+  COLLECTING
+  /// Everyone is in and one player's browser is running the turn.
+  RESOLVING
+  /// The turn was taken. The transcript is the record from here on.
+  RESOLVED
+  /// Abandoned before it was taken.
+  CANCELLED
+}
+
+/// One round of "what do you do?", collected from several devices at once.
+///
+/// This exists only for OWN_DEVICE campaigns. On a shared screen the answers
+/// never need to outlive the page: one person types all of them and presses
+/// send. Apart, they need somewhere to wait for each other — and that somewhere
+/// has to be the database, because two phones share nothing else.
+///
+/// The turn itself is unchanged. A round is a waiting room in front of it: when
+/// the last adventurer answers, exactly one browser wins the claim below and
+/// runs the same pipeline the shared screen runs, with the same result for
+/// everybody. That is what keeps the adventure single-threaded while the typing
+/// is not.
+model TurnRound {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// 1-based within the campaign, and the reason two devices cannot open two
+  /// rounds at once: the second insert loses the unique constraint and its
+  /// owner is handed the round that already exists.
+  number Int
+  mode   RoundMode   @default(ACTION)
+  status RoundStatus @default(COLLECTING)
+
+  /// The pipeline stage the resolving browser last reported, so that every
+  /// other screen can say "rolling the dice" at the same moment.
+  stage String?
+
+  /// Who is running the turn, and since when. A claim older than a turn could
+  /// possibly take belongs to a browser that was closed mid-turn, and may be
+  /// taken over.
+  claimedById String?
+  claimedAt   DateTime?
+
+  /// The Family Move the table chose: { key, helperId, targetId }.
+  familyMove Json?
+
+  /// True when this round is retelling a turn that was taken back. Its answers
+  /// arrive already filled in, so it must not start the moment it loads: the
+  /// table is here to change something, and needs to say when it is ready.
+  retelling Boolean @default(false)
+  /// What the table says the last telling got wrong, typed during a retelling
+  /// and handed to the storyteller as what really happened.
+  correction String?
+  /// Why the last attempt failed. Shown to everyone, and cleared on retry —
+  /// a failed turn returns the round to COLLECTING rather than losing what
+  /// everybody typed.
+  error String?
+
+  answers RoundAnswer[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  @@unique([campaignId, number])
+  @@index([campaignId, status])
+}
+
+/// One adventurer's answer within a round.
+model RoundAnswer {
+  id      String    @id @default(cuid())
+  roundId String
+  round   TurnRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// Who typed it, so the screen can say "you" and so an answer can only be
+  /// changed by the person who wrote it.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  text String
+  /// "Waits and watches" — ready, but doing nothing. Distinct from an empty
+  /// answer, which means nobody has spoken yet.
+  waiting Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([roundId, characterId])
+  @@index([characterId])
+  @@index([userId])
 }
 
 enum SceneStatus {

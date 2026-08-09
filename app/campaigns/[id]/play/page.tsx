@@ -7,7 +7,10 @@ import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
 import type { AvailableMove } from "@/components/play/family-move-picker";
-import { movesUnlockedAt } from "@/lib/game/rules";
+import { kindFromPerspective, movesUnlockedAt } from "@/lib/game/rules";
+import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
+import { currentRound } from "@/lib/game/rounds";
+import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +19,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const user = await requireUser();
 
   const campaign = await db.campaign.findFirst({
-    where: { id, ownerId: user.id },
+    where: memberCampaignFilter(id, user.id),
     include: {
       storyline: { include: { acts: { orderBy: { index: "asc" } } } },
       party: {
@@ -24,6 +27,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         include: {
           character: {
             include: {
+              user: { select: { id: true, displayName: true } },
+              skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
@@ -35,6 +40,11 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     },
   });
   if (!campaign) notFound();
+
+  const membership = await membershipFor(campaign.id, user.id);
+  // Only OWN_DEVICE campaigns have a waiting room; a shared screen keeps its
+  // answers on the page until they are sent.
+  const round = campaign.inputMode === "OWN_DEVICE" ? await currentRound(campaign.id) : null;
 
   const openScene = campaign.scenes.find((scene) => scene.status === "OPEN");
 
@@ -102,7 +112,41 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
       }),
   );
 
-  const carrying = campaign.party.filter((member) => member.character.inventory.length > 0);
+  // Everybody's sheet, for everybody. On separate devices there is no longer a
+  // screen in the middle of the table to lean over, and a player who cannot see
+  // what their character is good at has no way to decide what to try.
+  const sheets: PartySheet[] = campaign.party.map((member) => ({
+    id: member.characterId,
+    name: member.character.name,
+    race: member.character.race,
+    archetype: member.character.archetype,
+    pronouns: member.character.pronouns,
+    description: member.character.description,
+    xp: member.character.xp,
+    stats: Object.fromEntries(STATS.map((stat) => [stat, member.character[stat]])) as Record<
+      (typeof STATS)[number],
+      number
+    >,
+    skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
+    inventory: member.character.inventory.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      description: item.description,
+    })),
+    bonds: [...member.character.relationshipsA, ...member.character.relationshipsB]
+      .map((row) => {
+        const other = "characterB" in row ? row.characterB : row.characterA;
+        return {
+          otherId: other.id,
+          otherName: other.name,
+          kind: kindFromPerspective(row, member.characterId),
+          bondLevel: row.bondLevel,
+        };
+      })
+      .filter((bond) => inParty.has(bond.otherId)),
+    playedBy: member.character.user.displayName,
+    yours: member.character.userId === user.id,
+  }));
 
   const recap = campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary);
 
@@ -120,9 +164,15 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </Link>
         {act ? (
           <p className="mt-2 text-sm tracking-[0.15em] text-hearth-400 uppercase">
-            Chapter {act.index} · {act.title}
+            Chapter {act.index} of {campaign.storyline.acts.length} · {act.title}
           </p>
         ) : null}
+        <p className="mt-1 text-sm text-hearth-500">
+          {campaign.turnCounter} {campaign.turnCounter === 1 ? "turn" : "turns"} so far ·{" "}
+          {campaign.inputMode === "OWN_DEVICE"
+            ? "everyone on their own device"
+            : "one shared screen"}
+        </p>
       </header>
 
       {/* Party status bar — sticky so a ten-year-old can always see their stats. */}
@@ -142,25 +192,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </ul>
       </div>
 
-      {carrying.length > 0 ? (
-        <details className="mb-4 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
-          <summary className="cursor-pointer text-sm text-hearth-300">
-            What you are carrying
-          </summary>
-          <div className="mt-3 space-y-2">
-            {carrying.map((member) => (
-              <div key={member.id}>
-                <p className="text-sm font-medium text-hearth-300">{member.character.name}</p>
-                <p className="text-sm text-hearth-200/70">
-                  {member.character.inventory
-                    .map((item) => (item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name))
-                    .join(" · ")}
-                </p>
-              </div>
-            ))}
-          </div>
-        </details>
-      ) : null}
+      <PartySheets sheets={sheets} />
 
       {recap.length > 0 ? (
         <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
@@ -189,10 +221,15 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           archetype: member.character.archetype,
           level: member.character.level,
           pronouns: member.character.pronouns,
+          playedBy: member.character.user.displayName,
+          yours: member.character.userId === user.id,
         }))}
         initialEntries={entries}
         availableMoves={availableMoves}
         canUndo={canUndo}
+        inputMode={campaign.inputMode}
+        yourCharacterIds={membership.controlledCharacterIds}
+        initialRound={round}
       />
     </main>
   );

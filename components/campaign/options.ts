@@ -39,6 +39,25 @@ export const READING_LEVEL_OPTIONS = [
   },
 ] as const;
 
+export const INPUT_MODE_OPTIONS = [
+  {
+    value: "SHARED_SCREEN",
+    label: "One shared screen",
+    blurb:
+      "Everyone round one device. The storyteller asks each adventurer in turn, and one person types.",
+  },
+  {
+    value: "OWN_DEVICE",
+    label: "Everyone on their own device",
+    blurb:
+      "Each player answers on their own phone or laptop, all at the same time. The turn is taken once everybody has answered.",
+  },
+] as const;
+
+export const INPUT_MODE_LABELS: Record<string, string> = Object.fromEntries(
+  INPUT_MODE_OPTIONS.map((option) => [option.value, option.label]),
+);
+
 export const TONE_LABELS: Record<string, string> = Object.fromEntries(
   TONE_OPTIONS.map((option) => [option.value, option.label]),
 );

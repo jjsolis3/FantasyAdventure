@@ -6,7 +6,7 @@ import { createCampaignAction } from "@/lib/game/campaign-actions";
 import type { FormState } from "@/lib/auth/actions";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { INPUT_MODE_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
 import { PACING_OPTIONS } from "@/lib/game/pacing";
 
 export type StorylineChoice = {
@@ -49,6 +49,7 @@ export function CampaignSetup({
   const [tone, setTone] = useState<string | null>(null);
   const [readingLevel, setReadingLevel] = useState<string | null>(null);
   const [pacing, setPacing] = useState("STANDARD");
+  const [inputMode, setInputMode] = useState("SHARED_SCREEN");
   const [partyIds, setPartyIds] = useState<string[]>([]);
 
   const chosen = storylines.find((storyline) => storyline.id === storylineId);
@@ -82,6 +83,7 @@ export function CampaignSetup({
       <input type="hidden" name="tone" value={tone ?? "COZY"} />
       <input type="hidden" name="readingLevel" value={readingLevel ?? defaultReadingLevel} />
       <input type="hidden" name="pacing" value={pacing} />
+      <input type="hidden" name="inputMode" value={inputMode} />
 
       {/* ---- 1. The adventure ------------------------------------------- */}
       <section>
@@ -196,9 +198,43 @@ export function CampaignSetup({
         ))}
       </section>
 
-      {/* ---- 3. How it is told ------------------------------------------- */}
+      {/* ---- 3. Where everyone is sitting -------------------------------- */}
       <section className="border-t border-hearth-800/50 pt-8">
-        <h2 className="font-display mb-1 text-xl text-hearth-100">3 · How should it be told?</h2>
+        <h2 className="font-display mb-1 text-xl text-hearth-100">3 · Where is everyone?</h2>
+        <p className="mb-4 text-sm text-hearth-400">
+          The story is the same either way — one adventure, one turn at a time. This only decides
+          where the answers are typed, and you can change it whenever the evening changes.
+        </p>
+
+        <div className="space-y-2">
+          {INPUT_MODE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setInputMode(option.value)}
+              className={`block w-full rounded-lg border p-3 text-left transition-colors ${
+                inputMode === option.value
+                  ? "border-hearth-500 bg-hearth-800/40"
+                  : "border-hearth-800/60 hover:border-hearth-700"
+              }`}
+            >
+              <span className="block text-hearth-100">{option.label}</span>
+              <span className="block text-sm text-hearth-400">{option.blurb}</span>
+            </button>
+          ))}
+        </div>
+
+        {inputMode === "OWN_DEVICE" ? (
+          <p className="mt-3 text-sm text-hearth-400">
+            Everyone who plays from their own device needs their own sign-in. Once this adventure
+            exists it will show a code they can use to bring an adventurer along.
+          </p>
+        ) : null}
+      </section>
+
+      {/* ---- 4. How it is told ------------------------------------------- */}
+      <section className="border-t border-hearth-800/50 pt-8">
+        <h2 className="font-display mb-1 text-xl text-hearth-100">4 · How should it be told?</h2>
         <p className="mb-4 text-sm text-hearth-400">
           These are fixed to this adventure once it begins, so changing your profile later will not
           rewrite a story in progress.

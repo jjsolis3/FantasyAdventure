@@ -26,6 +26,7 @@ import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder
 import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
+import { memberCampaignFilter } from "@/lib/game/access";
 import { pacingGuidance } from "@/lib/game/pacing";
 import {
   SKILL_XP_PER_USE,
@@ -156,10 +157,16 @@ async function logAiCalls(campaignId: string, records: AiCallRecord[], repairs: 
     });
 }
 
-/** Loads a campaign with everything the prompt needs. */
+/**
+ * Loads a campaign with everything the prompt needs.
+ *
+ * Scoped to the people at the table rather than to the account that created it:
+ * once a household has joined with the code, their adventurer is in the party
+ * and they can play the turn like anybody else.
+ */
 async function loadCampaign(campaignId: string, userId: string) {
   return db.campaign.findFirst({
-    where: { id: campaignId, ownerId: userId },
+    where: memberCampaignFilter(campaignId, userId),
     include: {
       storyline: { include: { acts: { orderBy: { index: "asc" } } } },
       party: {
@@ -970,7 +977,7 @@ export async function suggestActions(campaignId: string, userId: string, charact
  */
 export async function markStoppingPoint(campaignId: string, userId: string) {
   const campaign = await db.campaign.findFirst({
-    where: { id: campaignId, ownerId: userId },
+    where: memberCampaignFilter(campaignId, userId),
     include: { scenes: { where: { status: "OPEN" }, take: 1 } },
   });
   if (!campaign) throw new Error("Campaign not found.");

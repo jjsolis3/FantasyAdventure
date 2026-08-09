@@ -3,10 +3,18 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { deleteCampaignAction } from "@/lib/game/campaign-actions";
+import { leaveCampaignAction } from "@/lib/game/party-actions";
+import { memberCampaignFilter } from "@/lib/game/access";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
-import { CAMPAIGN_STATUS_LABELS, READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
+import { JoinCode } from "@/components/campaign/join-code";
+import {
+  CAMPAIGN_STATUS_LABELS,
+  INPUT_MODE_LABELS,
+  READING_LEVEL_LABELS,
+  TONE_LABELS,
+} from "@/components/campaign/options";
 import { STATS, STAT_INFO, RELATIONSHIP_LABELS, kindFromPerspective } from "@/lib/game/rules";
 
 export const dynamic = "force-dynamic";
@@ -16,14 +24,16 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const user = await requireUser();
 
   const campaign = await db.campaign.findFirst({
-    where: { id, ownerId: user.id },
+    where: memberCampaignFilter(id, user.id),
     include: {
+      owner: { select: { displayName: true } },
       storyline: { include: { acts: { orderBy: { index: "asc" } } } },
       party: {
         orderBy: { position: "asc" },
         include: {
           character: {
             include: {
+              user: { select: { id: true, displayName: true } },
               skills: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
@@ -34,6 +44,10 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     },
   });
   if (!campaign) notFound();
+
+  const isOwner = campaign.ownerId === user.id;
+  const yourMembers = campaign.party.filter((member) => member.character.userId === user.id);
+  const households = new Set(campaign.party.map((member) => member.character.userId)).size;
 
   const characters = await db.character.findMany({
     where: { userId: user.id },
@@ -68,8 +82,17 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
       <PageTitle
         eyebrow={CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
         title={campaign.title}
-        lead={`${campaign.storyline.title} · ${TONE_LABELS[campaign.tone]} · ${READING_LEVEL_LABELS[campaign.readingLevel]}`}
+        lead={`${campaign.storyline.title} · ${TONE_LABELS[campaign.tone]} · ${READING_LEVEL_LABELS[campaign.readingLevel]} · ${INPUT_MODE_LABELS[campaign.inputMode]}`}
       />
+
+      {isOwner ? null : (
+        <div className="mb-6">
+          <Alert tone="info">
+            {campaign.owner.displayName} is running this adventure. You can play it, see everyone&rsquo;s
+            character sheets and follow the story — the settings and the party stay with them.
+          </Alert>
+        </div>
+      )}
 
       <div className="mb-6">
         <Link href="/campaigns" className="text-sm text-hearth-300 underline hover:text-hearth-200">
@@ -126,6 +149,13 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                     <span className="text-sm text-hearth-400">
                       {member.character.race} {member.character.archetype} · level {member.character.level}
                     </span>
+                    {households > 1 ? (
+                      <span className="rounded-full border border-hearth-700/50 bg-hearth-800/40 px-2 py-0.5 text-xs text-hearth-300">
+                        {member.character.userId === user.id
+                          ? "yours"
+                          : member.character.user.displayName}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-3">
                     {STATS.map((stat) => (
@@ -171,9 +201,11 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 {campaign.status === "SETUP" ? "Ready when you are" : "Pick up where you left off"}
               </h2>
               <p className="mb-4 text-sm text-hearth-400">
-                {campaign.status === "SETUP"
-                  ? "Gather everyone round one screen. The storyteller will set the scene, then ask each of you in turn."
-                  : `${campaign.turnCounter} ${campaign.turnCounter === 1 ? "turn" : "turns"} so far.`}
+                {campaign.status !== "SETUP"
+                  ? `${campaign.turnCounter} ${campaign.turnCounter === 1 ? "turn" : "turns"} so far.`
+                  : campaign.inputMode === "OWN_DEVICE"
+                    ? "Everyone opens this adventure on their own device. The storyteller sets the scene, then waits for all of you to say what you are doing before the story moves."
+                    : "Gather everyone round one screen. The storyteller will set the scene, then ask each of you in turn."}
               </p>
               <Link
                 href={`/campaigns/${campaign.id}/play`}
@@ -185,44 +217,78 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           )}
         </Card>
 
-        {campaign.status === "SETUP" ? (
+        {campaign.status === "COMPLETE" ? null : (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">Bring somebody else in</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Anyone with their own sign-in can use this code to add one of their adventurers to the
+              party. They will see the same story you do, and answer for their own character.
+              {campaign.status === "SETUP"
+                ? ""
+                : " Joining now means arriving part-way through — the storyteller will introduce them."}
+            </p>
+            <JoinCode campaignId={campaign.id} code={campaign.joinCode} isOwner={isOwner} />
+          </Card>
+        )}
+
+        {isOwner && campaign.status === "SETUP" ? (
           <Card>
             <h2 className="font-display mb-1 text-xl text-hearth-100">Change the party</h2>
             <p className="mb-4 text-sm text-hearth-400">
-              Once the adventure begins the party is settled, so that the story never refers to
-              someone who is no longer there.
+              Your own adventurers, and who is coming. Anyone who joined with the code keeps their
+              place. Once the adventure begins the party is settled, so that the story never refers
+              to someone who is no longer there.
             </p>
             <PartyEditor
               campaignId={campaign.id}
               characters={characters}
-              initialPartyIds={partyIds}
+              initialPartyIds={partyIds.filter((characterId) =>
+                yourMembers.some((member) => member.characterId === characterId),
+              )}
               minPlayers={campaign.storyline.minPlayers}
               maxPlayers={campaign.storyline.maxPlayers}
             />
           </Card>
         ) : null}
 
-        <Card>
-          <h2 className="font-display mb-4 text-xl text-hearth-100">Settings</h2>
-          <CampaignSettingsForm
-            campaignId={campaign.id}
-            title={campaign.title}
-            tone={campaign.tone}
-            readingLevel={campaign.readingLevel}
-            pacing={campaign.pacing}
-          />
-        </Card>
+        {isOwner ? (
+          <Card>
+            <h2 className="font-display mb-4 text-xl text-hearth-100">Settings</h2>
+            <CampaignSettingsForm
+              campaignId={campaign.id}
+              title={campaign.title}
+              tone={campaign.tone}
+              readingLevel={campaign.readingLevel}
+              pacing={campaign.pacing}
+              inputMode={campaign.inputMode}
+            />
+          </Card>
+        ) : null}
 
-        <Card className="border-red-900/40">
-          <h2 className="font-display mb-2 text-xl text-hearth-100">Remove</h2>
-          <p className="mb-4 text-sm text-hearth-400">
-            Deletes this adventure. The adventurers themselves are kept.
-          </p>
-          <form action={deleteCampaignAction}>
-            <input type="hidden" name="campaignId" value={campaign.id} />
-            <SubmitButton variant="danger" pendingLabel="Removing…">Remove this adventure</SubmitButton>
-          </form>
-        </Card>
+        {isOwner ? (
+          <Card className="border-red-900/40">
+            <h2 className="font-display mb-2 text-xl text-hearth-100">Remove</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Deletes this adventure, for everybody in it. The adventurers themselves are kept.
+            </p>
+            <form action={deleteCampaignAction}>
+              <input type="hidden" name="campaignId" value={campaign.id} />
+              <SubmitButton variant="danger" pendingLabel="Removing…">Remove this adventure</SubmitButton>
+            </form>
+          </Card>
+        ) : campaign.status === "SETUP" ? (
+          <Card className="border-red-900/40">
+            <h2 className="font-display mb-2 text-xl text-hearth-100">Leave</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Takes {yourMembers.length === 1 ? "your adventurer" : "your adventurers"} back out of
+              this party. Only until it begins — after that the story has already met them.
+            </p>
+            <form action={leaveCampaignAction}>
+              <input type="hidden" name="campaignId" value={campaign.id} />
+              <SubmitButton variant="danger" pendingLabel="Leaving…">Leave this adventure</SubmitButton>
+            </form>
+          </Card>
+        ) : null}
       </div>
     </main>
   );

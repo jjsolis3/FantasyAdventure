@@ -2,7 +2,13 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
-import { CAMPAIGN_STATUS_LABELS, READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
+import { memberCampaignWhere } from "@/lib/game/access";
+import {
+  CAMPAIGN_STATUS_LABELS,
+  INPUT_MODE_LABELS,
+  READING_LEVEL_LABELS,
+  TONE_LABELS,
+} from "@/components/campaign/options";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +16,12 @@ export default async function CampaignsPage() {
   const user = await requireUser();
 
   const campaigns = await db.campaign.findMany({
-    where: { ownerId: user.id },
+    where: memberCampaignWhere(user.id),
     include: {
+      owner: { select: { displayName: true } },
       storyline: { select: { title: true, estimatedScenes: true } },
       party: {
-        include: { character: { select: { name: true } } },
+        include: { character: { select: { name: true, userId: true } } },
         orderBy: { position: "asc" },
       },
     },
@@ -43,12 +50,20 @@ export default async function CampaignsPage() {
             </p>
           </Card>
         ) : (
-          <Link
-            href="/campaigns/new"
-            className="inline-block rounded-lg bg-hearth-600 px-4 py-2 font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
-          >
-            Start a new adventure
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/campaigns/new"
+              className="inline-block rounded-lg bg-hearth-600 px-4 py-2 font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
+            >
+              Start a new adventure
+            </Link>
+            <Link
+              href="/campaigns/join"
+              className="inline-block rounded-lg border border-hearth-700 px-4 py-2 font-medium text-hearth-200 transition-colors hover:bg-hearth-800/50"
+            >
+              Join with a code
+            </Link>
+          </div>
         )}
       </div>
 
@@ -67,11 +82,17 @@ export default async function CampaignsPage() {
                   <span className="rounded-full border border-hearth-700/50 bg-hearth-800/40 px-2.5 py-0.5 text-xs text-hearth-300">
                     {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
                   </span>
+                  {campaign.ownerId === user.id ? null : (
+                    <span className="rounded-full border border-moss-700/50 bg-moss-900/20 px-2.5 py-0.5 text-xs text-moss-400">
+                      {campaign.owner.displayName}&rsquo;s table
+                    </span>
+                  )}
                 </div>
 
                 <p className="mt-1 text-sm text-hearth-400">
                   {campaign.storyline.title} · {TONE_LABELS[campaign.tone]} ·{" "}
-                  {READING_LEVEL_LABELS[campaign.readingLevel]}
+                  {READING_LEVEL_LABELS[campaign.readingLevel]} ·{" "}
+                  {INPUT_MODE_LABELS[campaign.inputMode]}
                 </p>
 
                 <p className="mt-3 text-sm text-hearth-200/70">
