@@ -1,8 +1,8 @@
 # Hearthlight
 
 A wholesome, AI-guided fantasy tabletop adventure for families. One shared
-screen, a party of characters you build together, and a Game Master that never
-gets tired and never says no to a silly idea.
+screen — or one screen each — a party of characters you build together, and a
+Game Master that never gets tired and never says no to a silly idea.
 
 Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
@@ -35,6 +35,9 @@ they can only use together. Polish is M7.
 | ✅ | **M7** "I don't know what to do" — three ideas grounded in the scene |
 | ✅ | **M7** Stopping points, so next week can pick up the thread |
 | ✅ | **M7** How long an adventure runs — one evening, a few sessions, or unhurried |
+| ✅ | **M8** One screen each — every player answers for their own adventurer |
+| ✅ | **M8** Join codes, so other households can bring an adventurer along |
+| ✅ | **M8** Everybody's character sheet visible to everybody |
 | ⬜ | M7 printable journal, portraits |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
@@ -102,16 +105,68 @@ around the table. Party size is checked against the storyline's range, and the
 party is settled once the adventure leaves `SETUP`, so the transcript can never
 refer to somebody who is no longer there.
 
+Setup also asks **where everyone is sitting**, and it can be changed at any
+point from the campaign's settings:
+
+| | |
+|---|---|
+| **One shared screen** | Everyone round one device. The storyteller asks each adventurer in turn and one person types. This is the original flow, unchanged. |
+| **Everyone on their own device** | Each player answers on their own phone or laptop, at the same time. The turn is taken once everybody has answered. |
+
+### Playing from separate devices
+
+The story stays single-threaded; only the typing moves apart. One transcript,
+one turn at a time, everybody looking at the same thing.
+
+**Getting everyone in.** Every adventure has a join code shaped like
+`PARTY-K3M9-PQ7T`, shown on its page with a link you can send. Anyone with
+their own sign-in types it at `/campaigns/join`, picks one of their own
+adventurers, and joins the party. Joining *is* membership — there is no
+separate invitation to accept, because the only reason to be in an adventure is
+to have somebody in it. Registration is still invite-only, so a stranger who
+somehow gets the code still cannot make an account to use it.
+
+**A round.** Anyone can start one. Everybody sees the same board: who has
+answered, what they said, and who is still thinking. You answer only for the
+adventurers you built — the household that started the adventure may answer for
+anyone, which is how a five-year-old without an account of their own still gets
+a say. "Waits and watches" counts as an answer.
+
+**The turn starts itself.** When the last answer lands, the story moves — nobody
+also has to be the one who presses send. Every browser tries at that moment and
+the server hands the turn to exactly one of them, so a turn is never taken
+twice however many devices noticed at once. If the browser that got it is closed
+mid-turn, the claim goes stale and another can pick it up.
+
+**If a turn fails**, nothing anybody typed is thrown away: the round goes back
+to collecting with the reason attached, and the table presses again.
+
+**Taking a turn back** works the same as on one screen, and anybody at the table
+can do it. Apart, the retelling opens as a round with everyone's words already
+in it — so it waits to be sent rather than starting itself, which gives the
+table time to change something and say what the storyteller got wrong.
+
+**Everybody's sheet is open to everybody**, on the play screen: stats, skills,
+what each adventurer is carrying, and the bonds between them. On one screen
+this was a lean across the table; apart, a child who cannot see that their
+sister is the one with Might 5 has no way to suggest that she try the door.
+
+Screens that are not taking the turn poll a small state endpoint every few
+seconds and refetch the page when something has actually changed. That is a
+deliberate choice over a second long-lived stream per watcher: it passes through
+proxies and tunnels unchanged, and a family's table changes every minute or two,
+not every frame.
+
 ### Playing
 
-`/campaigns/[id]/play` is the table. Everyone gathers round one screen.
+`/campaigns/[id]/play` is the table, whether that is one screen or four.
 
 **Beginning.** The storyteller narrates the opening from the storyline's hook,
 names each character so everyone knows they are present, and leaves the party
 facing a situation.
 
-**A turn.** The game asks each character in turn — "Mira, what do you do?" —
-in the order the party was picked. Anything can be typed; nothing is refused.
+**A turn, on one screen.** The game asks each character in turn — "Mira, what
+do you do?" — in the order the party was picked. Anything can be typed; nothing is refused.
 "Waits and watches" is always an option. A review step shows all the declared
 actions before they are sent, so a child who typed something by accident can
 change it.
@@ -479,6 +534,46 @@ Coolify issues a Let's Encrypt certificate automatically.
 
 Migrations run automatically on container start, so no manual step is needed.
 
+### If the build fails with no error
+
+A deployment that ends like this:
+
+```
+#16 [builder 5/5] RUN npx prisma generate && npm run build
+#16 2.591   Creating an optimized production build ...
+========================================
+Deployment failed: Command execution failed (exit code 255)
+```
+
+— stopping mid-sentence, with no error from the build itself — **ran out of
+memory**. The kernel killed the compiler, so there is nothing for it to report.
+Turbopack is fast because it holds a great deal in memory, and a small server
+running Coolify, Postgres and the previous version of the app at the same time
+may not have a spare gigabyte to give it.
+
+Three things to try, cheapest first. All are set in Coolify under
+**Configuration → Build → Build Arguments**:
+
+| Build argument | Default | Effect |
+|---|---|---|
+| `NEXT_BUILD_WORKERS` | `1` | How many workers collect page data. Each is another copy of the app in memory. Already at the safe value; raise it only on a large server. |
+| `NEXT_BUILD_MEMORY_MB` | `1536` | Cap on the JavaScript heap. Lower it — to `1024` or `768` — on a very small server so Node collects garbage instead of growing. |
+| `NEXT_BUILD_BUNDLER` | `turbopack` | Set to `webpack` to build the slower, lighter way. This is the one that usually settles it. |
+
+The real fix on a 1–2GB VPS is **swap**, which costs nothing and helps every
+build on the machine:
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile
+mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+The build does **not** need `DATABASE_URL`. The database client connects on
+first use rather than on import, precisely so that a build in an image builder —
+which has no database and no reason to have one — cannot fail over a variable
+that is set perfectly well at runtime.
+
 ### If the app cannot reach the database
 
 Coolify sometimes places databases on a separate Docker network. Attach the
@@ -498,10 +593,13 @@ app/
   invites/          Admin-only invite management
   characters/       Party list, builder, and per-character editing
   campaigns/        Adventure list, setup flow, campaign page, and the table
-  api/campaigns/[id]/turn/  SSE endpoint that runs and streams a turn
+  campaigns/join/   Joining somebody else's adventure with a code
+  api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
+  api/campaigns/[id]/round/  Answering, and changing an answer, in a round
+  api/campaigns/[id]/state/  The small poll every other screen watches
   page.tsx          Landing page; lists seeded storylines
 lib/
-  db.ts             Prisma singleton (adapter-based, hot-reload safe)
+  db.ts             Prisma singleton (adapter-based, connects on first use)
   settings/
     secret-box.ts   AES-256-GCM for keys stored in the database
   auth/
@@ -528,6 +626,9 @@ lib/
     character-options.ts  Races, callings and skills offered by the builder
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
+    party-actions.ts     Joining, leaving, and re-issuing a join code
+    access.ts       Who may open an adventure, and answer for whom
+    rounds.ts       Collecting a round's answers from several devices
 components/         Shared UI, site header, character builder
 scripts/
   gm-harness.ts     Drive one turn against a real model server
@@ -542,6 +643,7 @@ tests/
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
   play.e2e.mts        Browser-driven play, against the mock model
+  rounds.e2e.mts      Two households, two browsers, one turn between them
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

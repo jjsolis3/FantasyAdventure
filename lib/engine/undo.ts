@@ -21,6 +21,7 @@
 
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client.ts";
+import { memberCampaignFilter } from "@/lib/game/access";
 
 /** A transaction client, or the plain one. */
 type Db = Prisma.TransactionClient | typeof db;
@@ -129,12 +130,18 @@ export type UndoResult =
 /**
  * Restores the state saved before the most recent turn.
  *
- * Ownership is checked here rather than trusted from the caller: this deletes
- * transcript rows, and it must not be reachable for somebody else's adventure.
+ * Membership is checked here rather than trusted from the caller: this deletes
+ * transcript rows, and it must not be reachable for an adventure you are not
+ * travelling in.
+ *
+ * Anyone at the table may take a turn back, not only the household that started
+ * the adventure. A storyteller that misread a child's answer has to be
+ * correctable by whoever is holding a device at the time, and the correction is
+ * visible to everyone the moment it happens.
  */
 export async function undoLastTurn(campaignId: string, userId: string): Promise<UndoResult> {
   const campaign = await db.campaign.findFirst({
-    where: { id: campaignId, ownerId: userId },
+    where: memberCampaignFilter(campaignId, userId),
     include: { snapshot: true, party: { select: { characterId: true } } },
   });
 
@@ -245,6 +252,13 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
         completedAt: state.campaign.completedAt ? new Date(state.campaign.completedAt) : null,
         lastPlayedAt: state.campaign.lastPlayedAt ? new Date(state.campaign.lastPlayedAt) : null,
       },
+    });
+
+    // Any round still collecting was written against a scene that has just
+    // stopped being true, so it goes with the turn it was answering.
+    await tx.turnRound.updateMany({
+      where: { campaignId, status: { in: ["COLLECTING", "RESOLVING"] } },
+      data: { status: "CANCELLED" },
     });
 
     // Undo is one turn deep, so the snapshot is spent. Leaving it would let a

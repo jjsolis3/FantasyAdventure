@@ -3,8 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client.ts";
+import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
+import { generateJoinCode } from "@/lib/auth/invite-code";
 import type { FormState } from "@/lib/auth/actions";
 
 const campaignSchema = z.object({
@@ -13,6 +15,7 @@ const campaignSchema = z.object({
   tone: z.enum(["COZY", "ADVENTUROUS"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
+  inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),
 });
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -22,6 +25,29 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
     if (typeof key === "string" && !result[key]) result[key] = issue.message;
   }
   return result;
+}
+
+/**
+ * Creates the campaign, retrying if its join code is already taken.
+ *
+ * Two random codes colliding is remote — a billion combinations against a
+ * family's handful of adventures — but the column is unique, so a collision
+ * would surface as an unexplained failure in the middle of setting up an
+ * adventure rather than as anything a user could act on.
+ */
+async function createWithJoinCode(
+  data: Omit<Prisma.CampaignUncheckedCreateInput, "joinCode">,
+): Promise<{ id: string }> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await db.campaign.create({
+        data: { ...data, joinCode: generateJoinCode() },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (attempt >= 4 || !isUniqueViolation(error)) throw error;
+    }
+  }
 }
 
 function partyIdsFrom(formData: FormData): string[] {
@@ -41,6 +67,7 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     tone: formData.get("tone"),
     readingLevel: formData.get("readingLevel"),
     pacing: formData.get("pacing") ?? undefined,
+    inputMode: formData.get("inputMode") ?? undefined,
   });
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -73,18 +100,17 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     };
   }
 
-  const campaign = await db.campaign.create({
-    data: {
-      ownerId: user.id,
-      storylineId: storyline.id,
-      title: parsed.data.title,
-      tone: parsed.data.tone,
-      readingLevel: parsed.data.readingLevel,
-      pacing: parsed.data.pacing,
-      party: {
-        // Turn order follows the order they were listed in the form.
-        create: partyIds.map((characterId, index) => ({ characterId, position: index })),
-      },
+  const campaign = await createWithJoinCode({
+    ownerId: user.id,
+    storylineId: storyline.id,
+    title: parsed.data.title,
+    tone: parsed.data.tone,
+    readingLevel: parsed.data.readingLevel,
+    pacing: parsed.data.pacing,
+    inputMode: parsed.data.inputMode,
+    party: {
+      // Turn order follows the order they were listed in the form.
+      create: partyIds.map((characterId, index) => ({ characterId, position: index })),
     },
   });
 
@@ -121,16 +147,33 @@ export async function updatePartyAction(_prev: FormState, formData: FormData): P
   if (characters.length !== partyIds.length) {
     return { error: "One of those adventurers could not be found." };
   }
-  if (characters.length < campaign.storyline.minPlayers) {
+
+  // Adventurers who joined with the code belong to other households, and this
+  // form has never heard of them. They keep their place: the editor is "which
+  // of *my* adventurers are coming", not "who is in the party".
+  const guests = await db.partyMember.findMany({
+    where: { campaignId: campaign.id, character: { userId: { not: user.id } } },
+    orderBy: { position: "asc" },
+    select: { characterId: true },
+  });
+
+  const size = partyIds.length + guests.length;
+  if (size < campaign.storyline.minPlayers) {
     return { error: `This adventure needs at least ${campaign.storyline.minPlayers} adventurers.` };
   }
-  if (characters.length > campaign.storyline.maxPlayers) {
+  if (size > campaign.storyline.maxPlayers) {
     return { error: `This adventure takes at most ${campaign.storyline.maxPlayers} adventurers.` };
   }
 
+  // The household's own choices lead, in the order they were picked, and the
+  // guests follow — so the turn order stays stable when the form is re-saved.
+  const ordered = [...partyIds, ...guests.map((guest) => guest.characterId)];
+
   await db.$transaction(async (tx) => {
-    await tx.partyMember.deleteMany({ where: { campaignId: campaign.id, characterId: { notIn: partyIds } } });
-    for (const [index, characterId] of partyIds.entries()) {
+    await tx.partyMember.deleteMany({
+      where: { campaignId: campaign.id, characterId: { notIn: ordered } },
+    });
+    for (const [index, characterId] of ordered.entries()) {
       await tx.partyMember.upsert({
         where: { campaignId_characterId: { campaignId: campaign.id, characterId } },
         create: { campaignId: campaign.id, characterId, position: index },
@@ -149,6 +192,7 @@ const settingsSchema = z.object({
   tone: z.enum(["COZY", "ADVENTUROUS"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
+  inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),
 });
 
 export async function updateCampaignSettingsAction(
@@ -163,6 +207,7 @@ export async function updateCampaignSettingsAction(
     tone: formData.get("tone"),
     readingLevel: formData.get("readingLevel"),
     pacing: formData.get("pacing") ?? undefined,
+    inputMode: formData.get("inputMode") ?? undefined,
   });
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -172,7 +217,17 @@ export async function updateCampaignSettingsAction(
   const updated = await db.campaign.updateMany({ where: { id: campaignId, ownerId: user.id }, data });
   if (updated.count === 0) return { error: "Campaign not found." };
 
+  // Switching to one screen mid-round would leave answers stranded in a waiting
+  // room nothing renders any more.
+  if (data.inputMode === "SHARED_SCREEN") {
+    await db.turnRound.updateMany({
+      where: { campaignId, status: { in: ["COLLECTING", "RESOLVING"] } },
+      data: { status: "CANCELLED" },
+    });
+  }
+
   revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/play`);
   revalidatePath("/campaigns");
   return { error: "" };
 }

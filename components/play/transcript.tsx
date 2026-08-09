@@ -93,10 +93,28 @@ export function DiceCard({ dice, animate = false }: { dice: DiceDetail; animate?
   );
 }
 
-/** Reveals text a few characters at a time, so narration feels written rather
- *  than pasted. The full text has already passed the safety guard. */
-export function TypedNarration({ text, speed = 12 }: { text: string; speed?: number }) {
+/**
+ * Reveals text a few characters at a time, so narration feels written rather
+ * than pasted. The full text has already passed the safety guard.
+ *
+ * `onDone` fires when the last character lands. The caller uses it to hand the
+ * paragraph over to the transcript: until then the same words are on the page
+ * twice — once here, once in the transcript the server has already committed
+ * them to — and only this copy is the one being read.
+ */
+export function TypedNarration({
+  text,
+  speed = 12,
+  onDone,
+}: {
+  text: string;
+  speed?: number;
+  onDone?: () => void;
+}) {
   const [shown, setShown] = useState("");
+
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     setShown("");
@@ -106,7 +124,10 @@ export function TypedNarration({ text, speed = 12 }: { text: string; speed?: num
       // 150-word paragraph.
       index = Math.min(index + 3, text.length);
       setShown(text.slice(0, index));
-      if (index >= text.length) clearInterval(timer);
+      if (index >= text.length) {
+        clearInterval(timer);
+        onDoneRef.current?.();
+      }
     }, speed);
     return () => clearInterval(timer);
   }, [text, speed]);

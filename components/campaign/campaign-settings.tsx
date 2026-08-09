@@ -5,7 +5,7 @@ import { updateCampaignSettingsAction, updatePartyAction } from "@/lib/game/camp
 import type { FormState } from "@/lib/auth/actions";
 import { Alert, Field, SelectField } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { INPUT_MODE_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
 import { PACING_OPTIONS } from "@/lib/game/pacing";
 import type { CharacterChoice } from "./campaign-setup";
 
@@ -15,12 +15,14 @@ export function CampaignSettingsForm({
   tone,
   readingLevel,
   pacing,
+  inputMode,
 }: {
   campaignId: string;
   title: string;
   tone: string;
   readingLevel: string;
   pacing: string;
+  inputMode: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(updateCampaignSettingsAction, null);
   const saved = state !== null && state.error === "";
@@ -44,6 +46,14 @@ export function CampaignSettingsForm({
         name="readingLevel"
         defaultValue={readingLevel}
         options={READING_LEVEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+      />
+
+      <SelectField
+        label="Where is everyone?"
+        name="inputMode"
+        defaultValue={inputMode}
+        options={INPUT_MODE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+        hint="Changing this puts away any round the party is part-way through answering."
       />
 
       <SelectField

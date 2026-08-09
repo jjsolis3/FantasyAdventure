@@ -18,9 +18,47 @@ COPY . .
 
 # `next build` runs pages to collect metadata. Every page that touches the
 # database is force-dynamic, but the Prisma client still has to exist at build
-# time for the imports to typecheck and bundle.
+# time for the imports to typecheck and bundle. No DATABASE_URL is needed —
+# lib/db.ts connects on first use, not on import.
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npx prisma generate && npm run build
+
+# Build memory, which is the usual reason a deployment fails on a small server.
+#
+# A build that runs out of memory does not report an error: the kernel kills the
+# compiler, the step ends mid-sentence — typically right after "Creating an
+# optimized production build ..." — and the deployment fails with exit code 255
+# and nothing to read. Both knobs below buy headroom at the cost of build time.
+#
+#   NEXT_BUILD_WORKERS   page-data collection workers; each is another copy of
+#                        the app in memory. 1 is slower and much lighter.
+#   NEXT_BUILD_MEMORY_MB cap on the JavaScript heap, so Node collects garbage
+#                        instead of growing until the kernel intervenes.
+#
+# If it still gets killed, build with webpack instead: Turbopack is faster but
+# holds far more in memory. In Coolify: Configuration → Build → Build Arguments,
+# NEXT_BUILD_BUNDLER=webpack.
+ARG NEXT_BUILD_WORKERS=1
+ARG NEXT_BUILD_MEMORY_MB=1536
+ARG NEXT_BUILD_BUNDLER=turbopack
+ENV NEXT_BUILD_WORKERS=${NEXT_BUILD_WORKERS} \
+    NODE_OPTIONS=--max-old-space-size=${NEXT_BUILD_MEMORY_MB}
+
+RUN set -e; \
+    echo "Building with ${NEXT_BUILD_BUNDLER}, ${NEXT_BUILD_WORKERS} worker(s), ${NEXT_BUILD_MEMORY_MB}MB heap."; \
+    free -m || true; \
+    npx prisma generate; \
+    if [ "${NEXT_BUILD_BUNDLER}" = "webpack" ]; then \
+      set -- --webpack; \
+    else \
+      set -- --turbopack; \
+    fi; \
+    if ! npx next build "$@"; then \
+      echo "" >&2; \
+      echo "The build failed. If it stopped without printing an error of its own," >&2; \
+      echo "the server ran out of memory — see the Troubleshooting section of the" >&2; \
+      echo "README for the two settings that fix it." >&2; \
+      exit 1; \
+    fi
 
 # ---- Stage 3: runtime ------------------------------------------------------
 FROM node:22-alpine AS runner

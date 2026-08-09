@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
+import { IdeaHints } from "./idea-hints";
+import { RoundBoard } from "./round-board";
 import { UndoTurn } from "./undo-turn";
+import { useCampaignState } from "./use-campaign-state";
+import type { RoundView } from "@/lib/game/rounds";
 
 export type PlayCharacter = {
   id: string;
@@ -15,6 +19,9 @@ export type PlayCharacter = {
   archetype: string;
   level: number;
   pronouns: string;
+  /** The household answering for them. */
+  playedBy: string;
+  yours: boolean;
 };
 
 type Phase =
@@ -80,6 +87,9 @@ export function PlayClient({
   initialEntries,
   availableMoves,
   canUndo,
+  inputMode,
+  yourCharacterIds,
+  initialRound,
 }: {
   campaignId: string;
   campaignTitle: string;
@@ -89,8 +99,15 @@ export function PlayClient({
   availableMoves: AvailableMove[];
   /** True once a turn has been played, so there is something to take back. */
   canUndo: boolean;
+  /** Whether the party shares this screen or is answering from their own. */
+  inputMode: string;
+  /** Adventurers this player may answer for. */
+  yourCharacterIds: string[];
+  /** The round being collected, when the party is apart. */
+  initialRound: RoundView | null;
 }) {
   const router = useRouter();
+  const apart = inputMode === "OWN_DEVICE";
 
   const [entries, setEntries] = useState<TranscriptEntry[]>(initialEntries);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -114,44 +131,120 @@ export function PlayClient({
   // the table was asked "what do you do?" forever, past the ending.
   const [finished, setFinished] = useState(status === "COMPLETE");
 
-  const run = useCallback(
-    async (body: Record<string, unknown>) => {
+  // Nothing may redraw the page underneath a turn that is being told. Both refs
+  // are read from callbacks that outlive the render they were created in.
+  const telling = phase.kind === "running" || phase.kind === "narrating";
+  const tellingRef = useRef(false);
+  tellingRef.current = telling;
+  const pendingRefresh = useRef(false);
+
+  /**
+   * Watching the rest of the table.
+   *
+   * Runs whatever the input mode is: even round one screen, somebody may have a
+   * second device open, and a page that quietly goes stale is worse than one
+   * that was never live at all. A refresh waits for the telling to finish, so
+   * it can never arrive in the middle of a narration.
+   */
+  const { round, applyRound, poke } = useCampaignState(campaignId, {
+    initialRound,
+    onChange: (next) => {
+      if (next.status === "COMPLETE") setFinished(true);
+      if (tellingRef.current) pendingRefresh.current = true;
+      else router.refresh();
+    },
+  });
+
+  useEffect(() => {
+    if (telling || !pendingRefresh.current) return;
+    pendingRefresh.current = false;
+    router.refresh();
+  }, [telling, router]);
+
+  /**
+   * Adopts the transcript the server just re-rendered.
+   *
+   * Held back while a turn is being told, because the narration is on screen
+   * twice at that moment — typing itself out below, and already committed to
+   * the transcript above. The typed one is the one the table is reading.
+   */
+  const transcriptSignature = `${initialEntries.length}:${initialEntries.at(-1)?.id ?? ""}`;
+  const adopted = useRef(transcriptSignature);
+  useEffect(() => {
+    if (telling || adopted.current === transcriptSignature) return;
+    adopted.current = transcriptSignature;
+    setEntries(initialEntries);
+  }, [telling, transcriptSignature, initialEntries]);
+
+  /**
+   * The end of the telling: the last character has been typed out, so the words
+   * become part of the transcript and the page goes back to waiting.
+   *
+   * Both changes are made together so there is no frame in which the paragraph
+   * has left the typed block but not yet arrived in the transcript.
+   */
+  const finishNarration = useCallback(() => {
+    adopted.current = transcriptSignature;
+    setEntries(initialEntries);
+    setPhase((current) => (current.kind === "narrating" ? { kind: "idle" } : current));
+  }, [initialEntries, transcriptSignature]);
+
+  /**
+   * Runs a turn and plays its stream into the phase.
+   *
+   * Returns what the stream said rather than deciding what to do about it: a
+   * turn from a shared screen and a turn taken on behalf of a round want the
+   * same progress on screen and different things afterwards.
+   */
+  const stream = useCallback(
+    async (body: Record<string, unknown>): Promise<{ ok: boolean; failed: string | null }> => {
       setPhase({ kind: "running", stage: "adjudicating", dice: [] });
 
-      try {
-        const response = await fetch(`/api/campaigns/${campaignId}/turn`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+      const response = await fetch(`/api/campaigns/${campaignId}/turn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-        if (!response.ok) {
-          throw new Error(`The server replied ${response.status}.`);
+      // 409 is the ordinary outcome of two browsers reaching for the same
+      // round; the caller decides whether that is worth mentioning.
+      if (!response.ok) {
+        if (response.status === 409) return { ok: false, failed: null };
+        throw new Error(`The server replied ${response.status}.`);
+      }
+
+      let dice: DiceDetail[] = [];
+      let failed: string | null = null;
+
+      await consumeEventStream(response, (event, data) => {
+        if (event === "stage") {
+          setPhase((current) =>
+            current.kind === "running" ? { ...current, stage: String(data.stage) } : current,
+          );
+        } else if (event === "dice") {
+          dice = (data.checks as DiceDetail[]) ?? [];
+          setPhase((current) => (current.kind === "running" ? { ...current, dice } : current));
+        } else if (event === "narration") {
+          setPhase({ kind: "narrating", text: String(data.text), dice });
+        } else if (event === "done") {
+          // The last act just closed. Said here rather than waiting for the
+          // refresh, so the ending is not preceded by one more "what do you
+          // do?" prompt.
+          if (data.campaignComplete === true) setFinished(true);
+        } else if (event === "error") {
+          failed = String(data.message);
         }
+      });
 
-        let dice: DiceDetail[] = [];
-        let failed: string | null = null;
+      return { ok: failed === null, failed };
+    },
+    [campaignId],
+  );
 
-        await consumeEventStream(response, (event, data) => {
-          if (event === "stage") {
-            setPhase((current) =>
-              current.kind === "running" ? { ...current, stage: String(data.stage) } : current,
-            );
-          } else if (event === "dice") {
-            dice = (data.checks as DiceDetail[]) ?? [];
-            setPhase((current) => (current.kind === "running" ? { ...current, dice } : current));
-          } else if (event === "narration") {
-            setPhase({ kind: "narrating", text: String(data.text), dice });
-          } else if (event === "done") {
-            // The last act just closed. Said here rather than waiting for the
-            // refresh, so the ending is not preceded by one more "what do you
-            // do?" prompt.
-            if (data.campaignComplete === true) setFinished(true);
-          } else if (event === "error") {
-            failed = String(data.message);
-          }
-        });
-
+  const run = useCallback(
+    async (body: Record<string, unknown>) => {
+      try {
+        const { failed } = await stream(body);
         if (failed) {
           setPhase({ kind: "failed", message: failed });
           return;
@@ -172,7 +265,40 @@ export function PlayClient({
         });
       }
     },
-    [campaignId, router],
+    [router, stream],
+  );
+
+  /**
+   * Takes the round the party has been filling in, if this browser is the one
+   * the server picks.
+   *
+   * A 409 is the ordinary outcome, not a failure: it means another browser is
+   * already running the turn, and this one goes back to watching. Telling the
+   * player about it would be reporting on plumbing.
+   */
+  const takeTurn = useCallback(
+    async (roundId: string) => {
+      try {
+        const { ok } = await stream({ mode: "round", roundId });
+        poke();
+
+        // Either another browser has it, or the turn failed and the round is
+        // back to collecting with the reason on it. Both are the board's story
+        // to tell, so this only stops the spinner.
+        if (!ok) {
+          setPhase({ kind: "idle" });
+          return;
+        }
+
+        router.refresh();
+      } catch (error) {
+        setPhase({
+          kind: "failed",
+          message: error instanceof Error ? error.message : "Something went wrong.",
+        });
+      }
+    },
+    [poke, router, stream],
   );
 
   function startAsking() {
@@ -209,7 +335,7 @@ export function PlayClient({
             </div>
           ) : null}
           <div className="font-display text-lg">
-            <TypedNarration text={phase.text} />
+            <TypedNarration text={phase.text} onDone={finishNarration} />
           </div>
         </div>
       ) : null}
@@ -264,13 +390,32 @@ export function PlayClient({
             </Link>
           </div>
         ) : !hasBegun ? (
-          <button
-            type="button"
-            onClick={() => run({ mode: "begin" })}
-            className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
-          >
-            Begin the adventure
-          </button>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => run({ mode: "begin" })}
+              className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
+            >
+              Begin the adventure
+            </button>
+            {apart ? (
+              <p className="text-sm text-hearth-500">
+                Anyone can start it. The opening scene appears on everybody&rsquo;s screen.
+              </p>
+            ) : null}
+          </div>
+        ) : apart ? (
+          <RoundBoard
+            campaignId={campaignId}
+            party={party}
+            yourCharacterIds={yourCharacterIds}
+            round={round}
+            availableMoves={availableMoves}
+            busy={telling}
+            onRound={applyRound}
+            onTakeTurn={takeTurn}
+            poke={poke}
+          />
         ) : phase.kind === "asking" ? (
           <AskCharacter
             campaignId={campaignId}
@@ -391,9 +536,19 @@ export function PlayClient({
           campaignId={campaignId}
           canUndo={canUndo}
           onRestore={(actions) => {
+            setEntries((current) => current.slice(0, -countTurnEntries(current)));
+
+            if (apart) {
+              // The server has already opened a round with everybody's words in
+              // it, so the retelling happens where the rest of the party can see
+              // it rather than in one person's boxes.
+              setPhase({ kind: "idle" });
+              poke();
+              return;
+            }
+
             setDrafts(Object.fromEntries(actions.map((a) => [a.characterId, a.text])));
             setRetelling(true);
-            setEntries((current) => current.slice(0, -countTurnEntries(current)));
             setPhase({ kind: "review" });
           }}
         />
@@ -448,32 +603,6 @@ function AskCharacter({
   onBack?: () => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
-  const [ideas, setIdeas] = useState<string[] | null>(null);
-  const [thinking, setThinking] = useState(false);
-  const [noIdeas, setNoIdeas] = useState("");
-
-  async function askForIdeas() {
-    setThinking(true);
-    setNoIdeas("");
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/suggest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characterId: character.id }),
-      });
-      const data = (await response.json()) as { suggestions?: string[]; error?: string };
-      if (!response.ok || !data.suggestions?.length) {
-        setNoIdeas(data.error ?? "No ideas just now — but anything you type will work.");
-        return;
-      }
-      setIdeas(data.suggestions);
-    } catch {
-      setNoIdeas("No ideas just now — but anything you type will work.");
-    } finally {
-      setThinking(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div>
@@ -512,41 +641,14 @@ function AskCharacter({
       />
 
       {talking ? null : (
-        <div className="space-y-2">
-          {ideas === null ? (
-            <button
-              type="button"
-              onClick={askForIdeas}
-              disabled={thinking}
-              className="text-sm text-hearth-500 underline underline-offset-4 hover:text-hearth-300 disabled:opacity-50"
-            >
-              {thinking ? "Thinking of some ideas…" : "I don't know what to do"}
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-hearth-400">
-                Some ideas — pick one to start from, or ignore them all.
-              </p>
-              <div className="flex flex-col gap-2">
-                {ideas.map((idea, position) => (
-                  <button
-                    key={position}
-                    type="button"
-                    onClick={() => {
-                      onChange(idea);
-                      setIdeas(null);
-                      inputRef.current?.focus();
-                    }}
-                    className="rounded-lg border border-hearth-800/70 px-3 py-2 text-left text-hearth-200 transition-colors hover:border-hearth-600 hover:bg-hearth-800/30"
-                  >
-                    {idea}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {noIdeas ? <p className="text-sm text-hearth-500">{noIdeas}</p> : null}
-        </div>
+        <IdeaHints
+          campaignId={campaignId}
+          characterId={character.id}
+          onPick={(idea) => {
+            onChange(idea);
+            inputRef.current?.focus();
+          }}
+        />
       )}
 
       <div className="flex flex-wrap gap-3">

@@ -17,15 +17,66 @@ function createClient() {
   return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 }
 
+type Client = ReturnType<typeof createClient>;
+
 // Next.js dev mode re-evaluates modules on every hot reload. Without caching the
 // client on globalThis, each reload opens a new connection pool until Postgres
 // starts refusing connections.
-const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createClient> | undefined;
-};
+const globalForPrisma = globalThis as unknown as { prisma: Client | undefined };
 
-export const db = globalForPrisma.prisma ?? createClient();
+/**
+ * The one client, made on demand.
+ *
+ * `cached` is not the same thing as the global above and cannot be folded into
+ * it: the global exists only to survive a hot reload in development, while this
+ * exists to make sure a single module evaluation opens a single connection pool.
+ * Without it every property access on `db` would build another one, and Postgres
+ * starts refusing connections within a handful of requests.
+ */
+let cached: Client | undefined;
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = db;
+function client(): Client {
+  if (cached) return cached;
+
+  cached = globalForPrisma.prisma ?? createClient();
+  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = cached;
+  return cached;
 }
+
+/**
+ * The database client, connected on first use rather than on import.
+ *
+ * The laziness is not an optimisation. `next build` evaluates every route
+ * module to collect its configuration, so a client constructed at import time
+ * makes DATABASE_URL a *build* requirement — and the build then fails inside a
+ * Docker image builder, which has no database and no reason to have one, with
+ * "Failed to collect page data" over a message about a variable that is set
+ * perfectly well at runtime.
+ *
+ * Reaching for a property is what resolves it, so the error still arrives on
+ * the first real query, in the request that made it.
+ */
+/**
+ * Whether a failure was a unique constraint refusing a duplicate.
+ *
+ * Several places here deliberately race the database rather than locking round
+ * it — two devices opening a round, two adventures drawing the same join code —
+ * and in each the constraint doing its job is an expected answer rather than an
+ * error, so the code that recognises it belongs in one place.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
+export const db: Client = new Proxy({} as Client, {
+  get(_target, property) {
+    const instance = client() as unknown as Record<string | symbol, unknown>;
+    const value = instance[property];
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+});

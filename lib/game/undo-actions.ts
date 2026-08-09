@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { undoLastTurn } from "@/lib/engine/undo";
 import { markStoppingPoint } from "@/lib/engine/play";
+import { openRound } from "@/lib/game/rounds";
 import type { FormState } from "@/lib/auth/actions";
 
 export type UndoOutcome =
@@ -44,6 +46,18 @@ export async function retellLastTurnAction(campaignId: string): Promise<UndoOutc
   const user = await requireUser();
   const result = await undoLastTurn(campaignId, user.id);
   if (!result.ok) return { ok: false, error: result.reason };
+
+  // On a shared screen the words go back into the boxes on the page that asked.
+  // Apart, they have to go somewhere the rest of the party can see them too, so
+  // the retelling opens as a round with everybody's answer already in it —
+  // marked as a retelling, so it waits to be sent rather than starting itself.
+  const campaign = await db.campaign.findUnique({
+    where: { id: campaignId },
+    select: { inputMode: true },
+  });
+  if (campaign?.inputMode === "OWN_DEVICE") {
+    await openRound(campaignId, "ACTION", { retelling: true, seed: result.actions });
+  }
 
   revalidatePath(`/campaigns/${campaignId}/play`);
   return { ok: true, actions: result.actions };
