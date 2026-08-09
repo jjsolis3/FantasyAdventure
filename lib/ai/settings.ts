@@ -70,6 +70,31 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     blurb: "Widely available, and cheap at the smaller sizes.",
   },
   {
+    key: "gemini",
+    label: "Google Gemini",
+    kind: "OPENAI_COMPATIBLE",
+    // Google publishes an OpenAI-compatible surface alongside its own API, so
+    // no separate adapter is needed. The native Gemini API has a different
+    // shape entirely and is not what this points at.
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    models: ["gemini-2.5-flash", "gemini-2.5-pro"],
+    needsKey: true,
+    reasoningEffort: "",
+    blurb: "Fast and inexpensive, via Google's OpenAI-compatible endpoint.",
+  },
+  {
+    key: "deepseek",
+    label: "DeepSeek",
+    kind: "OPENAI_COMPATIBLE",
+    baseUrl: "https://api.deepseek.com/v1",
+    models: ["deepseek-chat"],
+    needsKey: true,
+    // deepseek-reasoner thinks by default and returns it separately, the same
+    // trap as Qwen3 locally. deepseek-chat is the one to start with.
+    reasoningEffort: "",
+    blurb: "Very cheap. Use deepseek-chat — the reasoner spends its budget thinking.",
+  },
+  {
     key: "openrouter",
     label: "OpenRouter",
     kind: "OPENAI_COMPATIBLE",

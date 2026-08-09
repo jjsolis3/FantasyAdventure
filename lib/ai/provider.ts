@@ -18,7 +18,60 @@ export type ChatOptions = {
   /** Overrides the configured model — used to route JSON and prose separately. */
   model?: string;
   signal?: AbortSignal;
+  /**
+   * Called with whatever the provider reported about token use.
+   *
+   * A callback rather than a return value because most callers only want the
+   * text, and a hosted model is the only case where the numbers matter — but
+   * there they matter a great deal, since a turn is three calls and nobody
+   * should have to guess what an evening costs.
+   */
+  onUsage?: (usage: TokenUsage) => void;
 };
+
+export type TokenUsage = { inputTokens: number; outputTokens: number };
+
+/**
+ * Statuses worth trying again.
+ *
+ * Hosted providers rate-limit and occasionally shed load; losing a family's
+ * turn to a transient 429 would be a poor trade for the two seconds it costs
+ * to wait. 500 is included for the hosted case even though Ollama returns it
+ * for an unloadable model, where retrying cannot help — three quick attempts
+ * is a few wasted seconds, and the error still surfaces unchanged.
+ */
+const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 3;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Honours Retry-After when the server sends one, otherwise backs off. */
+function retryDelayMs(response: Response, attempt: number): number {
+  const header = response.headers.get("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 30_000);
+    const at = Date.parse(header);
+    if (Number.isFinite(at)) return Math.min(Math.max(at - Date.now(), 0), 30_000);
+  }
+  return Math.min(500 * 2 ** attempt, 8_000);
+}
+
+function usageFrom(payload: {
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+}): TokenUsage | null {
+  const usage = payload.usage;
+  if (!usage) return null;
+  const inputTokens = usage.prompt_tokens ?? usage.input_tokens;
+  const outputTokens = usage.completion_tokens ?? usage.output_tokens;
+  if (typeof inputTokens !== "number" || typeof outputTokens !== "number") return null;
+  return { inputTokens, outputTokens };
+}
 
 export type ProviderKind = "OPENAI_COMPATIBLE" | "ANTHROPIC";
 
@@ -105,12 +158,22 @@ function headersFor(config: AiConfig): Record<string, string> {
   return headers;
 }
 
-function bodyFor(config: AiConfig, options: ChatOptions, stream: boolean) {
+/** Which spelling of the contested parameters this endpoint accepts. */
+export type RequestDialect = { maxTokensField: string; sendTemperature: boolean };
+
+const DEFAULT_DIALECT: RequestDialect = { maxTokensField: "max_tokens", sendTemperature: true };
+
+function bodyFor(
+  config: AiConfig,
+  options: ChatOptions,
+  stream: boolean,
+  dialect: RequestDialect = DEFAULT_DIALECT,
+) {
   return {
     model: options.model ?? config.model,
     messages: options.messages,
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 800,
+    ...(dialect.sendTemperature ? { temperature: options.temperature ?? 0.7 } : {}),
+    [dialect.maxTokensField]: options.maxTokens ?? 800,
     stream,
     // Servers that do not understand response_format ignore it; those that do
     // become dramatically more reliable. Either way the response is still
@@ -140,29 +203,51 @@ async function anthropicChat(config: AiConfig, options: ChatOptions): Promise<st
     .map((message) => ({ role: message.role as "user" | "assistant", content: message.content }));
 
   try {
-    const response = await fetch(`${config.baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": config.apiKey ?? "",
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: options.model ?? config.model,
-        max_tokens: options.maxTokens ?? 800,
-        temperature: options.temperature ?? 0.7,
-        ...(system ? { system } : {}),
-        messages: messages.length > 0 ? messages : [{ role: "user" as const, content: "Continue." }],
-      }),
-      signal: controller.signal,
-    });
+    let response!: Response;
 
-    if (!response.ok) {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      response = await fetch(`${config.baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": config.apiKey ?? "",
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: options.model ?? config.model,
+          max_tokens: options.maxTokens ?? 800,
+          temperature: options.temperature ?? 0.7,
+          ...(system ? { system } : {}),
+          messages:
+            messages.length > 0 ? messages : [{ role: "user" as const, content: "Continue." }],
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.ok) break;
+
       const detail = await response.text().catch(() => "");
-      throw new AiUnavailableError(`Anthropic returned ${response.status}. ${detail.slice(0, 300)}`);
+      const last = attempt === MAX_ATTEMPTS - 1;
+
+      // Anthropic uses 529 for overloaded, which is squarely worth retrying.
+      const retryable = RETRYABLE_STATUSES.has(response.status) || response.status === 529;
+      if (!retryable || last) {
+        throw new AiUnavailableError(
+          `Anthropic returned ${response.status}. ${detail.slice(0, 300)}`,
+        );
+      }
+
+      await sleep(retryDelayMs(response, attempt));
     }
 
-    const payload = (await response.json()) as { content?: { type?: string; text?: string }[] };
+    const payload = (await response.json()) as {
+      content?: { type?: string; text?: string }[];
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+
+    const usage = usageFrom(payload);
+    if (usage) options.onUsage?.(usage);
+
     const text = (payload.content ?? [])
       .filter((block) => block.type === "text")
       .map((block) => block.text ?? "")
@@ -194,22 +279,53 @@ export async function chat(config: AiConfig, options: ChatOptions): Promise<stri
   // Caller-supplied cancellation has to compose with the timeout.
   options.signal?.addEventListener("abort", () => controller.abort(), { once: true });
 
-  try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: headersFor(config),
-      body: JSON.stringify(bodyFor(config, options, false)),
-      signal: controller.signal,
-    });
+  // Providers disagree about the names of two long-settled parameters, and the
+  // disagreement changes as they ship models. Rather than track which model
+  // wants which spelling, adapt when one is rejected: the error names the
+  // field, so the next attempt can speak the dialect the server asked for.
+  const dialect = { maxTokensField: "max_tokens", sendTemperature: true };
 
-    if (!response.ok) {
+  try {
+    let response!: Response;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: headersFor(config),
+        body: JSON.stringify(bodyFor(config, options, false, dialect)),
+        signal: controller.signal,
+      });
+
+      if (response.ok) break;
+
       const detail = await response.text().catch(() => "");
-      throw new AiUnavailableError(
-        `Model server returned ${response.status}. ${detail.slice(0, 300)}`,
-      );
+
+      if (response.status === 400) {
+        // Adapting costs one extra round trip and only happens once per field.
+        const before = { ...dialect };
+        if (/max_completion_tokens/i.test(detail)) dialect.maxTokensField = "max_completion_tokens";
+        if (/temperature/i.test(detail)) dialect.sendTemperature = false;
+
+        if (
+          dialect.maxTokensField !== before.maxTokensField ||
+          dialect.sendTemperature !== before.sendTemperature
+        ) {
+          continue;
+        }
+      }
+
+      const last = attempt === MAX_ATTEMPTS - 1;
+      if (!RETRYABLE_STATUSES.has(response.status) || last) {
+        throw new AiUnavailableError(
+          `Model server returned ${response.status}. ${detail.slice(0, 300)}`,
+        );
+      }
+
+      await sleep(retryDelayMs(response, attempt));
     }
 
     const payload = (await response.json()) as {
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
       choices?: {
         finish_reason?: string;
         // Ollama and several hosted providers return chain-of-thought here,
@@ -217,6 +333,10 @@ export async function chat(config: AiConfig, options: ChatOptions): Promise<stri
         message?: { content?: string; reasoning?: string; reasoning_content?: string };
       }[];
     };
+
+    const usage = usageFrom(payload);
+    if (usage) options.onUsage?.(usage);
+
     const choice = payload.choices?.[0];
     const content = choice?.message?.content;
     if (typeof content !== "string") {
