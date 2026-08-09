@@ -44,6 +44,8 @@ export type TurnInput = {
    * happen before the dice, not after.
    */
   correction?: string;
+  /** Where the story is and how long this family likes an act to run. */
+  pacing?: string;
   /** A Family Move the table chose to spend this turn, if any. */
   familyMove?: {
     key: string;
@@ -244,6 +246,7 @@ export async function runTurn(
       call: (hint) =>
         calls.json(
           extractionPrompt({
+            pacing: input.pacing,
             narration,
             partyNames: input.party.map((member) => member.name),
           }),

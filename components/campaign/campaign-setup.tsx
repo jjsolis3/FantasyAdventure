@@ -7,6 +7,7 @@ import type { FormState } from "@/lib/auth/actions";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { PACING_OPTIONS } from "@/lib/game/pacing";
 
 export type StorylineChoice = {
   id: string;
@@ -47,6 +48,7 @@ export function CampaignSetup({
   // but an explicit choice afterwards must not be overwritten.
   const [tone, setTone] = useState<string | null>(null);
   const [readingLevel, setReadingLevel] = useState<string | null>(null);
+  const [pacing, setPacing] = useState("STANDARD");
   const [partyIds, setPartyIds] = useState<string[]>([]);
 
   const chosen = storylines.find((storyline) => storyline.id === storylineId);
@@ -79,6 +81,7 @@ export function CampaignSetup({
       <input type="hidden" name="storylineId" value={storylineId} />
       <input type="hidden" name="tone" value={tone ?? "COZY"} />
       <input type="hidden" name="readingLevel" value={readingLevel ?? defaultReadingLevel} />
+      <input type="hidden" name="pacing" value={pacing} />
 
       {/* ---- 1. The adventure ------------------------------------------- */}
       <section>
@@ -242,6 +245,29 @@ export function CampaignSetup({
                   onClick={() => setReadingLevel(option.value)}
                   className={`block w-full rounded-lg border p-3 text-left transition-colors ${
                     (readingLevel ?? defaultReadingLevel) === option.value
+                      ? "border-hearth-500 bg-hearth-800/40"
+                      : "border-hearth-800/60 hover:border-hearth-700"
+                  }`}
+                >
+                  <span className="block text-hearth-100">{option.label}</span>
+                  <span className="block text-sm text-hearth-400">{option.blurb}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-hearth-200">
+              How long should it run?
+            </legend>
+            <div className="space-y-2">
+              {PACING_OPTIONS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setPacing(option.key)}
+                  className={`block w-full rounded-lg border p-3 text-left transition-colors ${
+                    pacing === option.key
                       ? "border-hearth-500 bg-hearth-800/40"
                       : "border-hearth-800/60 hover:border-hearth-700"
                   }`}

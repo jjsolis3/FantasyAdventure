@@ -121,6 +121,7 @@ try {
 
   // One adventurer, but this storyline needs two.
   await page.click('button:has-text("Mira")');
+  await page.click('button:has-text("One evening")');
   await submitAndSettle(page, 'button:has-text("Begin the preparations")');
   check("a party below the minimum is refused", /at least 2/.test(await alertText(page)), await alertText(page));
   check("no campaign was created", (await db.campaign.count()) === 0);
@@ -138,6 +139,7 @@ try {
   check("title saved", campaign?.title === "The Thistledown Flight", campaign?.title);
   check("storyline linked", campaign?.storylineId === dragon.id);
   check("tone saved", campaign?.tone === "ADVENTUROUS", campaign?.tone);
+  check("how long it should run was saved", campaign?.pacing === "BRISK", campaign?.pacing);
   check("reading level saved", campaign?.readingLevel === "MIDDLE_GRADE", campaign?.readingLevel);
   check("status starts at SETUP", campaign?.status === "SETUP", campaign?.status);
   check("act index starts at 1", campaign?.currentActIndex === 1);

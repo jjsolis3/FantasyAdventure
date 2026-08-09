@@ -6,6 +6,7 @@ import type { FormState } from "@/lib/auth/actions";
 import { Alert, Field, SelectField } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { PACING_OPTIONS } from "@/lib/game/pacing";
 import type { CharacterChoice } from "./campaign-setup";
 
 export function CampaignSettingsForm({
@@ -13,11 +14,13 @@ export function CampaignSettingsForm({
   title,
   tone,
   readingLevel,
+  pacing,
 }: {
   campaignId: string;
   title: string;
   tone: string;
   readingLevel: string;
+  pacing: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(updateCampaignSettingsAction, null);
   const saved = state !== null && state.error === "";
@@ -41,6 +44,16 @@ export function CampaignSettingsForm({
         name="readingLevel"
         defaultValue={readingLevel}
         options={READING_LEVEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+      />
+
+      <SelectField
+        label="How long should it run?"
+        name="pacing"
+        defaultValue={pacing}
+        options={PACING_OPTIONS.map((option) => ({
+          value: option.key,
+          label: `${option.label} — ${option.blurb}`,
+        }))}
       />
 
       <SubmitButton variant="secondary" pendingLabel="Saving…">Save</SubmitButton>

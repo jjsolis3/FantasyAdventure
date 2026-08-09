@@ -209,6 +209,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             title={campaign.title}
             tone={campaign.tone}
             readingLevel={campaign.readingLevel}
+            pacing={campaign.pacing}
           />
         </Card>
 
