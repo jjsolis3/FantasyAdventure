@@ -71,10 +71,29 @@ export function systemPrompt(options: {
 const STAT_LIST = STATS.map((stat) => `${stat} (${STAT_INFO[stat].blurb})`).join(", ");
 
 /** Stage 1 — decide which declared actions need a roll. */
+/**
+ * The table's own words about what the last telling misunderstood.
+ *
+ * Placed high, before the actions, because it exists to change how those
+ * actions are read — arriving after them would be a footnote to a
+ * misreading that has already happened.
+ */
+function correctionBlock(correction?: string): string {
+  if (!correction?.trim()) return "";
+  return `
+THE TABLE SAYS THE LAST TELLING GOT SOMETHING WRONG:
+${correction.trim()}
+
+Take that as the truth of what happened and tell it again accordingly.
+`;
+}
+
 export function adjudicationPrompt(options: {
   sceneText: string;
   party: string;
   actions: { character: string; text: string }[];
+  /** The table saying what the previous telling got wrong. */
+  correction?: string;
 }): string {
   return `Read what each character is trying to do and decide which attempts need a dice roll.
 
@@ -86,7 +105,7 @@ Difficulty: EASY for simple-but-uncertain, NORMAL for genuinely tricky, HARD for
 
 THE SCENE:
 ${options.sceneText}
-
+${correctionBlock(options.correction)}
 THE PARTY:
 ${options.party}
 
@@ -107,9 +126,11 @@ export function narrationPrompt(options: {
   context: string;
   actions: { character: string; text: string }[];
   resolutions: string;
+  /** The table saying what the previous telling got wrong. */
+  correction?: string;
 }): string {
   return `${options.context}
-
+${correctionBlock(options.correction)}
 WHAT THE CHARACTERS JUST DID:
 ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join("\n")}
 
@@ -181,4 +202,62 @@ something to react to. Name each character at least once so everyone knows they
 are here. End with the party facing the situation — do not ask what they do.
 
 Write only the story.`;
+}
+
+/**
+ * A turn where the party talks rather than acts.
+ *
+ * No dice, no consequences, no act progress — the storyteller listens and the
+ * world responds. This exists because the best part of a tabletop game is two
+ * children planning together, and a loop that only ever asks "what do you do?"
+ * quietly teaches them that talking is not a move.
+ */
+export function conversationPrompt(options: {
+  context: string;
+  said: { character: string; text: string }[];
+}): string {
+  return `${options.context}
+
+WHAT THE CHARACTERS SAY TO EACH OTHER:
+${options.said.map((line) => `- ${line.character}: ${line.text}`).join("\n")}
+
+Respond to this conversation. Nothing is being attempted yet, so nothing
+succeeds or fails — do not invent an outcome, and do not move the story on.
+
+You may: have someone present react, add a sound or a detail that answers what
+they wondered about, or let a character notice something while they talk. Keep
+it short — a paragraph at most. Leave them exactly where they are, still free
+to decide what to do.
+
+Write only the story. No headings, no lists, no questions to the players.`;
+}
+
+/**
+ * Three things a character might try, for a player who has gone blank.
+ *
+ * Deliberately grounded in the scene and in who this character is, because a
+ * generic list ("attack it", "run away") teaches nothing and fits no story.
+ */
+export function suggestionPrompt(options: {
+  sceneText: string;
+  characterName: string;
+  characterSummary: string;
+}): string {
+  return `A player is stuck and would like some ideas.
+
+THE SCENE:
+${options.sceneText}
+
+THE CHARACTER:
+${options.characterName} — ${options.characterSummary}
+
+Suggest three different things ${options.characterName} could try. Make them
+genuinely different from each other: one careful, one bold, one kind or
+curious. Each must fit this scene and suit this character.
+
+Write each as ${options.characterName} would say it, in the first person, in
+under fifteen words. No numbering, no explanation.
+
+Reply with JSON only:
+{"suggestions": ["...", "...", "..."]}`;
 }

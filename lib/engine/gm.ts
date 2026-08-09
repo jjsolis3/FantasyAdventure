@@ -35,6 +35,15 @@ export type TurnInput = {
     skills: { name: string; rank: number }[];
   }[];
   actions: { characterId: string; text: string }[];
+  /**
+   * What the table says the previous telling of this turn got wrong.
+   *
+   * Set only when a turn is being retold after being taken back. It shapes
+   * adjudication as well as narration: if the storyteller misread an action,
+   * the check it chose was likely wrong too, so re-reading the action has to
+   * happen before the dice, not after.
+   */
+  correction?: string;
   /** A Family Move the table chose to spend this turn, if any. */
   familyMove?: {
     key: string;
@@ -124,6 +133,7 @@ export async function runTurn(
       call: (hint) =>
         calls.json(
           adjudicationPrompt({
+      correction: input.correction,
             sceneText: input.sceneText,
             party: input.party
               .map((member) => `- ${member.name}`)
@@ -193,6 +203,7 @@ export async function runTurn(
 
   const system = systemPrompt({ tone: input.tone, readingLevel: input.readingLevel });
   const basePrompt = narrationPrompt({
+      correction: input.correction,
     context: input.context,
     actions: namedActions,
     resolutions: resolutions || "Nothing needed a dice roll this turn.",

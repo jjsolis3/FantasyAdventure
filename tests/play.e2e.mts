@@ -265,6 +265,144 @@ try {
   // One turn deep: the snapshot is spent, so there is nothing further back.
   check("there is nothing left to undo", (await db.turnSnapshot.count()) === 0);
 
+  // ---- "The storyteller got that wrong" -----------------------------------
+  //
+  // Same machinery as undo, different intent: the words come back so only the
+  // correction has to be typed, and the correction reaches the model.
+  await page.reload();
+  await page.click('button:has-text("What do you do?")');
+  await page.fill("textarea", "I hum to it, like I do with the goats.");
+  await page.click('button:has-text("Next")');
+  await page.fill("textarea", "I stand between it and my sister.");
+  await page.click('button:has-text("Done")');
+  await page.click('button:has-text("Tell the storyteller")');
+
+  await waitFor("the retold turn to commit", async () => (await db.turnSnapshot.count()) === 1);
+
+  await page.click('button:has-text("The storyteller got that wrong")');
+  await page.click('button:has-text("Yes, let us explain")');
+
+  await page.waitForSelector("text=/What did the storyteller get wrong/", { timeout: 30_000 });
+  const restored = (await page.textContent("body")) ?? "";
+  check(
+    "the words everyone said came back",
+    restored.includes("like I do with the goats") && restored.includes("between it and my sister"),
+  );
+
+  await page.fill(
+    'textarea[placeholder*="humming to the creature"]',
+    "Mira was humming to the creature, not to the goats.",
+  );
+  await page.click('button:has-text("Tell the storyteller")');
+
+  const retold = await waitFor(
+    "the retelling to commit",
+    async () => (await db.turnEvent.count({ where: { type: "NARRATION" } })) === 2,
+  );
+  check("the retold turn was committed", retold);
+
+  const correctionReached = await db.aiCall.findFirst({
+    where: { promptPreview: { contains: "not to the goats" } },
+  });
+  check("the correction reached the storyteller", correctionReached !== null);
+  check(
+    "it was given to the storyteller as the truth",
+    correctionReached?.promptPreview?.includes("GOT SOMETHING WRONG") === true,
+  );
+
+  // ---- Talking to each other ----------------------------------------------
+  //
+  // A conversation is not a turn: it must cost no dice, no experience and no
+  // progress. Getting that wrong would let a family advance the story by
+  // chatting, and would quietly spend Family Moves on small talk.
+  await page.reload();
+  const beforeTalk = {
+    turnCounter: (await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).turnCounter,
+    dice: await db.turnEvent.count({ where: { type: "DICE_ROLL" } }),
+    xp: (await db.character.findMany({ orderBy: { name: "asc" } })).map((c) => c.xp),
+  };
+
+  await page.click('button:has-text("Talk to each other")');
+  check(
+    "talking asks what you say, not what you do",
+    (await page.textContent("body"))?.includes("Mira, what do you say?") === true,
+  );
+
+  await page.fill("textarea", "Do you think it is lost?");
+  await page.click('button:has-text("Next")');
+  await page.fill("textarea", "Maybe. Stay behind me either way.");
+  await page.click('button:has-text("Done")');
+  check(
+    "a conversation offers no Family Move",
+    !((await page.textContent("body")) ?? "").includes("Family Move"),
+  );
+  await page.click('button:has-text("Tell the storyteller")');
+
+  const talked = await waitFor(
+    "the conversation to be answered",
+    async () => (await db.turnEvent.count({ where: { type: "NARRATION" } })) === 3,
+  );
+  check("the storyteller answered the conversation", talked);
+
+  const afterTalk = {
+    turnCounter: (await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).turnCounter,
+    dice: await db.turnEvent.count({ where: { type: "DICE_ROLL" } }),
+    xp: (await db.character.findMany({ orderBy: { name: "asc" } })).map((c) => c.xp),
+  };
+  check("talking rolled no dice", afterTalk.dice === beforeTalk.dice);
+  check("talking awarded no experience", afterTalk.xp.join() === beforeTalk.xp.join());
+  check(
+    "talking did not advance the turn counter",
+    afterTalk.turnCounter === beforeTalk.turnCounter,
+    `${beforeTalk.turnCounter} -> ${afterTalk.turnCounter}`,
+  );
+
+  const spokenEvents = await db.turnEvent.findMany({ where: { type: "PLAYER_ACTION" } });
+  check(
+    "what was said is recorded as speech",
+    spokenEvents.some((event) => (event.metadata as { spoken?: boolean } | null)?.spoken === true),
+  );
+
+  // ---- Ideas for a player who has gone blank ------------------------------
+  await page.reload();
+  await page.click('button:has-text("What do you do?")');
+  await page.click('button:has-text("I don\'t know what to do")');
+  await page.waitForSelector('button:has-text("I creep closer and hold out my hand.")', {
+    timeout: 30_000,
+  });
+  check("ideas are offered", true);
+
+  await page.click('button:has-text("I creep closer and hold out my hand.")');
+  check(
+    "picking an idea fills the box",
+    (await page.inputValue("textarea")).includes("creep closer"),
+  );
+
+  // ---- Marking where the evening stopped ----------------------------------
+  await page.reload();
+  await page.click('button:has-text("stop here for today")');
+
+  // Waiting on "any SYSTEM event" is not enough: earlier turns already wrote
+  // milestones, so the condition was true before the bookmark existed and the
+  // test raced on while the write was still in flight.
+  const marked = await waitFor("the stopping point to be recorded", async () => {
+    const events = await db.turnEvent.findMany({ where: { type: "SYSTEM" } });
+    return events.some(
+      (event) => (event.metadata as { bookmark?: boolean } | null)?.bookmark === true,
+    );
+  });
+  check("a stopping point was recorded, marked as a bookmark", marked);
+
+  const shown = await page
+    .waitForFunction(
+      () => /The family stopped here on/.test(document.body.textContent ?? ""),
+      undefined,
+      { timeout: 30_000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check("the transcript shows where the family stopped", shown);
+
   // ---- Another household cannot reach the table ---------------------------
   const turnsBeforeStranger = await db.turnEvent.count();
   {

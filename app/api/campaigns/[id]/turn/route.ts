@@ -1,5 +1,11 @@
 import { requireUserForApi } from "@/lib/auth/session";
-import { beginCampaign, playTurn, type FamilyMoveChoice, type PlayerAction } from "@/lib/engine/play";
+import {
+  beginCampaign,
+  playTurn,
+  talkTurn,
+  type FamilyMoveChoice,
+  type PlayerAction,
+} from "@/lib/engine/play";
 import type { TurnProgress } from "@/lib/engine/gm";
 import { sseResponse } from "@/lib/http/sse";
 
@@ -34,16 +40,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (user instanceof Response) return user;
 
   const body = (await request.json().catch(() => ({}))) as {
-    mode?: "begin" | "turn";
+    mode?: "begin" | "turn" | "talk";
     actions?: PlayerAction[];
     familyMove?: FamilyMoveChoice | null;
+    /** Set when retelling a turn the table took back. */
+    correction?: string | null;
   };
 
   return sseResponse(async (send) => {
     const onProgress = (event: TurnProgress) => send(event.type, event);
 
     try {
-      if (body.mode === "begin") {
+      if (body.mode === "talk") {
+        const result = await talkTurn(id, user.id, body.actions ?? [], onProgress);
+        send("narration", { text: result.narration });
+        send("done", { talked: true });
+      } else if (body.mode === "begin") {
         const result = await beginCampaign(id, user.id, onProgress);
         send("narration", { text: result.narration });
         send("done", { sceneId: result.sceneId });
@@ -54,6 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           body.actions ?? [],
           onProgress,
           body.familyMove ?? null,
+          body.correction ?? null,
         );
         send("narration", { text: result.narration });
         send("done", {

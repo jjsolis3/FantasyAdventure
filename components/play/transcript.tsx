@@ -10,6 +10,10 @@ export type TranscriptEntry = {
   actorName?: string | null;
   content: string;
   dice?: DiceDetail | null;
+  /** Said aloud rather than attempted — shown as speech, not as an action. */
+  spoken?: boolean;
+  /** Where a play session stopped, so returning to it reads as a resumption. */
+  bookmark?: boolean;
 };
 
 export type DiceDetail = {
@@ -145,14 +149,31 @@ export function Transcript({ entries }: { entries: TranscriptEntry[] }) {
             <div key={entry.id} className="border-l-2 border-hearth-700 pl-4">
               <span className="text-sm font-medium text-hearth-300">
                 {entry.actorName ?? "Someone"}
+                {entry.spoken ? <span className="text-hearth-500"> says</span> : null}
               </span>
-              <p className="text-hearth-200/80 italic">{entry.content}</p>
+              <p className="text-hearth-200/80 italic">
+                {entry.spoken ? `\u201c${entry.content}\u201d` : entry.content}
+              </p>
             </div>
           );
         }
 
         if (entry.type === "DICE_ROLL" && entry.dice) {
           return <DiceCard key={entry.id} dice={entry.dice} />;
+        }
+
+        // A stopping point is a divider, not an announcement — it marks where
+        // one evening ended rather than celebrating anything.
+        if (entry.bookmark) {
+          return (
+            <div key={entry.id} className="flex items-center gap-3 py-2">
+              <span className="h-px flex-1 bg-hearth-800" />
+              <span className="text-xs tracking-wide text-hearth-500 uppercase">
+                {entry.content}
+              </span>
+              <span className="h-px flex-1 bg-hearth-800" />
+            </div>
+          );
         }
 
         // SYSTEM events are growth: levels, skill ranks, unlocked Family

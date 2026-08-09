@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
+import { UndoTurn } from "./undo-turn";
 
 export type PlayCharacter = {
   id: string;
@@ -78,6 +79,7 @@ export function PlayClient({
   party,
   initialEntries,
   availableMoves,
+  canUndo,
 }: {
   campaignId: string;
   campaignTitle: string;
@@ -85,6 +87,8 @@ export function PlayClient({
   party: PlayCharacter[];
   initialEntries: TranscriptEntry[];
   availableMoves: AvailableMove[];
+  /** True once a turn has been played, so there is something to take back. */
+  canUndo: boolean;
 }) {
   const router = useRouter();
 
@@ -92,6 +96,17 @@ export function PlayClient({
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [move, setMove] = useState<MoveChoice | null>(null);
+  /** What the table says the last telling got wrong; sent with the retold turn. */
+  const [correction, setCorrection] = useState("");
+  /** True between taking a turn back to retell it and sending the retelling. */
+  const [retelling, setRetelling] = useState(false);
+  /**
+   * True when the party is talking rather than acting.
+   *
+   * The same ask-everyone flow, sent to a different pipeline: talk costs one
+   * model call, rolls nothing, and does not move the story on.
+   */
+  const [talking, setTalking] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const hasBegun = status !== "SETUP";
@@ -146,6 +161,9 @@ export function PlayClient({
         // authoritative transcript rather than trusting what was streamed.
         setDrafts({});
         setMove(null);
+        setCorrection("");
+        setRetelling(false);
+        setTalking(false);
         router.refresh();
       } catch (error) {
         setPhase({
@@ -255,6 +273,8 @@ export function PlayClient({
           </button>
         ) : phase.kind === "asking" ? (
           <AskCharacter
+            campaignId={campaignId}
+            talking={talking}
             character={party[phase.index]}
             index={phase.index}
             total={party.length}
@@ -289,13 +309,44 @@ export function PlayClient({
               </ul>
             )}
 
-            <FamilyMovePicker available={availableMoves} chosen={move} onChoose={setMove} />
+            {retelling ? (
+              <label className="block rounded-lg border border-hearth-700/60 bg-hearth-950/40 p-4">
+                <span className="mb-1.5 block text-sm font-medium text-hearth-200">
+                  What did the storyteller get wrong?
+                </span>
+                <textarea
+                  value={correction}
+                  onChange={(event) => setCorrection(event.target.value)}
+                  rows={2}
+                  placeholder="Mira was humming to the creature, not to the goats."
+                  className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
+                />
+                <span className="mt-1.5 block text-sm text-hearth-400">
+                  In your own words. The storyteller takes this as what really happened.
+                </span>
+              </label>
+            ) : null}
+
+            {talking ? null : (
+              <FamilyMovePicker available={availableMoves} chosen={move} onChoose={setMove} />
+            )}
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 disabled={filledActions.length === 0}
-                onClick={() => run({ mode: "turn", actions: filledActions, familyMove: move })}
+                onClick={() =>
+                  run(
+                    talking
+                      ? { mode: "talk", actions: filledActions }
+                      : {
+                          mode: "turn",
+                          actions: filledActions,
+                          familyMove: move,
+                          correction: correction.trim() || null,
+                        },
+                  )
+                }
                 className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500 disabled:opacity-40"
               >
                 Tell the storyteller
@@ -310,20 +361,73 @@ export function PlayClient({
             </div>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={startAsking}
-            className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
-          >
-            What do you do?
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setTalking(false);
+                startAsking();
+              }}
+              className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
+            >
+              What do you do?
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTalking(true);
+                startAsking();
+              }}
+              className="rounded-lg border border-hearth-700 px-5 py-2.5 text-hearth-200 hover:bg-hearth-800/50"
+            >
+              Talk to each other
+            </button>
+          </div>
         )}
       </div>
+
+      {hasBegun && !finished && phase.kind !== "running" ? (
+        <UndoTurn
+          campaignId={campaignId}
+          canUndo={canUndo}
+          onRestore={(actions) => {
+            setDrafts(Object.fromEntries(actions.map((a) => [a.characterId, a.text])));
+            setRetelling(true);
+            setEntries((current) => current.slice(0, -countTurnEntries(current)));
+            setPhase({ kind: "review" });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
+/**
+ * How many trailing entries belong to the turn just taken back.
+ *
+ * The server has already deleted them; this only stops them lingering on screen
+ * while the table types its correction. Everything from the last run of player
+ * actions onward is one turn's worth.
+ */
+function countTurnEntries(entries: TranscriptEntry[]): number {
+  let count = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    count += 1;
+    if (entries[index].type === "PLAYER_ACTION") {
+      // Keep walking back over the rest of this turn's actions.
+      while (index - 1 >= 0 && entries[index - 1].type === "PLAYER_ACTION") {
+        index -= 1;
+        count += 1;
+      }
+      break;
+    }
+  }
+  return count;
+}
+
 function AskCharacter({
+  campaignId,
+  talking,
   character,
   index,
   total,
@@ -333,6 +437,8 @@ function AskCharacter({
   onBack,
   inputRef,
 }: {
+  campaignId: string;
+  talking: boolean;
   character: PlayCharacter;
   index: number;
   total: number;
@@ -342,6 +448,32 @@ function AskCharacter({
   onBack?: () => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
+  const [ideas, setIdeas] = useState<string[] | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const [noIdeas, setNoIdeas] = useState("");
+
+  async function askForIdeas() {
+    setThinking(true);
+    setNoIdeas("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId: character.id }),
+      });
+      const data = (await response.json()) as { suggestions?: string[]; error?: string };
+      if (!response.ok || !data.suggestions?.length) {
+        setNoIdeas(data.error ?? "No ideas just now — but anything you type will work.");
+        return;
+      }
+      setIdeas(data.suggestions);
+    } catch {
+      setNoIdeas("No ideas just now — but anything you type will work.");
+    } finally {
+      setThinking(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -349,10 +481,12 @@ function AskCharacter({
           {index + 1} of {total}
         </p>
         <h2 className="font-display text-2xl text-hearth-100">
-          {character.name}, what do you do?
+          {character.name}, {talking ? "what do you say?" : "what do you do?"}
         </h2>
         <p className="mt-1 text-sm text-hearth-400">
-          Anything at all. Talk, look, try something silly — the storyteller will go with it.
+          {talking
+            ? "Talking to each other. Nothing is being attempted, so nothing can go wrong — plan, wonder, argue."
+            : "Anything at all. Talk, look, try something silly — the storyteller will go with it."}
         </p>
       </div>
 
@@ -369,9 +503,51 @@ function AskCharacter({
           }
         }}
         rows={3}
-        placeholder="I sit down in the barley and start humming, like I do with the goats…"
+        placeholder={
+          talking
+            ? "Do you think it's lost? Maybe if we're quiet it will come out…"
+            : "I sit down in the barley and start humming, like I do with the goats…"
+        }
         className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
       />
+
+      {talking ? null : (
+        <div className="space-y-2">
+          {ideas === null ? (
+            <button
+              type="button"
+              onClick={askForIdeas}
+              disabled={thinking}
+              className="text-sm text-hearth-500 underline underline-offset-4 hover:text-hearth-300 disabled:opacity-50"
+            >
+              {thinking ? "Thinking of some ideas…" : "I don't know what to do"}
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-hearth-400">
+                Some ideas — pick one to start from, or ignore them all.
+              </p>
+              <div className="flex flex-col gap-2">
+                {ideas.map((idea, position) => (
+                  <button
+                    key={position}
+                    type="button"
+                    onClick={() => {
+                      onChange(idea);
+                      setIdeas(null);
+                      inputRef.current?.focus();
+                    }}
+                    className="rounded-lg border border-hearth-800/70 px-3 py-2 text-left text-hearth-200 transition-colors hover:border-hearth-600 hover:bg-hearth-800/30"
+                  >
+                    {idea}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {noIdeas ? <p className="text-sm text-hearth-500">{noIdeas}</p> : null}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <button
@@ -401,3 +577,4 @@ function AskCharacter({
     </div>
   );
 }
+

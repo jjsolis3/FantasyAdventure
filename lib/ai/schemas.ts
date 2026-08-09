@@ -97,6 +97,16 @@ export const summarySchema = z.object({
   summary: z.string().min(1).max(1200),
 });
 
+/**
+ * Ideas offered to a player who has gone blank.
+ *
+ * Capped short on both ends: a suggestion longer than a sentence stops being a
+ * nudge and starts being the game playing itself.
+ */
+export const suggestionsSchema = z.object({
+  suggestions: z.array(z.string().min(3).max(160)).min(1).max(5),
+});
+
 /** Wraps Zod into the shape `requestStructured` expects. */
 export function validator<T>(schema: z.ZodType<T>) {
   return (value: unknown): { ok: true; value: T } | { ok: false; error: string } => {

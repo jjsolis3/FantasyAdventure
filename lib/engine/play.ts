@@ -9,8 +9,16 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client.ts";
 import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/context";
-import { openingPrompt, summaryPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
-import { summarySchema, validator } from "@/lib/ai/schemas";
+import {
+  conversationPrompt,
+  openingPrompt,
+  suggestionPrompt,
+  summaryPrompt,
+  systemPrompt,
+  type ReadingLevelKey,
+  type ToneKey,
+} from "@/lib/ai/prompts";
+import { suggestionsSchema, summarySchema, validator } from "@/lib/ai/schemas";
 import { requestStructured } from "@/lib/ai/json";
 import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
@@ -391,6 +399,8 @@ export async function playTurn(
   actions: PlayerAction[],
   onProgress?: (event: TurnProgress) => void,
   familyMove?: FamilyMoveChoice | null,
+  /** Set when retelling a turn the table took back. */
+  correction?: string | null,
 ) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
@@ -438,6 +448,7 @@ export async function playTurn(
         skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
       })),
       actions: accepted,
+      correction: correction?.trim() || undefined,
       familyMove:
         validMove && familyMove
           ? {
@@ -769,4 +780,211 @@ async function closeScene(campaignId: string, sceneId: string, config: AiConfig,
       },
     });
   });
+}
+
+
+/**
+ * A turn where the party talks instead of acting.
+ *
+ * One model call rather than three: no adjudication, no dice, no extraction,
+ * and the turn counter does not move. Nothing was attempted, so nothing can
+ * succeed or fail, and treating a conversation as a turn would quietly spend
+ * the party's Family Moves and advance the act on a chat.
+ *
+ * It is still snapshotted, so it can be taken back like any other turn.
+ */
+export async function talkTurn(
+  campaignId: string,
+  userId: string,
+  said: PlayerAction[],
+  onProgress?: (event: TurnProgress) => void,
+) {
+  const campaign = await loadCampaign(campaignId, userId);
+  if (!campaign) throw new Error("Campaign not found.");
+  if (campaign.status !== "ACTIVE") throw new Error("This adventure is not in progress.");
+
+  const scene = campaign.scenes.find((entry) => entry.status === "OPEN");
+  if (!scene) throw new Error("There is no open scene.");
+
+  const spoken = said
+    .map((line) => ({ ...line, text: line.text.trim() }))
+    .filter((line) => line.text.length > 0);
+  if (spoken.length === 0) throw new Error("Nobody said anything.");
+
+  const config = await resolveAiConfig();
+  const records: AiCallRecord[] = [];
+  const calls = modelCalls(config, (record) => records.push(record));
+
+  const built = await buildCampaignContext(campaign, config.maxContextTokens);
+  const lastNarration = await db.turnEvent.findFirst({
+    where: { sceneId: scene.id, type: "NARRATION" },
+    orderBy: { ordinal: "desc" },
+  });
+
+  const named = spoken.map((line) => ({
+    character:
+      campaign.party.find((member) => member.characterId === line.characterId)?.character.name ??
+      "Someone",
+    text: line.text,
+  }));
+
+  onProgress?.({ type: "stage", stage: "narrating" });
+
+  const system = systemPrompt({
+    tone: campaign.tone as ToneKey,
+    readingLevel: campaign.readingLevel as ReadingLevelKey,
+  });
+
+  let reply = await calls.prose(system, conversationPrompt({ context: built.text, said: named }));
+
+  // The same guard the storyteller's other prose passes through. A quieter
+  // moment is not a safer one.
+  const verdict = checkNarration(reply);
+  if (!verdict.ok) {
+    reply = await calls.prose(
+      `${system}\n\n${safetyReminder(verdict.matched)}`,
+      conversationPrompt({ context: built.text, said: named }),
+    );
+  }
+
+  const narration = reply.trim();
+
+  await db.$transaction(async (tx) => {
+    let ordinal = await nextOrdinal(scene.id);
+
+    const snapshot = await captureSnapshot(
+      tx,
+      campaign.id,
+      campaign.party.map((member) => member.characterId),
+    );
+    await tx.turnSnapshot.upsert({
+      where: { campaignId: campaign.id },
+      create: {
+        campaignId: campaign.id,
+        turnCounter: campaign.turnCounter,
+        fromOrdinal: ordinal,
+        state: snapshot as unknown as Prisma.InputJsonValue,
+      },
+      update: {
+        turnCounter: campaign.turnCounter,
+        fromOrdinal: ordinal,
+        state: snapshot as unknown as Prisma.InputJsonValue,
+        createdAt: new Date(),
+      },
+    });
+
+    for (const line of spoken) {
+      await tx.turnEvent.create({
+        data: {
+          sceneId: scene.id,
+          ordinal: ordinal++,
+          type: "PLAYER_ACTION",
+          actorCharacterId: line.characterId,
+          content: line.text,
+          // Marks it as speech rather than an attempt, so the transcript can
+          // show it as talk and the Game Master reads it back as talk.
+          metadata: { spoken: true },
+        },
+      });
+    }
+
+    await tx.turnEvent.create({
+      data: { sceneId: scene.id, ordinal: ordinal++, type: "NARRATION", content: narration },
+    });
+
+    await tx.campaign.update({
+      where: { id: campaign.id },
+      data: { lastPlayedAt: new Date() },
+    });
+  });
+
+  await logAiCalls(campaign.id, records, 0);
+
+  return { narration };
+}
+
+/**
+ * Three things a character might try, for a player who has gone blank.
+ *
+ * Read-only: it writes nothing but the debug log, so a child can press it as
+ * often as they like without touching the story.
+ */
+export async function suggestActions(campaignId: string, userId: string, characterId: string) {
+  const campaign = await loadCampaign(campaignId, userId);
+  if (!campaign) throw new Error("Campaign not found.");
+
+  const member = campaign.party.find((entry) => entry.characterId === characterId);
+  if (!member) throw new Error("That adventurer is not on this journey.");
+
+  const scene = campaign.scenes.find((entry) => entry.status === "OPEN");
+  const lastNarration = scene
+    ? await db.turnEvent.findFirst({
+        where: { sceneId: scene.id, type: "NARRATION" },
+        orderBy: { ordinal: "desc" },
+      })
+    : null;
+
+  const config = await resolveAiConfig();
+  const calls = modelCalls(config);
+
+  const character = member.character;
+  const summary =
+    `${character.race} ${character.archetype}, ` +
+    `Might ${character.might} Wits ${character.wits} Heart ${character.heart} Spark ${character.spark}` +
+    (character.skills.length > 0
+      ? `, good at ${character.skills.map((skill) => skill.name).join(", ")}`
+      : "");
+
+  const result = await requestStructured({
+    call: (hint) =>
+      calls.json(
+        suggestionPrompt({
+          sceneText: lastNarration?.content ?? campaign.storyline.hook,
+          characterName: character.name,
+          characterSummary: summary,
+        }),
+        hint,
+      ),
+    validate: validator(suggestionsSchema),
+  });
+
+  return result.value.suggestions.slice(0, 3);
+}
+
+/**
+ * Marks where a play session stopped.
+ *
+ * Two children playing weekly lose the thread between sessions, and "what
+ * happened last time?" is much easier to answer when the transcript says where
+ * last time ended.
+ */
+export async function markStoppingPoint(campaignId: string, userId: string) {
+  const campaign = await db.campaign.findFirst({
+    where: { id: campaignId, ownerId: userId },
+    include: { scenes: { where: { status: "OPEN" }, take: 1 } },
+  });
+  if (!campaign) throw new Error("Campaign not found.");
+
+  const scene = campaign.scenes[0];
+  if (!scene) throw new Error("There is no open scene.");
+
+  const when = new Date();
+  await db.turnEvent.create({
+    data: {
+      sceneId: scene.id,
+      ordinal: await nextOrdinal(scene.id),
+      type: "SYSTEM",
+      content: `The family stopped here on ${when.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })}.`,
+      // Kept in metadata rather than a new event type: the transcript needs to
+      // style it differently, and a nullable flag is a cheaper thing to add
+      // than an enum value every existing row has to be reasoned about against.
+      metadata: { bookmark: true, at: when.toISOString() },
+    },
+  });
+
+  await db.campaign.update({ where: { id: campaignId }, data: { lastPlayedAt: when } });
 }

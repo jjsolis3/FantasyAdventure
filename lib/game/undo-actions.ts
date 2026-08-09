@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
 import { undoLastTurn } from "@/lib/engine/undo";
+import { markStoppingPoint } from "@/lib/engine/play";
 import type { FormState } from "@/lib/auth/actions";
+
+export type UndoOutcome =
+  | { ok: true; actions: { characterId: string; text: string }[] }
+  | { ok: false; error: string };
 
 /**
  * Takes back the most recent turn.
@@ -25,5 +30,40 @@ export async function undoLastTurnAction(
 
   revalidatePath(`/campaigns/${campaignId}/play`);
   revalidatePath(`/campaigns/${campaignId}`);
+  return { error: "" };
+}
+
+/**
+ * Takes the turn back and hands its words back to the caller.
+ *
+ * Used by "the storyteller got that wrong": the turn is removed, but what
+ * everyone said is restored into the boxes so only the correction has to be
+ * typed.
+ */
+export async function retellLastTurnAction(campaignId: string): Promise<UndoOutcome> {
+  const user = await requireUser();
+  const result = await undoLastTurn(campaignId, user.id);
+  if (!result.ok) return { ok: false, error: result.reason };
+
+  revalidatePath(`/campaigns/${campaignId}/play`);
+  return { ok: true, actions: result.actions };
+}
+
+/** Records where a play session stopped, so next time can pick it up. */
+export async function markStoppingPointAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const campaignId = String(formData.get("campaignId") ?? "");
+  if (!campaignId) return { error: "Which adventure?" };
+
+  try {
+    await markStoppingPoint(campaignId, user.id);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not mark the spot." };
+  }
+
+  revalidatePath(`/campaigns/${campaignId}/play`);
   return { error: "" };
 }
