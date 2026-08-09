@@ -435,6 +435,11 @@ model AiCall {
 
   latencyMs Int
   ok        Boolean
+
+  /// Reported by hosted providers only; null for most local servers. Kept so a
+  /// session's cost can be added up after the fact rather than estimated.
+  inputTokens  Int?
+  outputTokens Int?
   /// How many repair attempts were needed before the response parsed.
   repairs   Int     @default(0)
   error     String?

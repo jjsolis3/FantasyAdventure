@@ -11,7 +11,7 @@ import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/con
 import { openingPrompt, summaryPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
 import { summarySchema, validator } from "@/lib/ai/schemas";
 import { requestStructured } from "@/lib/ai/json";
-import { chat, type AiConfig } from "@/lib/ai/provider";
+import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
 import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
@@ -42,6 +42,8 @@ export function modelCalls(config: AiConfig, onCall?: (record: AiCallRecord) => 
           ]
         : [{ role: "user" as const, content: prompt }];
 
+      let usage: TokenUsage | null = null;
+
       try {
         const reply = await chat(config, {
           messages,
@@ -49,8 +51,9 @@ export function modelCalls(config: AiConfig, onCall?: (record: AiCallRecord) => 
           temperature: 0,
           json: true,
           maxTokens: 700,
+          onUsage: (reported) => (usage = reported),
         });
-        onCall?.({ stage: "json", model: config.model, latencyMs: Date.now() - started, ok: true, prompt, reply });
+        onCall?.({ stage: "json", model: config.model, latencyMs: Date.now() - started, ok: true, prompt, reply, usage });
         return reply;
       } catch (error) {
         onCall?.({
@@ -68,6 +71,8 @@ export function modelCalls(config: AiConfig, onCall?: (record: AiCallRecord) => 
 
     async prose(system, prompt) {
       const started = Date.now();
+      let usage: TokenUsage | null = null;
+
       try {
         const reply = await chat(config, {
           messages: [
@@ -77,6 +82,7 @@ export function modelCalls(config: AiConfig, onCall?: (record: AiCallRecord) => 
           model: config.narrationModel,
           temperature: 0.85,
           maxTokens: 700,
+          onUsage: (reported) => (usage = reported),
         });
         onCall?.({
           stage: "narrate",
@@ -85,6 +91,7 @@ export function modelCalls(config: AiConfig, onCall?: (record: AiCallRecord) => 
           ok: true,
           prompt,
           reply,
+          usage,
         });
         return reply;
       } catch (error) {
@@ -111,6 +118,8 @@ export type AiCallRecord = {
   prompt: string;
   reply: string;
   error?: string;
+  /** Only hosted providers report this; local servers usually do not. */
+  usage?: TokenUsage | null;
 };
 
 async function logAiCalls(campaignId: string, records: AiCallRecord[], repairs: number) {
@@ -125,6 +134,8 @@ async function logAiCalls(campaignId: string, records: AiCallRecord[], repairs: 
         ok: record.ok,
         repairs,
         error: record.error ?? null,
+        inputTokens: record.usage?.inputTokens ?? null,
+        outputTokens: record.usage?.outputTokens ?? null,
         promptPreview: record.prompt.slice(0, 2000),
         responsePreview: record.reply.slice(0, 2000),
       })),

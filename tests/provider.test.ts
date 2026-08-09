@@ -364,3 +364,155 @@ test("an unrecognised reasoning effort is ignored rather than forwarded", () => 
   assert.equal(configFor("http://x/v1", { AI_REASONING_EFFORT: "" }).reasoningEffort, null);
   assert.equal(configFor("http://x/v1", { AI_REASONING_EFFORT: " NONE " }).reasoningEffort, "none");
 });
+
+// ---- Hosted providers ------------------------------------------------------
+
+test("retries a rate limit and succeeds", async () => {
+  // A family should not lose a turn to a transient 429 when waiting a moment
+  // would have worked.
+  let calls = 0;
+  await withMockServer(
+    () => {
+      calls += 1;
+      return calls < 3 ? { status: 429, raw: "slow down" } : { content: "at last" };
+    },
+    async (baseUrl) => {
+      const reply = await chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] });
+      assert.equal(reply, "at last");
+      assert.equal(calls, 3);
+    },
+  );
+});
+
+test("gives up on a rate limit that will not clear, naming the status", async () => {
+  let calls = 0;
+  await withMockServer(
+    () => {
+      calls += 1;
+      return { status: 429, raw: "still limited" };
+    },
+    async (baseUrl) => {
+      await assert.rejects(
+        () => chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] }),
+        /429/,
+      );
+      assert.equal(calls, 3, "should stop after three attempts, not retry forever");
+    },
+  );
+});
+
+test("does not retry a request the server will always refuse", async () => {
+  // 401 is a wrong key. Retrying it wastes the table's time and cannot help.
+  let calls = 0;
+  await withMockServer(
+    () => {
+      calls += 1;
+      return { status: 401, raw: "invalid api key" };
+    },
+    async (baseUrl) => {
+      await assert.rejects(
+        () => chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] }),
+        /401/,
+      );
+      assert.equal(calls, 1);
+    },
+  );
+});
+
+test("adopts max_completion_tokens when the server rejects max_tokens", async () => {
+  // Newer hosted models renamed the field. Rather than track which model wants
+  // which spelling, the error names the field and the retry uses it.
+  const bodies: Record<string, unknown>[] = [];
+  await withMockServer(
+    (body) => {
+      bodies.push(body);
+      if ("max_tokens" in body) {
+        return {
+          status: 400,
+          raw: '{"error":{"message":"Unsupported parameter: \'max_tokens\' is not supported with this model. Use \'max_completion_tokens\' instead."}}',
+        };
+      }
+      return { content: "adapted" };
+    },
+    async (baseUrl) => {
+      const reply = await chat(configFor(baseUrl), {
+        messages: [{ role: "user", content: "hi" }],
+        maxTokens: 700,
+      });
+      assert.equal(reply, "adapted");
+      assert.equal(bodies.length, 2);
+      assert.equal(bodies[1].max_completion_tokens, 700);
+      assert.ok(!("max_tokens" in bodies[1]));
+    },
+  );
+});
+
+test("drops temperature when the server rejects it", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  await withMockServer(
+    (body) => {
+      bodies.push(body);
+      if ("temperature" in body) {
+        return { status: 400, raw: "temperature does not support 0.7 with this model" };
+      }
+      return { content: "fine without it" };
+    },
+    async (baseUrl) => {
+      const reply = await chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] });
+      assert.equal(reply, "fine without it");
+      assert.ok(!("temperature" in bodies[1]));
+    },
+  );
+});
+
+test("a 400 it cannot adapt to is reported rather than retried", async () => {
+  let calls = 0;
+  await withMockServer(
+    () => {
+      calls += 1;
+      return { status: 400, raw: "context length exceeded" };
+    },
+    async (baseUrl) => {
+      await assert.rejects(
+        () => chat(configFor(baseUrl), { messages: [{ role: "user", content: "hi" }] }),
+        /context length exceeded/,
+      );
+      assert.equal(calls, 1, "an unadaptable 400 must not loop");
+    },
+  );
+});
+
+test("reports token usage when the provider sends it", async () => {
+  await withMockServer(
+    () => ({
+      raw: JSON.stringify({
+        choices: [{ message: { content: "counted" } }],
+        usage: { prompt_tokens: 1234, completion_tokens: 56 },
+      }),
+    }),
+    async (baseUrl) => {
+      const seen: unknown[] = [];
+      await chat(configFor(baseUrl), {
+        messages: [{ role: "user", content: "hi" }],
+        onUsage: (usage) => seen.push(usage),
+      });
+      assert.deepEqual(seen, [{ inputTokens: 1234, outputTokens: 56 }]);
+    },
+  );
+});
+
+test("a provider that reports no usage is not an error", async () => {
+  // Most local servers omit it entirely; that must not break a turn.
+  await withMockServer(
+    () => ({ content: "no numbers here" }),
+    async (baseUrl) => {
+      let called = false;
+      const reply = await chat(configFor(baseUrl), {
+        messages: [{ role: "user", content: "hi" }],
+        onUsage: () => (called = true),
+      });
+      assert.equal(reply, "no numbers here");
+      assert.equal(called, false);
+    },
+  );
+});
