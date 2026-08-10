@@ -55,6 +55,19 @@ write their own adventures without touching the code.
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
 
+### Getting around
+
+Two links a family uses — **Adventures** (the stories) and **Characters** (the
+people) — each with an icon, and the section you are in marked rather than left
+to be inferred. They differ by two letters and used to sit side by side in the
+same weight, which meant reading carefully every time.
+
+Everything about your account sits behind the avatar on the right: your profile,
+**Settings** for an administrator, and signing out at the bottom. Those were four
+separate doors in the bar competing with the two anybody actually uses, and
+signing out was given the same weight as the game. Signed out, the bar offers one
+thing, and it looks like a button.
+
 ### Creating the first account
 
 Registration is invite-only, so the first account needs a code that nobody has

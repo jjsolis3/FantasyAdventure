@@ -105,6 +105,61 @@ try {
     );
   }
 
+  // ---- The navigation bar ---------------------------------------------------
+  //
+  // Two links a family uses, and everything about the account behind an avatar.
+  await admin.goto(`${BASE}/campaigns`);
+  const bar = admin.getByRole("banner");
+  check("the two places to go are in the bar", (await bar.innerText()).includes("Adventures"));
+  check(
+    "and the second one is not another word for the first",
+    (await bar.innerText()).includes("Characters"),
+  );
+  check(
+    "the section you are in is marked",
+    (await bar.locator('a[aria-current="page"]').innerText()).includes("Adventures"),
+  );
+  check(
+    "administrative doors are not in the bar itself",
+    !(await bar.innerText()).includes("Invites") && !(await bar.innerText()).includes("Storyteller"),
+  );
+  check(
+    "and signing out is not competing with the game",
+    !(await bar.innerText()).includes("Sign out"),
+  );
+
+  // The menu is shut until it is asked for.
+  check(
+    "the account menu starts closed",
+    (await admin.locator('[role="menu"]').count()) === 0,
+  );
+  await admin.click('button[aria-haspopup="menu"]');
+  const menu = admin.locator('[role="menu"]');
+  check("it opens on the avatar", (await menu.count()) === 1);
+  const menuText = await menu.innerText();
+  check("with the profile", menuText.includes("Your profile"));
+  check("the settings, for an administrator", menuText.includes("Settings"));
+  check("and signing out at the bottom", menuText.trim().endsWith("Sign out"));
+
+  await admin.keyboard.press("Escape");
+  check("escape closes it", (await admin.locator('[role="menu"]').count()) === 0);
+
+  // A player has a menu too, with one door fewer.
+  await player.goto(`${BASE}/campaigns`);
+  await player.click('button[aria-haspopup="menu"]');
+  const playerMenu = await player.locator('[role="menu"]').innerText();
+  check("a player is not shown a door they cannot open", !playerMenu.includes("Settings"));
+  check("but can still reach their profile", playerMenu.includes("Your profile"));
+  check("and still sign out", playerMenu.includes("Sign out"));
+
+  // Signed out, the only thing worth offering is the way in.
+  const anon = await (await browser.newContext()).newPage();
+  await anon.goto(`${BASE}/`);
+  const anonBar = await anon.getByRole("banner").innerText();
+  check("signed out, there is a sign-in button", anonBar.includes("Sign in"));
+  check("and no account menu", (await anon.locator('button[aria-haspopup="menu"]').count()) === 0);
+  await anon.close();
+
   // ---- Writing an adventure -------------------------------------------------
   await admin.goto(`${BASE}/settings/adventures/new`);
   await admin.fill('input[name="title"]', "The Thing In The Hedge");

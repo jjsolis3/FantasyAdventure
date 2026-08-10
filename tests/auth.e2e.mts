@@ -137,7 +137,6 @@ try {
     check("admin can reach /invites", page.url().endsWith("/invites"), page.url());
 
     await page.fill('input[name="note"]', "Grandma");
-    // Not `button[type=submit]` — the header's Sign out button precedes it in the DOM.
     await submitAndSettle(page, 'button:has-text("Create invite code")');
 
     const invite = await db.inviteCode.findFirst({ where: { note: "Grandma" } });
@@ -188,7 +187,10 @@ try {
     check("correct password signs in", page.url() === `${BASE}/`);
     check("failed attempts reset on success", (await db.user.findUnique({ where: { email: "parent@example.com" } }))?.failedLoginAttempts === 0);
 
-    await submitAndSettle(page, 'button:has-text("Sign out")');
+    // Signing out lives in the account menu now, rather than shouting from the
+    // bar next to the game itself.
+    await page.click('button[aria-haspopup="menu"]');
+    await submitAndSettle(page, '[role="menu"] button:has-text("Sign out")');
     await page.waitForURL(`${BASE}/login`);
     await page.goto(`${BASE}/profile`);
     check("signed-out user cannot reach /profile", page.url().includes("/login"), page.url());

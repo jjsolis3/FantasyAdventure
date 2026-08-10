@@ -206,8 +206,9 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </p>
       </header>
 
-      {/* Party status bar — sticky so a ten-year-old can always see their stats. */}
-      <div className="sticky top-0 z-10 -mx-6 mb-8 border-b border-hearth-800/60 bg-hearth-950/90 px-6 py-3 backdrop-blur">
+      {/* Party status bar — sticky so a ten-year-old can always see their stats,
+          and offset by the height of the site header, which is sticky too. */}
+      <div className="sticky top-16 z-10 -mx-6 mb-8 border-b border-hearth-800/60 bg-hearth-950/90 px-6 py-3 backdrop-blur">
         <ul className="flex flex-wrap gap-x-6 gap-y-2">
           {campaign.party.map((member) => (
             <li key={member.id} className="text-sm">
