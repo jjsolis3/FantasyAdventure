@@ -30,6 +30,28 @@ export default async function CampaignsPage() {
 
   const characterCount = await db.character.count({ where: { userId: user.id } });
 
+  // Which adventures are waiting on *this* player. Somebody who opens the app
+  // between school runs should not have to go into each one to find out whether
+  // anybody is waiting for them.
+  const openRounds = await db.turnRound.findMany({
+    where: { campaignId: { in: campaigns.map((campaign) => campaign.id) }, status: "COLLECTING" },
+    select: { campaignId: true, answers: { select: { characterId: true } } },
+  });
+
+  const waitingOn = new Set(
+    openRounds
+      .filter((round) => {
+        const campaign = campaigns.find((entry) => entry.id === round.campaignId);
+        if (!campaign || campaign.inputMode !== "OWN_DEVICE") return false;
+
+        const answered = new Set(round.answers.map((answer) => answer.characterId));
+        return campaign.party.some(
+          (member) => member.character.userId === user.id && !answered.has(member.characterId),
+        );
+      })
+      .map((round) => round.campaignId),
+  );
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
@@ -87,6 +109,11 @@ export default async function CampaignsPage() {
                       {campaign.owner.displayName}&rsquo;s table
                     </span>
                   )}
+                  {waitingOn.has(campaign.id) ? (
+                    <span className="rounded-full border border-hearth-500/60 bg-hearth-700/50 px-2.5 py-0.5 text-xs font-medium text-hearth-100">
+                      Your turn
+                    </span>
+                  ) : null}
                 </div>
 
                 <p className="mt-1 text-sm text-hearth-400">

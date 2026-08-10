@@ -8,10 +8,11 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 6 — Growing
+## Status: Milestone 8 — One screen each
 
-Characters now get better at things, collect what they find, and unlock moves
-they can only use together. Polish is M7.
+The table no longer has to be one table. Every player can answer for their own
+adventurer from their own device, the round waits until everybody has, and the
+whole story can be read back or printed afterwards. Portraits are M9.
 
 | | |
 |---|---|
@@ -39,7 +40,10 @@ they can only use together. Polish is M7.
 | ✅ | **M8** Join codes, so other households can bring an adventurer along |
 | ✅ | **M8** Handing an adventurer to another account, with everything they earned |
 | ✅ | **M8** Everybody's character sheet visible to everybody |
-| ⬜ | M7 printable journal, portraits |
+| ✅ | **M8** "It's your turn" — a nudge that finds the player, not just the page |
+| ✅ | **M8** The journal — the whole story, laid out to be read back or printed |
+| ✅ | **M8** Running the table — turn order, taking somebody out, pausing |
+| ⬜ | M9 character portraits |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -130,9 +134,10 @@ referenced from your profile — changing your preferences later must not
 silently rewrite a story already in progress.
 
 The order you pick the party in is the order the game asks "what do you do?"
-around the table. Party size is checked against the storyline's range, and the
-party is settled once the adventure leaves `SETUP`, so the transcript can never
-refer to somebody who is no longer there.
+around the table. Party size is checked against the storyline's range. Once the
+adventure leaves `SETUP` the party stops being something a form rewrites — the
+household running it can still take somebody out or change the turn order from
+**Run the table**, but nobody else can, and nothing does it by accident.
 
 Setup also asks **where everyone is sitting**, and it can be changed at any
 point from the campaign's settings:
@@ -180,6 +185,26 @@ what each adventurer is carrying, and the bonds between them. On one screen
 this was a lean across the table; apart, a child who cannot see that their
 sister is the one with Might 5 has no way to suggest that she try the door.
 
+**Being told it is your turn.** Answering from your own device only works if you
+find out there is something to answer, so three signals escalate in the order of
+how much they interrupt: a line on the play screen and a badge on the adventures
+list; the tab's title, which turns into `● Your turn — …`; and a browser
+notification, which is asked for by a button rather than by a prompt on page
+load and only fires when the tab is in the background. Each is about *your*
+adventurers specifically — a nudge that fires when somebody else's answer is
+missing is a nudge people learn to ignore.
+
+The honest limit: the page has to be open somewhere, even in a background tab.
+Reaching a closed browser means push subscriptions and a service worker, which is
+a great deal of machinery for a family who are mostly in the same house.
+
+**Running the table.** The household that started an adventure can change the
+turn order (which is the order the storyteller hears everybody in, and left
+alone means the youngest is always reacting to everybody else), take somebody
+out of the party without touching the adventurer themselves, and pause the whole
+thing — which refuses turns rather than merely looking different, and puts away
+any round the party is part-way through.
+
 Screens that are not taking the turn poll a small state endpoint every few
 seconds and refetch the page when something has actually changed. That is a
 deliberate choice over a second long-lived stream per watcher: it passes through
@@ -216,6 +241,21 @@ again" button. Nothing is lost — the adventure sits exactly where it was.
 The transcript, the dice and every player's own words persist, so the game can
 be closed mid-scene and picked up next week. Closed chapters collapse into a
 "story so far" recap.
+
+### The journal
+
+`/campaigns/[id]/journal` is the same events as the play screen, laid out to be
+kept rather than played: the whole adventure in order, chapter by chapter, with
+the narration, everybody's own words, the milestones, and who each adventurer
+turned out to be by the end. Dice become a single line — "and it worked" — since
+a year later nobody wants the arithmetic, but "and it worked" is still part of
+the story.
+
+It prints. The screen is candlelight on near-black, which a printer renders as a
+solid block of ink, so printing switches to black on white, drops the navigation
+and the buttons, and breaks pages between chapters. Which is most of the point of
+a family playing at all: nobody remembers the dice, and everybody remembers that
+a seven-year-old decided to hum to the dragon.
 
 ### Growing — what play changes
 
@@ -639,6 +679,7 @@ app/
   characters/claim/ Taking on an adventurer somebody else built
   campaigns/        Adventure list, setup flow, campaign page, and the table
   campaigns/join/   Joining somebody else's adventure with a code
+  campaigns/[id]/journal/  The whole story, laid out to be read back or printed
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
