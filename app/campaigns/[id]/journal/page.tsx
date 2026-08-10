@@ -42,7 +42,15 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
           },
         },
       },
-      scenes: { orderBy: { index: "asc" }, include: { turns: { orderBy: { ordinal: "asc" } } } },
+      scenes: {
+        orderBy: { index: "asc" },
+        include: {
+          turns: { orderBy: { ordinal: "asc" } },
+          // Only whether there is one. The bytes are served by their own route,
+          // so that a twelve-chapter journal is not a twelve-megabyte page.
+          image: { select: { id: true } },
+        },
+      },
     },
   });
   if (!campaign) notFound();
@@ -176,6 +184,17 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
                 {act ? `Chapter ${act.index} · ${act.title}` : `Chapter ${scene.actIndex}`}
                 {scene.location ? ` · ${scene.location}` : ""}
               </p>
+
+              {scene.image ? (
+                <figure className="mb-6 overflow-hidden rounded-xl border border-hearth-800/60">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/scenes/${scene.id}/image`}
+                    alt={`An illustration of ${scene.title}`}
+                    className="block w-full"
+                  />
+                </figure>
+              ) : null}
 
               <div className="space-y-4">
                 {scene.turns.map((turn) => {

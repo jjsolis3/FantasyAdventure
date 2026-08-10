@@ -20,6 +20,10 @@ enum Tone {
   COZY
   /// Real tension and real stakes, but still no gore and no death.
   ADVENTUROUS
+  /// Frightening on purpose: dread, wrongness, something following. The floor
+  /// underneath it does not move — nobody dies, nobody is hurt, and the story
+  /// always leaves a way through.
+  SPOOKY
 }
 
 /// Drives vocabulary, sentence length and narration density in the GM prompt.
@@ -497,6 +501,7 @@ model Scene {
   status   SceneStatus @default(OPEN)
 
   turns TurnEvent[]
+  image SceneImage?
 
   createdAt DateTime  @default(now())
   closedAt  DateTime?
@@ -542,6 +547,32 @@ model TurnEvent {
 
   @@unique([sceneId, ordinal])
   @@index([sceneId])
+}
+
+/// A picture of one chapter, drawn once and kept.
+///
+/// One per scene rather than per turn: a scene is a place the party is in for a
+/// while, so a picture of it stays true for several turns, and drawing on every
+/// turn would cost real money for pictures nobody has finished looking at.
+///
+/// The bytes live in the database rather than on disk, because the container is
+/// replaced on every deployment and a picture of the night the dragon learned
+/// her name should outlive a redeploy. They are small — one low-detail square
+/// each — and there are as many of them as there are chapters.
+model SceneImage {
+  id      String @id @default(cuid())
+  sceneId String @unique
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  data     Bytes
+  mimeType String @default("image/png")
+
+  /// What the picture was asked for, kept so an odd one can be understood
+  /// rather than only regenerated and hoped about.
+  prompt String
+  model  String
+
+  createdAt DateTime @default(now())
 }
 
 enum MemoryKind {
@@ -667,6 +698,16 @@ model AiSetting {
   /// chain-of-thought and returning an empty answer.
   reasoningEffort String?
 
+  /// Pictures are a separate provider from prose, and usually a different
+  /// company: Anthropic draws nothing, and a family running a local model for
+  /// the storytelling still has to reach out somewhere to get a picture. Off by
+  /// default, because unlike everything else here it costs money per use.
+  imagesEnabled  Boolean @default(false)
+  imageBaseUrl   String?
+  imageModel     String?
+  imageApiKeyCipher String?
+  imageApiKeyHint   String?
+
   /// Result of the last connection test, so the page can show the state it was
   /// left in rather than looking untested after every reload.
   lastTestedAt DateTime?
@@ -713,6 +754,15 @@ model StorylineAct {
   /// What this act is meant to accomplish, written as guidance to the GM.
   goal        String
   beats       String[]
+
+  /// Things the party is meant to come away from this act holding.
+  ///
+  /// Guidance, like beats: the storyteller is told to make them findable, not
+  /// to force them into anybody's hands, and a party that solves the act
+  /// another way is not stopped. Naming them is what lets a screen say "still
+  /// looking for the brass key" instead of the family keeping that list in
+  /// their heads.
+  seeks       String[]
 
   @@unique([storylineId, index])
   @@index([storylineId])

@@ -12,7 +12,15 @@ export const TONE_OPTIONS = [
   {
     value: "ADVENTUROUS",
     label: "Adventurous",
-    blurb: "Real tension and real stakes — spooky is allowed. Still no gore and nobody dies.",
+    blurb: "Real tension and real stakes — eerie is allowed. Still no gore and nobody dies.",
+  },
+  {
+    value: "SPOOKY",
+    label: "Spooky",
+    blurb:
+      "Meant to be frightening: dread, being watched, something wrong with the ordinary. " +
+      "For a table that likes Goosebumps. Nobody is ever caught or hurt, and every scene " +
+      "still leaves a way through.",
   },
 ] as const;
 

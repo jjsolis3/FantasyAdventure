@@ -12,7 +12,7 @@ import type { FormState } from "@/lib/auth/actions";
 const campaignSchema = z.object({
   storylineId: z.string().min(1, "Choose an adventure."),
   title: z.string().trim().min(1, "Give this adventure a name.").max(80, "That name is very long."),
-  tone: z.enum(["COZY", "ADVENTUROUS"]),
+  tone: z.enum(["COZY", "ADVENTUROUS", "SPOOKY"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
   inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),
@@ -189,7 +189,7 @@ export async function updatePartyAction(_prev: FormState, formData: FormData): P
 const settingsSchema = z.object({
   campaignId: z.string().min(1),
   title: z.string().trim().min(1, "Give this adventure a name.").max(80),
-  tone: z.enum(["COZY", "ADVENTUROUS"]),
+  tone: z.enum(["COZY", "ADVENTUROUS", "SPOOKY"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
   inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),

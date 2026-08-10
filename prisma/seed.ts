@@ -198,6 +198,7 @@ const storylines = [
           "The house hides a door when someone gets angry at it",
           "Bramble's handwriting keeps appearing in useful places",
         ],
+        seeks: ["the key to the room that keeps moving"],
       },
       {
         index: 2,
@@ -208,6 +209,7 @@ const storylines = [
           "The garden shows two versions of itself, before and after",
           "Someone finds a letter that was written but never sent",
         ],
+        seeks: ["the letter that was never sent"],
       },
       {
         index: 3,
@@ -251,6 +253,7 @@ const storylines = [
           "Her scales change colour with her mood and she hates that everyone can tell",
           "She remembers a lullaby but not who sang it",
         ],
+        seeks: ["a scale she shed when she landed"],
       },
       {
         index: 2,
@@ -261,6 +264,7 @@ const storylines = [
           "A rival her own age remembers it perfectly and is furious about being asked",
           "The eldest of the clan is going deaf and will only answer a question asked kindly, twice",
         ],
+        seeks: ["the first syllable of her name, written down"],
       },
       {
         index: 3,
@@ -376,6 +380,182 @@ const storylines = [
       },
     ],
   },
+
+  // ---- Frightening on purpose ---------------------------------------------
+  //
+  // For the table that reads Goosebumps and watches Stranger Things from behind
+  // a cushion. The floor is exactly where it is everywhere else — nobody dies,
+  // nobody is caught, nothing is cruel — and everything above it is dread:
+  // being watched, being copied, not being believed, and the ordinary going
+  // subtly wrong. Each one ends by turning the thing that frightened them into
+  // something that can be talked to, and each act names what it wants the party
+  // to come away holding.
+  {
+    slug: "the-radio-that-answers-back",
+    title: "The Radio That Answers Back",
+    tagline: "The old set in the attic picks up a station that knows your names.",
+    premise:
+      "A shortwave radio nobody has plugged in for thirty years starts up on its own, and the " +
+      "voice on it describes the house — accurately, except for the details that are wrong. A " +
+      "door where there is no door. A fourth child at the table. Somewhere close by there is a " +
+      "copy of this house, running slightly behind, and something in it has been waiting a long " +
+      "time to be let out. It is not the thing that should frighten them. What it is hiding from " +
+      "is.",
+    hook:
+      "The radio is warm. Nothing is plugged in and the radio is warm, and through the hiss a " +
+      "calm voice is reading a list: the colour of the front door, the name of the dog that died " +
+      "before any of you were born, and then — quite clearly, and one at a time — each of your " +
+      "names, as if checking you are all still here.",
+    defaultTone: "SPOOKY",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 14,
+    acts: [
+      {
+        index: 1,
+        title: "The Station That Should Not Exist",
+        goal: "Establish that the voice knows too much and is running a few seconds behind the house. Let the family test it and find it true. Nothing is threatening yet; everything is wrong.",
+        beats: [
+          "The voice describes what somebody is doing, a beat after they do it",
+          "It describes a room the house does not have, in detail",
+          "An adult hears only static, and says so kindly, and does not come upstairs again",
+        ],
+        seeks: ["the tuning key from the back of the radio", "Grandad's station logbook"],
+      },
+      {
+        index: 2,
+        title: "The House Behind the House",
+        goal: "Let them find the way across — a door, a mirror, a cellar stair that has one step too many. The copy is their house left running too long: dust, stopped clocks, a fourth chair. Something moves in it and does not want to be seen.",
+        beats: [
+          "A thing in the copy imitates one of them badly, and gets a detail wrong",
+          "Their own house can be seen from inside it, and someone is standing in the kitchen",
+          "The logbook's last entry is in handwriting that has not been written yet",
+        ],
+        seeks: ["the stopped clock from the copied hallway", "a photograph with one face too many"],
+      },
+      {
+        index: 3,
+        title: "What Has Been Waiting",
+        goal: "Reveal that the thing in the copy is frightened, not hunting — it has been alone in a house that never changes since the night the radio was switched off. Give the family a way to end its wait: finish the broadcast that was interrupted.",
+        beats: [
+          "It runs from them, which is worse than being chased",
+          "The radio will only transmit when more than one of them speaks at once",
+          "Whatever they broadcast is heard in both houses, and one of them goes quiet at last",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "every-photograph-is-wrong",
+    title: "Every Photograph Is Wrong",
+    tagline: "In every picture taken this week, there is someone standing behind you.",
+    premise:
+      "The school photographs came back with a figure at the edge of the frame. So did the ones " +
+      "on the phone, and the ones from last summer that nobody has touched since. In each new " +
+      "picture it is closer, and it is patient. It is not coming for them — it is trying to be " +
+      "remembered, because it is being forgotten out of existence, and it has picked the family " +
+      "that still has the albums.",
+    hook:
+      "The envelope of school photographs is on the kitchen table and everyone is laughing at " +
+      "their own faces until somebody stops laughing. At the back of the hall, half behind the " +
+      "curtain, there is a person. Nobody remembers them. In the photograph taken four minutes " +
+      "later, they are one row nearer, and their head is turned.",
+    defaultTone: "SPOOKY",
+    readingLevel: "TEEN",
+    minPlayers: 2,
+    maxPlayers: 4,
+    estimatedScenes: 12,
+    acts: [
+      {
+        index: 1,
+        title: "One Row Nearer",
+        goal: "Build the rule and let them prove it: it only moves in pictures, and only when nobody is looking at the picture. Photographing it deliberately is the obvious idea and should work, and should be frightening.",
+        beats: [
+          "A picture taken as a test comes out with it much closer than a week of drift would explain",
+          "A grown-up looks straight at it and says 'that's just the curtain'",
+          "Somebody finds it in an album from before they were born",
+        ],
+        seeks: ["the old family album from the loft", "a camera that still takes film"],
+      },
+      {
+        index: 2,
+        title: "Who It Used To Be",
+        goal: "Turn dread into pity. The albums, the school register and an elderly neighbour together give it a name and a story — somebody nobody kept. The house grows colder as they get closer to remembering.",
+        beats: [
+          "The register has a name with no photograph beside it",
+          "A neighbour remembers the name and then, mid-sentence, does not",
+          "Reflections start doing it too, which is much worse than photographs",
+        ],
+        seeks: ["the school register for that year", "the name written down somewhere permanent"],
+      },
+      {
+        index: 3,
+        title: "Kept",
+        goal: "Let them decide how to remember it, and make that the whole ending — not a trap, not a banishment. Whatever they choose has to cost them something small and real: a page of their own album, a place at the table, a story told properly.",
+        beats: [
+          "It comes as close as the doorway and stops, waiting to be invited",
+          "The last photograph is one they take on purpose, with it in the middle",
+          "Afterwards the pictures are ordinary, and one of them has an extra person in it who belongs",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "the-lights-in-the-reservoir",
+    title: "The Lights in the Reservoir",
+    tagline: "The drowned village is still keeping its lights on, and it is coming back up.",
+    premise:
+      "The reservoir is low after a dry summer, and the church spire of the village underneath has " +
+      "broken the surface for the first time in sixty years. At night there are lights down there, " +
+      "moving between the drowned streets in an orderly way, as if somebody is still doing the " +
+      "rounds. The village never finished its last evening, and until it does the water will keep " +
+      "dropping — taking the reservoir, and then the town that drinks from it.",
+    hook:
+      "Torchlight on black water, and the spire standing up out of it like a finger. Then, forty " +
+      "feet down and quite unhurried, a lamp comes on in a window. Then another, further along a " +
+      "street that has not been walked on since your grandparents were children, moving away from " +
+      "you, as though somebody heard you arrive and has gone to tell the others.",
+    defaultTone: "SPOOKY",
+    readingLevel: "FAMILY_MIXED",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 14,
+    acts: [
+      {
+        index: 1,
+        title: "The Spire Comes Up",
+        goal: "Establish the drowned village as somewhere that is still going, on its own time. Nothing threatens them; everything invites them. The wrongness is that it is all perfectly normal, forty feet under.",
+        beats: [
+          "Something is left on the shore that is dry, and sixty years old",
+          "The lights go out one by one when a torch is pointed at them",
+          "The bell rings underwater, on the hour, and is four minutes slow",
+        ],
+        seeks: ["the ferryman's brass whistle", "a key that opens something long since drowned"],
+      },
+      {
+        index: 2,
+        title: "The Last Evening",
+        goal: "Let them piece together the night the valley was flooded and what was left unfinished — somebody was not fetched home. The village replays fragments of that evening, and the party can walk through them but not change them yet.",
+        beats: [
+          "A door in the village opens for one of them and not the others",
+          "The same five minutes happen twice, differently",
+          "Whatever they take from down there is dry when they surface",
+        ],
+        seeks: ["the ledger from the drowned schoolhouse", "the shoe that was never collected"],
+      },
+      {
+        index: 3,
+        title: "Calling Them In",
+        goal: "The village is waiting to be told the evening is over. Give the family a way to say so — ringing the bell right, reading the names, walking the last child home — and let the water come back up gently once it is done.",
+        beats: [
+          "The bell can only be rung on time by two people working together",
+          "The names have to be read aloud, and one of them is a name they now know",
+          "The lights go out in order, the way a village goes to bed",
+        ],
+      },
+    ],
+  },
 ] as const;
 
 /**
@@ -426,7 +606,14 @@ async function main() {
 
     await db.storylineAct.deleteMany({ where: { storylineId: record.id } });
     await db.storylineAct.createMany({
-      data: acts.map((act) => ({ ...act, beats: [...act.beats], storylineId: record.id })),
+      data: acts.map((act) => ({
+        ...act,
+        beats: [...act.beats],
+        // Most acts ask for nothing in particular; the ones that do name it, so
+        // that the table can be told what it is still missing.
+        seeks: "seeks" in act && Array.isArray(act.seeks) ? [...(act.seeks as string[])] : [],
+        storylineId: record.id,
+      })),
     });
 
     console.log(`  ✓ ${record.title} (${acts.length} acts)`);

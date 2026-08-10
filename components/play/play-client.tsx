@@ -7,8 +7,10 @@ import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
+import { NarratorControls } from "./narrator-controls";
 import { RoundBoard } from "./round-board";
 import { TellMeToggle, useTurnAlerts } from "./turn-alerts";
+import { useNarrator } from "./use-narrator";
 import { UndoTurn } from "./undo-turn";
 import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
@@ -185,6 +187,35 @@ export function PlayClient({
     campaignTitle,
     campaignId,
   });
+
+  /**
+   * The storyteller's voice.
+   *
+   * Fed from two places on purpose. The browser running the turn hears the
+   * narration as it arrives down the stream, which is the moment it should
+   * start talking; every other screen only ever sees it appear in the refreshed
+   * transcript. The narrator ignores a passage it has already read, so whichever
+   * happens first is the one that speaks.
+   */
+  const narrator = useNarrator();
+  const { speakOnce, markSpoken } = narrator;
+
+  // Opening a page mid-adventure must not read the whole evening back. Whatever
+  // is already on screen counts as heard.
+  const primed = useRef(false);
+  if (!primed.current) {
+    primed.current = true;
+    markSpoken(lastNarration(initialEntries));
+  }
+
+  useEffect(() => {
+    if (phase.kind === "narrating") speakOnce(phase.text);
+  }, [phase, speakOnce]);
+
+  useEffect(() => {
+    const latest = lastNarration(entries);
+    if (latest) speakOnce(latest);
+  }, [entries, speakOnce]);
 
   /**
    * Adopts the transcript the server just re-rendered.
@@ -366,7 +397,9 @@ export function PlayClient({
         </div>
       ) : null}
 
-      <Transcript entries={entries} />
+      <NarratorControls narrator={narrator} />
+
+      <Transcript entries={entries} onSpeak={narrator.supported ? narrator.say : undefined} />
 
       {phase.kind === "narrating" ? (
         <div>
@@ -632,6 +665,14 @@ export function PlayClient({
  * while the table types its correction. Everything from the last run of player
  * actions onward is one turn's worth.
  */
+/** The most recent thing the storyteller said, or null before it has said any. */
+function lastNarration(entries: TranscriptEntry[]): string | null {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (entries[index].type === "NARRATION") return entries[index].content;
+  }
+  return null;
+}
+
 function countTurnEntries(entries: TranscriptEntry[]): number {
   let count = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {

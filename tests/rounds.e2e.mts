@@ -493,6 +493,79 @@ try {
     await page.close();
   });
 
+  // ---- Pictures -------------------------------------------------------------
+  //
+  // Drawn on request rather than during a turn, once per chapter, and only ever
+  // paid for once however many browsers ask at the same moment.
+  const scene = await db.scene.findFirstOrThrow({
+    where: { campaignId: campaign.id, status: "OPEN" },
+  });
+
+  // Pictures are opt-in and cost money, so a suite run without a drawing
+  // service configured says so and moves on rather than failing. Set
+  // IMAGE_ENABLED, IMAGE_BASE_URL and IMAGE_MODEL on the app to exercise this;
+  // the mock model server draws a one-pixel PNG.
+  const probe = await hostContext.request.post(`${BASE}/api/campaigns/${campaign.id}/scene-image`, {
+    data: { sceneId: scene.id },
+    timeout: 60_000,
+  });
+  const picturesOn =
+    probe.ok() || !((await probe.text()).includes("switched off"));
+
+  if (!picturesOn) {
+    console.log("  ---- pictures are switched off for this run; skipping that section");
+  } else {
+  // Nobody asked for the first one: opening the play screen did, which is the
+  // whole point — a picture appears beside the chapter without anybody pressing.
+  const drawnByLooking = await waitFor(
+    "the chapter to be painted",
+    async () => (await db.sceneImage.count({ where: { sceneId: scene.id } })) === 1,
+    60_000,
+  );
+  check("opening a chapter is enough to have it painted", drawnByLooking);
+
+  // Now the race, deliberately: with the picture cleared, two devices ask at
+  // the same moment, and only one of them should pay for it.
+  await db.sceneImage.deleteMany({ where: { sceneId: scene.id } });
+
+  const [firstAsk, secondAsk] = await Promise.all([
+    hostContext.request.post(`${BASE}/api/campaigns/${campaign.id}/scene-image`, {
+      data: { sceneId: scene.id },
+      timeout: 60_000,
+    }),
+    guestContext.request.post(`${BASE}/api/campaigns/${campaign.id}/scene-image`, {
+      data: { sceneId: scene.id },
+      timeout: 60_000,
+    }),
+  ]);
+  check(
+    "two devices asking for the same picture both succeed",
+    firstAsk.ok() && secondAsk.ok(),
+    `${firstAsk.status()} and ${secondAsk.status()}`,
+  );
+
+  const drawnTwice = [
+    ((await firstAsk.json()) as { drawn: boolean }).drawn,
+    ((await secondAsk.json()) as { drawn: boolean }).drawn,
+  ].filter(Boolean).length;
+  check("but it is only drawn once", drawnTwice === 1, `${drawnTwice} drawings`);
+
+  const stored = await db.sceneImage.findUnique({ where: { sceneId: scene.id } });
+  check("the picture is kept with the chapter", stored !== null);
+  check("as bytes, not a link that expires", (stored?.data.length ?? 0) > 0);
+  check(
+    "and it remembers what it was asked for",
+    (stored?.prompt ?? "").includes("watercolour"),
+  );
+
+  const served = await guestContext.request.get(`${BASE}/api/scenes/${scene.id}/image`);
+  check("anybody at the table can see it", served.ok(), String(served.status()));
+  check("served as an image", (served.headers()["content-type"] ?? "").startsWith("image/"));
+
+  const outsider = await strangerContext.request.get(`${BASE}/api/scenes/${scene.id}/image`);
+  check("and nobody else can", outsider.status() === 404, String(outsider.status()));
+  }
+
   // ---- The journal ----------------------------------------------------------
   await guest.goto(`${BASE}/campaigns/${campaign.id}/journal`);
   const journal = await guest.locator("main").innerText();

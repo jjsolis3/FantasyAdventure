@@ -147,7 +147,14 @@ export function NarrationBody({ text }: { text: string }) {
   );
 }
 
-export function Transcript({ entries }: { entries: TranscriptEntry[] }) {
+export function Transcript({
+  entries,
+  onSpeak,
+}: {
+  entries: TranscriptEntry[];
+  /** Given when the device can read aloud, so a passage can be heard again. */
+  onSpeak?: (text: string) => void;
+}) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -159,8 +166,21 @@ export function Transcript({ entries }: { entries: TranscriptEntry[] }) {
       {entries.map((entry) => {
         if (entry.type === "NARRATION") {
           return (
-            <div key={entry.id} className="font-display text-lg">
+            <div key={entry.id} className="group font-display text-lg">
               <NarrationBody text={entry.content} />
+              {onSpeak ? (
+                // Quiet until wanted: a child asking "what did it say?" is the
+                // whole use, and a loudspeaker beside every paragraph would
+                // shout at everybody else all evening.
+                <button
+                  type="button"
+                  onClick={() => onSpeak(entry.content)}
+                  aria-label="Read this part again"
+                  className="mt-1 font-sans text-sm text-hearth-600 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover:text-hearth-300"
+                >
+                  ▸ read this again
+                </button>
+              ) : null}
             </div>
           );
         }

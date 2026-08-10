@@ -61,6 +61,16 @@ export type ContextInput = {
   actTitle: string;
   actGoal: string;
   actBeats: string[];
+  /**
+   * What this chapter wants the party to come away holding, and what they are
+   * already carrying so that nothing is handed over twice.
+   *
+   * Optional because not every caller has a campaign behind it — the settings
+   * page's practice turn and the CLI harness both build a context out of thin
+   * air, and neither has an inventory to speak of.
+   */
+  actSeeks?: string[];
+  itemsHeld?: string[];
   party: PartyMemberContext[];
   bonds: BondContext[];
   location?: string | null;
@@ -151,6 +161,19 @@ export function buildContext(input: ContextInput): BuiltContext {
       ? `Things that could happen (optional, ignore if the party goes elsewhere):\n${input.actBeats
           .map((beat) => `- ${beat}`)
           .join("\n")}`
+      : "",
+    // Named separately from the beats because they are the one kind of guidance
+    // the table can see for itself — a screen tells them what is still missing,
+    // so the storyteller has to make these findable rather than merely possible.
+    (input.actSeeks?.length ?? 0) > 0
+      ? `Things the party should be able to find here. Make them findable — put them somewhere a ` +
+        `search, a question or a kindness would turn them up — but never force them into anybody's ` +
+        `hands, and let a party that solves this another way carry on:\n${(input.actSeeks ?? [])
+          .map((item) => `- ${item}`)
+          .join("\n")}`
+      : "",
+    (input.itemsHeld?.length ?? 0) > 0
+      ? `Already found and being carried: ${(input.itemsHeld ?? []).join(", ")}. Do not offer these again.`
       : "",
     "",
     "THE PARTY:",

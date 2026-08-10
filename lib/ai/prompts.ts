@@ -9,7 +9,7 @@
 
 import { STAT_INFO, STATS } from "@/lib/game/rules";
 
-export type ToneKey = "COZY" | "ADVENTUROUS";
+export type ToneKey = "COZY" | "ADVENTUROUS" | "SPOOKY";
 export type ReadingLevelKey = "EARLY_READER" | "MIDDLE_GRADE" | "TEEN" | "FAMILY_MIXED";
 
 const READING_LEVEL_GUIDANCE: Record<ReadingLevelKey, string> = {
@@ -35,6 +35,25 @@ const TONE_GUIDANCE: Record<ToneKey, string> = {
   ADVENTUROUS:
     "Real tension is welcome. Things can be eerie, urgent, and genuinely uncertain. " +
     "Something can be behind the door. It is never something that wants to hurt them.",
+  // Written to be genuinely frightening, because a table that asked for
+  // frightening and got "slightly odd" will stop asking. The fear is built out
+  // of wrongness, being watched and not being believed — the Goosebumps and
+  // Stranger Things toolkit — rather than out of harm, which the core contract
+  // forbids and which is the least interesting way to frighten anybody.
+  SPOOKY:
+    "Frighten them properly. Build dread: something is wrong and everyone can feel it before " +
+    "anyone can name it. Use the specific and the ordinary — a door that is open by one inch " +
+    "more than it was, a reflection a beat behind, a voice that knows their names. Things can " +
+    "follow, watch, wait at the edge of the light, and copy them badly. Grown-ups do not " +
+    "believe them yet. " +
+    "Let the fear land: do not undercut a frightening moment with a joke or a reassurance in " +
+    "the same breath. " +
+    "What is never in doubt is that they are not going to be hurt. Nothing draws blood, " +
+    "nothing catches them, nobody is taken. A chase ends in a hiding place or a slammed door, " +
+    "never in being caught. Whatever it is turns out to want something — and wanting is what " +
+    "makes it possible to talk to, trick, feed, free or forgive. " +
+    "End every scene with a way forward, even a narrow one, and never leave a character alone " +
+    "in the dark at the end of a turn.",
 };
 
 /** The rules that never change, whatever the campaign settings. */
