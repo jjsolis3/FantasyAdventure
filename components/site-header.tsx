@@ -7,7 +7,7 @@ export async function SiteHeader() {
   const user = await getCurrentUser();
 
   return (
-    <header className="border-b border-hearth-800/50">
+    <header className="print-hide border-b border-hearth-800/50">
       <nav className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-5 gap-y-2 px-6 py-4">
         <Link href="/" className="font-display text-lg text-hearth-100 hover:text-hearth-50">
           Hearthlight

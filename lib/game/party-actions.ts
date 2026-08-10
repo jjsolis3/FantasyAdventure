@@ -105,6 +105,143 @@ export async function leaveCampaignAction(formData: FormData): Promise<void> {
   redirect("/campaigns");
 }
 
+/**
+ * Takes somebody out of the party. Owner only, at any point.
+ *
+ * Deliberately blunter than the character delete: nothing is destroyed here.
+ * The adventurer keeps their level, their things and their ties, and can be
+ * brought back with the join code — so the honest confirmation is a sentence
+ * rather than a ceremony.
+ */
+export async function removePartyMemberAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+
+  const campaignId = String(formData.get("campaignId") ?? "");
+  const characterId = String(formData.get("characterId") ?? "");
+  if (!campaignId || !characterId) return;
+
+  const campaign = await db.campaign.findFirst({
+    where: { id: campaignId, ownerId: user.id },
+    select: { id: true, party: { select: { characterId: true } } },
+  });
+  if (!campaign) return;
+
+  // An adventure with nobody in it cannot be begun or played, and the storyteller
+  // would be narrating to an empty room.
+  if (campaign.party.length <= 1) return;
+
+  await db.$transaction(async (tx) => {
+    await tx.partyMember.deleteMany({ where: { campaignId, characterId } });
+
+    // Their answer would otherwise sit in an open round that is now waiting for
+    // somebody who is not in the party, which nothing would ever satisfy.
+    await tx.roundAnswer.deleteMany({
+      where: { characterId, round: { campaignId, status: { in: ["COLLECTING", "RESOLVING"] } } },
+    });
+
+    await resequence(tx, campaignId);
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/play`);
+}
+
+/**
+ * Moves somebody up or down the turn order. Owner only.
+ *
+ * The order is who the storyteller hears first, which matters more than it
+ * sounds: the party's answers are read in this order, so the child who always
+ * goes last is always reacting to everybody else.
+ */
+export async function movePartyMemberAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+
+  const campaignId = String(formData.get("campaignId") ?? "");
+  const characterId = String(formData.get("characterId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (!campaignId || !characterId || (direction !== "up" && direction !== "down")) return;
+
+  const campaign = await db.campaign.findFirst({
+    where: { id: campaignId, ownerId: user.id },
+    select: { id: true },
+  });
+  if (!campaign) return;
+
+  await db.$transaction(async (tx) => {
+    const party = await tx.partyMember.findMany({
+      where: { campaignId },
+      orderBy: { position: "asc" },
+      select: { id: true, characterId: true },
+    });
+
+    const from = party.findIndex((member) => member.characterId === characterId);
+    const to = direction === "up" ? from - 1 : from + 1;
+    if (from === -1 || to < 0 || to >= party.length) return;
+
+    const reordered = [...party];
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+
+    // Positions are rewritten from scratch rather than swapped in place: the
+    // unique key is (campaign, character), not position, so there is nothing to
+    // collide with and nothing to do in two steps.
+    for (const [index, member] of reordered.entries()) {
+      await tx.partyMember.update({ where: { id: member.id }, data: { position: index } });
+    }
+  });
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/play`);
+}
+
+/**
+ * Puts an adventure down, or picks it back up. Owner only.
+ *
+ * A paused adventure refuses turns rather than merely looking different: the
+ * turn pipeline already declines anything that is not ACTIVE, so this needs no
+ * special case anywhere else. Useful when a family is away for a month and does
+ * not want a half-answered round sitting open, and when one child is grounded.
+ */
+export async function setCampaignPausedAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+
+  const campaignId = String(formData.get("campaignId") ?? "");
+  const paused = String(formData.get("paused") ?? "") === "true";
+  if (!campaignId) return;
+
+  const updated = await db.campaign.updateMany({
+    where: { id: campaignId, ownerId: user.id, status: paused ? "ACTIVE" : "PAUSED" },
+    data: { status: paused ? "PAUSED" : "ACTIVE" },
+  });
+  if (updated.count === 0) return;
+
+  if (paused) {
+    await db.turnRound.updateMany({
+      where: { campaignId, status: { in: ["COLLECTING", "RESOLVING"] } },
+      data: { status: "CANCELLED" },
+    });
+  }
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/play`);
+  revalidatePath("/campaigns");
+}
+
+/** Closes the gaps left in the turn order by somebody leaving. */
+async function resequence(
+  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  campaignId: string,
+): Promise<void> {
+  const party = await tx.partyMember.findMany({
+    where: { campaignId },
+    orderBy: { position: "asc" },
+    select: { id: true },
+  });
+
+  for (const [index, member] of party.entries()) {
+    await tx.partyMember.update({ where: { id: member.id }, data: { position: index } });
+  }
+}
+
 /** Issues a new join code, so an old one stops working. Owner only. */
 export async function regenerateJoinCodeAction(formData: FormData): Promise<void> {
   const user = await requireUser();

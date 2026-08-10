@@ -463,6 +463,118 @@ try {
     strangerSpeaks.status() === 404,
     String(strangerSpeaks.status()),
   );
+
+  // ---- Being told it is your turn -------------------------------------------
+  //
+  // A round is open with Mira answered, so the two households still owing an
+  // answer are the ones that should be nudged — and only about their own.
+  await guest.goto(`${BASE}/campaigns/${campaign.id}/play`);
+  check(
+    "the player who still owes an answer is told so",
+    (await guest.locator("main").innerText()).includes("It's your turn"),
+  );
+  check(
+    "and told which adventurer it is waiting on",
+    (await guest.locator("main").innerText()).includes("Rowan"),
+  );
+
+  await guest.goto(`${BASE}/campaigns`);
+  check(
+    "the adventures list says which one is waiting for you",
+    (await guest.locator("main").innerText()).includes("Your turn"),
+  );
+
+  await strangerContext.newPage().then(async (page) => {
+    await page.goto(`${BASE}/campaigns`);
+    check(
+      "and says nothing to somebody with no part in it",
+      !(await page.locator("main").innerText()).includes("Your turn"),
+    );
+    await page.close();
+  });
+
+  // ---- The journal ----------------------------------------------------------
+  await guest.goto(`${BASE}/campaigns/${campaign.id}/journal`);
+  const journal = await guest.locator("main").innerText();
+  check("the journal opens for anybody at the table", guest.url().includes("/journal"));
+  check("it reads back what the party actually said", journal.includes(secret));
+  check("it lists who went", journal.includes("Mira") && journal.includes("Rowan"));
+  check("and says the adventure is still going", journal.includes("still going on"));
+
+  // ---- Running the table ----------------------------------------------------
+  await host.goto(`${BASE}/campaigns/${campaign.id}`);
+
+  const orderBefore = (
+    await db.partyMember.findMany({ where: { campaignId: campaign.id }, orderBy: { position: "asc" } })
+  ).map((member) => member.characterId);
+
+  await submitAndSettle(host, `button[aria-label="Move Rowan earlier in the turn order"]`);
+  const orderAfter = (
+    await db.partyMember.findMany({ where: { campaignId: campaign.id }, orderBy: { position: "asc" } })
+  ).map((member) => member.characterId);
+  check(
+    "the host can change who is heard first",
+    orderAfter.indexOf(rowan.id) === orderBefore.indexOf(rowan.id) - 1,
+    orderAfter.join(",") ,
+  );
+
+  // Removing takes somebody out of this adventure without touching them.
+  await host.goto(`${BASE}/campaigns/${campaign.id}`);
+  await submitAndSettle(host, 'button[aria-label="Remove Fen from the party"]');
+
+  const partyAfter = await waitFor(
+    "Fen to leave the party",
+    async () => (await db.partyMember.count({ where: { campaignId: campaign.id } })) === 2,
+    15_000,
+  );
+  check("the host can take somebody out of the party", partyAfter);
+  check(
+    "and the adventurer themselves is untouched",
+    (await db.character.findUnique({ where: { id: fen.id } })) !== null,
+  );
+
+  // Pausing refuses turns rather than merely looking different.
+  await host.goto(`${BASE}/campaigns/${campaign.id}`);
+  await submitAndSettle(host, 'button:has-text("Pause this adventure")');
+
+  const pausedRow = await waitFor(
+    "the adventure to pause",
+    async () =>
+      (await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status === "PAUSED",
+    15_000,
+  );
+  check("the host can put the adventure down", pausedRow);
+  check(
+    "which puts away the round nobody finished",
+    (await db.turnRound.count({
+      where: { campaignId: campaign.id, status: { in: ["COLLECTING", "RESOLVING"] } },
+    })) === 0,
+  );
+
+  const whilePaused = await guestContext.request.post(`${BASE}/api/campaigns/${campaign.id}/round`, {
+    data: { action: "open", mode: "ACTION" },
+  });
+  check(
+    "and refuses a new round until it is picked back up",
+    whilePaused.status() === 409,
+    String(whilePaused.status()),
+  );
+
+  await guest.goto(`${BASE}/campaigns/${campaign.id}/play`);
+  check(
+    "the rest of the table is told why nothing works",
+    (await guest.locator("main").innerText()).includes("Paused"),
+  );
+
+  await host.goto(`${BASE}/campaigns/${campaign.id}`);
+  await submitAndSettle(host, 'button:has-text("Pick it back up")');
+  const resumed = await waitFor(
+    "the adventure to resume",
+    async () =>
+      (await db.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status === "ACTIVE",
+    15_000,
+  );
+  check("and can pick it back up again", resumed);
 } finally {
   await browser.close();
   await db.$disconnect();

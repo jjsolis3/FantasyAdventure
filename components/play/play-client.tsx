@@ -8,6 +8,7 @@ import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptE
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
 import { RoundBoard } from "./round-board";
+import { TellMeToggle, useTurnAlerts } from "./turn-alerts";
 import { UndoTurn } from "./undo-turn";
 import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
@@ -146,7 +147,7 @@ export function PlayClient({
    * that was never live at all. A refresh waits for the telling to finish, so
    * it can never arrive in the middle of a narration.
    */
-  const { round, applyRound, poke } = useCampaignState(campaignId, {
+  const { state, round, applyRound, poke } = useCampaignState(campaignId, {
     initialRound,
     onChange: (next) => {
       if (next.status === "COMPLETE") setFinished(true);
@@ -160,6 +161,30 @@ export function PlayClient({
     pendingRefresh.current = false;
     router.refresh();
   }, [telling, router]);
+
+  /**
+   * Whether the table is waiting for *this* player specifically.
+   *
+   * Not "a round is open" — a round is open for everybody, and a nudge that
+   * fires when it is somebody else's answer that is missing teaches people to
+   * ignore the nudge.
+   */
+  const yoursOutstanding =
+    round !== null && round.status === "COLLECTING"
+      ? yourCharacterIds.filter(
+          (id) =>
+            round.partyIds.includes(id) &&
+            !round.answers.some((answer) => answer.characterId === id),
+        )
+      : [];
+  const waitingOnYou = apart && !telling && yoursOutstanding.length > 0;
+
+  const alerts = useTurnAlerts({
+    waiting: waitingOnYou,
+    storyMoved: state?.turnCounter ?? 0,
+    campaignTitle,
+    campaignId,
+  });
 
   /**
    * Adopts the transcript the server just re-rendered.
@@ -321,8 +346,26 @@ export function PlayClient({
 
   // ---- Rendering -----------------------------------------------------------
 
+  const outstandingNames = yoursOutstanding
+    .map((id) => party.find((character) => character.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+
   return (
     <div className="space-y-8">
+      {waitingOnYou ? (
+        <div
+          role="status"
+          className="rounded-xl border border-hearth-500/60 bg-hearth-800/50 px-4 py-3"
+        >
+          <p className="font-medium text-hearth-100">
+            {outstandingNames.length === 1
+              ? `It's your turn — ${outstandingNames[0]} has not said what they are doing.`
+              : `It's your turn — ${outstandingNames.join(" and ")} have not said what they are doing.`}
+          </p>
+          <p className="text-sm text-hearth-300">The rest of the party is waiting for you.</p>
+        </div>
+      ) : null}
+
       <Transcript entries={entries} />
 
       {phase.kind === "narrating" ? (
@@ -382,12 +425,28 @@ export function PlayClient({
               This adventure is complete. The whole story is above, and everything your
               adventurers learned and found stays with them.
             </p>
-            <Link
-              href="/campaigns"
-              className="mt-4 inline-block rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
-            >
-              Choose the next adventure
-            </Link>
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <Link
+                href={`/campaigns/${campaignId}/journal`}
+                className="inline-block rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
+              >
+                Read it back from the beginning
+              </Link>
+              <Link
+                href="/campaigns"
+                className="inline-block rounded-lg border border-hearth-700 px-5 py-2.5 font-medium text-hearth-200 hover:bg-hearth-800/50"
+              >
+                Choose the next adventure
+              </Link>
+            </div>
+          </div>
+        ) : status === "PAUSED" ? (
+          <div className="rounded-xl border border-hearth-700/60 bg-hearth-900/40 p-6 text-center">
+            <h2 className="font-display mb-2 text-2xl text-hearth-100">Paused</h2>
+            <p className="text-hearth-300">
+              Whoever set this adventure up has put it down for now. Everything is exactly where you
+              left it, and they can pick it back up from the adventure&rsquo;s page.
+            </p>
           </div>
         ) : !hasBegun ? (
           <div className="space-y-3">
@@ -551,6 +610,15 @@ export function PlayClient({
             setRetelling(true);
             setPhase({ kind: "review" });
           }}
+        />
+      ) : null}
+
+      {apart && !finished ? (
+        <TellMeToggle
+          wanted={alerts.wanted}
+          permission={alerts.permission}
+          onAsk={alerts.askToBeTold}
+          onStop={alerts.stopBeingTold}
         />
       ) : null}
     </div>

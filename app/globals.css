@@ -34,3 +34,52 @@ body {
   color: var(--color-hearth-100);
   min-height: 100dvh;
 }
+
+/* The journal, on paper.
+   ------------------------------------------------------------------------
+   A dark screen makes a beautiful table and a terrible printout — candlelight
+   colours come out of a printer as a solid block of ink over a page a child is
+   supposed to read. So printing switches the whole thing to black on white and
+   drops everything that is furniture rather than story: the site header, the
+   links back, the buttons. What is left is the adventure. */
+@media print {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .journal {
+    max-width: none;
+    padding: 0;
+    color: #000;
+  }
+
+  .journal * {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #bbb !important;
+  }
+
+  /* A chapter starting three lines from the bottom of a page is the one thing
+     that makes a printed keepsake read like a bank statement. */
+  .journal-chapter {
+    break-inside: avoid-page;
+    break-before: page;
+  }
+
+  .journal-chapter:first-of-type {
+    break-before: auto;
+  }
+
+  .journal-entry {
+    break-inside: avoid;
+  }
+}

@@ -9,6 +9,7 @@ import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
 import { JoinCode } from "@/components/campaign/join-code";
+import { TableControls } from "@/components/campaign/table-controls";
 import {
   CAMPAIGN_STATUS_LABELS,
   INPUT_MODE_LABELS,
@@ -207,12 +208,22 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                     ? "Everyone opens this adventure on their own device. The storyteller sets the scene, then waits for all of you to say what you are doing before the story moves."
                     : "Gather everyone round one screen. The storyteller will set the scene, then ask each of you in turn."}
               </p>
-              <Link
-                href={`/campaigns/${campaign.id}/play`}
-                className="inline-block rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
-              >
-                {campaign.status === "SETUP" ? "Begin the adventure" : "Continue the adventure"}
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/campaigns/${campaign.id}/play`}
+                  className="inline-block rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
+                >
+                  {campaign.status === "SETUP" ? "Begin the adventure" : "Continue the adventure"}
+                </Link>
+                {campaign.status === "SETUP" ? null : (
+                  <Link
+                    href={`/campaigns/${campaign.id}/journal`}
+                    className="inline-block rounded-lg border border-hearth-700 px-5 py-2.5 font-medium text-hearth-200 transition-colors hover:bg-hearth-800/50"
+                  >
+                    Read the journal
+                  </Link>
+                )}
+              </div>
             </>
           )}
         </Card>
@@ -230,6 +241,28 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             <JoinCode campaignId={campaign.id} code={campaign.joinCode} isOwner={isOwner} />
           </Card>
         )}
+
+        {isOwner && campaign.party.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">Run the table</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Yours to arrange: who is in the party, the order they are heard in, and whether the
+              adventure is going on at all.
+            </p>
+            <TableControls
+              campaignId={campaign.id}
+              status={campaign.status}
+              members={campaign.party.map((member) => ({
+                characterId: member.characterId,
+                name: member.character.name,
+                race: member.character.race,
+                archetype: member.character.archetype,
+                playedBy: member.character.user.displayName,
+                yours: member.character.userId === user.id,
+              }))}
+            />
+          </Card>
+        ) : null}
 
         {isOwner && campaign.status === "SETUP" ? (
           <Card>
