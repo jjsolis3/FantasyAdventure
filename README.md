@@ -101,6 +101,15 @@ every adventure they are travelling in — including one already in progress. Th
 code is single-use, spent the moment it is claimed, and can be withdrawn before
 then. What changes is one column: who answers for them.
 
+**Removing an adventurer is the only thing here that destroys progress**, so it
+lives in one place — the character's own page — and takes three deliberate acts
+to reach: asking for it, reading what specifically would be lost (this level,
+these skills, these things carried, these ties, these adventures), and typing
+the character's name. The name is checked on the server as well as in the
+browser, because a confirmation that only exists in the client is a suggestion.
+The screen offers the handover first, since "somebody else plays them now" is
+the reason most people arrive there.
+
 **Family ties are mechanical, not decoration.** Declare that Pip is Mira's
 parent and the game stores one row for the pair with a shared **Bond** counter.
 Bonds rise when one of them genuinely helps the other, and unlock **Family
@@ -354,6 +363,21 @@ to the browser; the page shows only a hint like `sk-ant…4f2a`.
 Anthropic speaks a different wire format from everything else (`/v1/messages`,
 its own auth header, system prompt as a separate field), so it has its own
 adapter rather than being bent into the OpenAI shape.
+
+**There is no chat thread.** A cloud model reached over its API has no memory
+between requests and no conversation anywhere — nothing appears in the Claude,
+ChatGPT or Gemini apps, and there is no thread to scroll back through. Every
+call is a fresh, complete request: the app sends the system prompt, the
+storyline, the party, the recent transcript and the selected memories each time,
+and the model replies once and forgets everything.
+
+That is why the memory pyramid below exists at all. Continuity is the app's job,
+not the model's — it is assembled out of the database on every call, which is
+also what makes it cheap to run (only a few thousand tokens travel per stage,
+not the whole campaign) and what makes swapping models mid-adventure harmless.
+The nearest thing to a conversation log is the `AiCall` table, which keeps the
+prompt and reply of every call so "the storyteller went weird" is something you
+can read back rather than guess at.
 
 ### Choosing a model
 

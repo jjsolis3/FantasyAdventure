@@ -145,14 +145,43 @@ export async function updateCharacterAction(_prev: FormState, formData: FormData
   return { error: "" };
 }
 
-export async function deleteCharacterAction(formData: FormData): Promise<void> {
+/**
+ * Removes an adventurer for good.
+ *
+ * The one thing in this app that destroys earned progress, and the only way to
+ * do it — there is no delete on the party list, in a campaign, or anywhere a
+ * misplaced tap could reach. It asks for the name to be typed out, and checks
+ * that here rather than only in the browser: a confirmation that lives solely
+ * in the client is a suggestion, and this is the request that cannot be undone.
+ *
+ * A handover is the answer to almost every reason somebody arrives here, so the
+ * screen says so before it asks.
+ */
+export async function deleteCharacterAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
-  const id = formData.get("characterId");
-  if (typeof id !== "string") return;
 
-  await db.character.deleteMany({ where: { id, userId: user.id } });
+  const id = formData.get("characterId");
+  const typed = String(formData.get("confirmName") ?? "").trim();
+  if (typeof id !== "string" || !id) return { error: "Which adventurer?" };
+
+  const character = await db.character.findFirst({
+    where: { id, userId: user.id },
+    select: { id: true, name: true },
+  });
+  if (!character) return { error: "Adventurer not found." };
+
+  // Case and surrounding spaces are not the point; typing the name is.
+  if (typed.toLocaleLowerCase() !== character.name.trim().toLocaleLowerCase()) {
+    return {
+      error: `That did not match. Type ${character.name} exactly to remove them.`,
+      fieldErrors: { confirmName: "This has to match their name." },
+    };
+  }
+
+  await db.character.delete({ where: { id: character.id } });
 
   revalidatePath("/characters");
+  revalidatePath("/campaigns");
   redirect("/characters");
 }
 
