@@ -175,9 +175,24 @@ export async function setRelationshipAction(_prev: FormState, formData: FormData
   const { fromId, toId, kind } = parsed.data;
   if (fromId === toId) return { error: "A character cannot be related to themselves." };
 
-  // Both characters must belong to the signed-in household.
-  const owned = await db.character.count({ where: { id: { in: [fromId, toId] }, userId: user.id } });
-  if (owned !== 2) return { error: "Character not found." };
+  // The tie is declared from an adventurer you answer for…
+  const from = await db.character.findFirst({ where: { id: fromId, userId: user.id } });
+  if (!from) return { error: "Character not found." };
+
+  // …to one of yours, or to somebody you are actually adventuring with. Once a
+  // household hands a child their own adventurer, "Rowan is Mira's sibling" is
+  // a tie between two accounts, and it has to stay declarable — but only to
+  // people you share a story with, so this cannot reach across the whole app.
+  const to = await db.character.findFirst({
+    where: {
+      id: toId,
+      OR: [
+        { userId: user.id },
+        { partyMemberships: { some: { campaign: { party: { some: { characterId: fromId } } } } } },
+      ],
+    },
+  });
+  if (!to) return { error: "Character not found." };
 
   const pair = canonicalPair(fromId, toId, kind as RelationshipKind);
 
@@ -205,11 +220,20 @@ export async function removeRelationshipAction(formData: FormData): Promise<void
   const id = formData.get("relationshipId");
   if (typeof id !== "string") return;
 
+  // Either side may undo it. A tie now spans two households as often as not,
+  // and "only the account that happened to be stored first may remove it" is a
+  // rule nobody could discover, let alone predict.
   const relationship = await db.relationship.findUnique({
     where: { id },
-    include: { characterA: { select: { userId: true } } },
+    include: {
+      characterA: { select: { userId: true } },
+      characterB: { select: { userId: true } },
+    },
   });
-  if (!relationship || relationship.characterA.userId !== user.id) return;
+  if (!relationship) return;
+  if (relationship.characterA.userId !== user.id && relationship.characterB.userId !== user.id) {
+    return;
+  }
 
   await db.relationship.delete({ where: { id } });
 

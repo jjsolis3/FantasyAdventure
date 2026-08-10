@@ -40,6 +40,18 @@ export function generateJoinCode(): string {
   return `PARTY-${randomGroups()}`;
 }
 
+/**
+ * Generates the code that hands an adventurer to another account, shaped like
+ * `HAND-K3M9-PQ7T`.
+ *
+ * A third prefix rather than a third format: all three of these get read aloud
+ * in the same kitchen, and the word at the front is how anybody tells which one
+ * they are holding.
+ */
+export function generateHandoverCode(): string {
+  return `HAND-${randomGroups()}`;
+}
+
 /** Normalises user input so spacing and case do not matter. */
 export function normaliseInviteCode(input: string): string {
   return input.trim().toUpperCase().replace(/\s+/g, "");

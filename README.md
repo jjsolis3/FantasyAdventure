@@ -37,6 +37,7 @@ they can only use together. Polish is M7.
 | ✅ | **M7** How long an adventure runs — one evening, a few sessions, or unhurried |
 | ✅ | **M8** One screen each — every player answers for their own adventurer |
 | ✅ | **M8** Join codes, so other households can bring an adventurer along |
+| ✅ | **M8** Handing an adventurer to another account, with everything they earned |
 | ✅ | **M8** Everybody's character sheet visible to everybody |
 | ⬜ | M7 printable journal, portraits |
 
@@ -85,6 +86,21 @@ the model server is asleep. Given names are mixed rather than split by gender,
 so any name suits anyone, and a race the generator has never heard of still
 gets something sensible.
 
+**Adventurers can change hands.** Almost every family builds the whole party
+from one account, because one adult was holding the keyboard — and then wants
+everyone on their own sign-in later. Rebuilding a character for the new account
+would hand a child a level 1 stranger, so instead the adventurer *moves*: open
+their page, press **Hand … to another player**, and read out the
+`HAND-K3M9-PQ7T` code. The other account types it at `/characters/claim` and
+takes them on.
+
+Everything comes along, because everything is stored against the character
+rather than against the account: experience and level, skill ranks, what they
+are carrying, family ties and the bond levels earned in them, and their place in
+every adventure they are travelling in — including one already in progress. The
+code is single-use, spent the moment it is claimed, and can be withdrawn before
+then. What changes is one column: who answers for them.
+
 **Family ties are mechanical, not decoration.** Declare that Pip is Mira's
 parent and the game stores one row for the pair with a shared **Bond** counter.
 Bonds rise when one of them genuinely helps the other, and unlock **Family
@@ -92,6 +108,10 @@ Moves** — see below. Storing one row rather than two directions is deliberate:
 counters for one relationship drift apart the moment anything writes to only
 one of them. The pair is keyed on the smaller character id, and each side reads
 the relationship from its own perspective.
+
+A tie can be declared to an adventurer another account owns, so long as the two
+are travelling together — which is what makes bonds keep working after a family
+splits its characters across separate sign-ins. Either side can remove one.
 
 ### Setting up an adventure
 
@@ -592,6 +612,7 @@ app/
   profile/          Display name, reading level, tone, password change
   invites/          Admin-only invite management
   characters/       Party list, builder, and per-character editing
+  characters/claim/ Taking on an adventurer somebody else built
   campaigns/        Adventure list, setup flow, campaign page, and the table
   campaigns/join/   Joining somebody else's adventure with a code
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
@@ -627,6 +648,7 @@ lib/
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
     party-actions.ts     Joining, leaving, and re-issuing a join code
+    handover-actions.ts  Moving an adventurer to another account, intact
     access.ts       Who may open an adventure, and answer for whom
     rounds.ts       Collecting a round's answers from several devices
 components/         Shared UI, site header, character builder

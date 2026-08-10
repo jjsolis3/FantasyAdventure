@@ -6,6 +6,7 @@ import { deleteCharacterAction } from "@/lib/game/actions";
 import { Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CharacterForm } from "@/components/character/character-form";
+import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
 import { kindFromPerspective } from "@/lib/game/rules";
 
@@ -133,6 +134,15 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
               },
               skills: character.skills.map((skill) => skill.name),
             }}
+          />
+        </Card>
+
+        <Card>
+          <h2 className="font-display mb-3 text-xl text-hearth-100">Hand over</h2>
+          <Handover
+            characterId={character.id}
+            characterName={character.name}
+            code={character.handoverCode}
           />
         </Card>
 
