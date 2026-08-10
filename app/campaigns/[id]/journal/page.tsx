@@ -34,6 +34,7 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
         include: {
           character: {
             include: {
+              portrait: { select: { version: true } },
               skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
@@ -120,7 +121,16 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
               .filter((bond) => inParty.has(bond.otherId));
 
             return (
-              <div key={member.id} className="journal-entry">
+              <div key={member.id} className="journal-entry flex items-start gap-4">
+                {member.character.portrait ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/characters/${member.characterId}/portrait?v=${member.character.portrait.version}`}
+                    alt=""
+                    className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
                 <p className="font-display text-xl text-hearth-100">
                   {member.character.name}
                   <span className="ml-3 text-base text-hearth-400">
@@ -160,6 +170,7 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
                     {RELATIONSHIP_LABELS[bond.kind]} {bond.otherName} · bond {bond.bondLevel}
                   </p>
                 ))}
+                </div>
               </div>
             );
           })}

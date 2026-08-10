@@ -133,6 +133,11 @@ export type StoredSettings = {
   imageModel: string;
   imageApiKeyHint: string | null;
   hasImageApiKey: boolean;
+  /** Null when unpriced, which the usage page reports rather than guessing. */
+  inputPricePer1M: number | null;
+  outputPricePer1M: number | null;
+  imagePrice: number | null;
+  currency: string;
   lastTestedAt: Date | null;
   lastTestOk: boolean | null;
   lastTestNote: string | null;
@@ -158,6 +163,10 @@ export async function readStoredSettings(): Promise<StoredSettings | null> {
     imageModel: row.imageModel ?? "",
     imageApiKeyHint: row.imageApiKeyHint,
     hasImageApiKey: row.imageApiKeyCipher !== null,
+    inputPricePer1M: row.inputPricePer1M,
+    outputPricePer1M: row.outputPricePer1M,
+    imagePrice: row.imagePrice,
+    currency: row.currency,
     lastTestedAt: row.lastTestedAt,
     lastTestOk: row.lastTestOk,
     lastTestNote: row.lastTestNote,

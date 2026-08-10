@@ -40,7 +40,20 @@ const settingsSchema = z.object({
   imageModel: z.string().trim().max(120).optional(),
   imageApiKey: z.string().optional(),
   clearImageApiKey: z.string().optional(),
+
+  // Blank means "not priced", which the usage page reports honestly rather
+  // than as zero.
+  inputPricePer1M: z.coerce.number().min(0).max(10_000).nullish(),
+  outputPricePer1M: z.coerce.number().min(0).max(10_000).nullish(),
+  imagePrice: z.coerce.number().min(0).max(1_000).nullish(),
+  currency: z.string().trim().max(8).optional(),
 });
+
+/** An empty price field means unset, not zero. */
+function priceOrNull(value: FormDataEntryValue | null): number | undefined {
+  const text = String(value ?? "").trim();
+  return text === "" ? undefined : Number(text);
+}
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   const result: Record<string, string> = {};
@@ -69,6 +82,10 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     imageModel: formData.get("imageModel") ?? undefined,
     imageApiKey: formData.get("imageApiKey") ?? undefined,
     clearImageApiKey: formData.get("clearImageApiKey") ?? undefined,
+    inputPricePer1M: priceOrNull(formData.get("inputPricePer1M")),
+    outputPricePer1M: priceOrNull(formData.get("outputPricePer1M")),
+    imagePrice: priceOrNull(formData.get("imagePrice")),
+    currency: formData.get("currency") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -85,6 +102,10 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     imageModel,
     imageApiKey,
     clearImageApiKey,
+    inputPricePer1M,
+    outputPricePer1M,
+    imagePrice,
+    currency,
     ...rest
   } = parsed.data;
 
@@ -134,6 +155,10 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     imagesEnabled: wantsImages,
     imageBaseUrl: imageBaseUrl?.trim() || null,
     imageModel: imageModel?.trim() || null,
+    inputPricePer1M: inputPricePer1M ?? null,
+    outputPricePer1M: outputPricePer1M ?? null,
+    imagePrice: imagePrice ?? null,
+    currency: currency?.trim().toUpperCase() || "USD",
     ...keyFields,
     ...imageKeyFields,
     updatedById: admin.id,

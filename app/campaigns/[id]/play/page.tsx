@@ -31,6 +31,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           character: {
             include: {
               user: { select: { id: true, displayName: true } },
+              portrait: { select: { version: true } },
               skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
@@ -156,6 +157,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
       .filter((bond) => inParty.has(bond.otherId)),
     playedBy: member.character.user.displayName,
     yours: member.character.userId === user.id,
+    portraitVersion: member.character.portrait?.version ?? null,
   }));
 
   // A count rather than the list: what is missing belongs on its own page, but
@@ -204,8 +206,9 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </p>
       </header>
 
-      {/* Party status bar — sticky so a ten-year-old can always see their stats. */}
-      <div className="sticky top-0 z-10 -mx-6 mb-8 border-b border-hearth-800/60 bg-hearth-950/90 px-6 py-3 backdrop-blur">
+      {/* Party status bar — sticky so a ten-year-old can always see their stats,
+          and offset by the height of the site header, which is sticky too. */}
+      <div className="sticky top-16 z-10 -mx-6 mb-8 border-b border-hearth-800/60 bg-hearth-950/90 px-6 py-3 backdrop-blur">
         <ul className="flex flex-wrap gap-x-6 gap-y-2">
           {campaign.party.map((member) => (
             <li key={member.id} className="text-sm">

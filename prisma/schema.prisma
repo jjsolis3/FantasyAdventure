@@ -173,6 +173,7 @@ model Character {
   inventory     InventoryItem[]
   partyMemberships PartyMember[]
   roundAnswers  RoundAnswer[]
+  portrait      CharacterPortrait?
   /// Relationships where this character is the "A" side, and the "B" side.
   relationshipsA Relationship[]  @relation("RelationshipA")
   relationshipsB Relationship[]  @relation("RelationshipB")
@@ -549,6 +550,29 @@ model TurnEvent {
   @@index([sceneId])
 }
 
+/// A picture of an adventurer, uploaded by whoever plays them.
+///
+/// Uploaded rather than generated, deliberately. A child who has drawn their own
+/// character in felt-tip wants *that* on the sheet, and a photograph of it beats
+/// anything a model would invent — it costs nothing, needs no provider, and asks
+/// nobody's permission to put a likeness of a real family through an API.
+///
+/// Shrunk in the browser before it is sent, so what arrives is a portrait rather
+/// than a twelve-megapixel photograph of a fridge.
+model CharacterPortrait {
+  id          String    @id @default(cuid())
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  data     Bytes
+  mimeType String
+
+  /// Bumped on every replacement, so a cached portrait is never the old one.
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
 /// A picture of one chapter, drawn once and kept.
 ///
 /// One per scene rather than per turn: a scene is a place the party is in for a
@@ -708,6 +732,16 @@ model AiSetting {
   imageApiKeyCipher String?
   imageApiKeyHint   String?
 
+  /// What the provider charges, in whole currency units per million tokens, and
+  /// per picture. Optional and unset by default: prices change monthly and
+  /// differ per provider, so a number baked into the code would be a confident
+  /// lie. Given these, the usage page reports money; without them it reports
+  /// tokens and says why.
+  inputPricePer1M  Float?
+  outputPricePer1M Float?
+  imagePrice       Float?
+  currency         String @default("USD")
+
   /// Result of the last connection test, so the page can show the state it was
   /// left in rather than looking untested after every reload.
   lastTestedAt DateTime?
@@ -734,6 +768,16 @@ model Storyline {
   maxPlayers      Int            @default(5)
   estimatedScenes Int            @default(12)
   isActive        Boolean        @default(true)
+
+  /// True once a person has written or edited this adventure in the app.
+  ///
+  /// The seed re-runs on every container start and replaces the acts of every
+  /// storyline it knows about, which is right for the ones it ships and
+  /// catastrophic for one somebody wrote on a Sunday evening. This flag is what
+  /// the seed checks before touching anything: set it, and the file stops being
+  /// the source of truth for this row.
+  isCustom        Boolean        @default(false)
+
   acts            StorylineAct[]
   campaigns       Campaign[]
   createdAt       DateTime       @default(now())

@@ -16,6 +16,8 @@ export type PartySheet = {
   /** The household answering for this adventurer. */
   playedBy: string;
   yours: boolean;
+  /** Set when a picture has been uploaded; changes when it is replaced. */
+  portraitVersion: number | null;
 };
 
 /**
@@ -42,7 +44,15 @@ export function PartySheets({ sheets }: { sheets: PartySheet[] }) {
           open={sheet.yours}
           className="rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4"
         >
-          <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1">
+          <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1">
+            {sheet.portraitVersion === null ? null : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/characters/${sheet.id}/portrait?v=${sheet.portraitVersion}`}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
+            )}
             <span className="text-hearth-100">{sheet.name}</span>
             <span className="text-sm text-hearth-400">
               {sheet.race} {sheet.archetype}
