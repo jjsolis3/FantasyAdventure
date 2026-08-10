@@ -20,6 +20,10 @@ enum Tone {
   COZY
   /// Real tension and real stakes, but still no gore and no death.
   ADVENTUROUS
+  /// Frightening on purpose: dread, wrongness, something following. The floor
+  /// underneath it does not move — nobody dies, nobody is hurt, and the story
+  /// always leaves a way through.
+  SPOOKY
 }
 
 /// Drives vocabulary, sentence length and narration density in the GM prompt.
@@ -750,6 +754,15 @@ model StorylineAct {
   /// What this act is meant to accomplish, written as guidance to the GM.
   goal        String
   beats       String[]
+
+  /// Things the party is meant to come away from this act holding.
+  ///
+  /// Guidance, like beats: the storyteller is told to make them findable, not
+  /// to force them into anybody's hands, and a party that solves the act
+  /// another way is not stopped. Naming them is what lets a screen say "still
+  /// looking for the brass key" instead of the family keeping that list in
+  /// their heads.
+  seeks       String[]
 
   @@unique([storylineId, index])
   @@index([storylineId])

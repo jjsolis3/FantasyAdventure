@@ -10,6 +10,7 @@ import type { AvailableMove } from "@/components/play/family-move-picker";
 import { kindFromPerspective, movesUnlockedAt } from "@/lib/game/rules";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import { currentRound } from "@/lib/game/rounds";
+import { reconcileFinds } from "@/lib/game/finds";
 import { resolveImageConfig } from "@/lib/ai/settings";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { ScenePicture } from "@/components/play/scene-picture";
@@ -157,6 +158,19 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     yours: member.character.userId === user.id,
   }));
 
+  // A count rather than the list: what is missing belongs on its own page, but
+  // "there are two things you have not found" is worth knowing mid-scene.
+  const stillToFind = reconcileFinds(
+    campaign.storyline.acts
+      .filter((act) => act.index <= campaign.currentActIndex)
+      .flatMap((act) => act.seeks.map((name) => ({ name, actIndex: act.index, actTitle: act.title }))),
+    campaign.party.flatMap((member) =>
+      member.character.inventory
+        .filter((item) => item.foundInCampaignId === campaign.id)
+        .map((item) => ({ name: item.name, holder: member.character.name })),
+    ),
+  ).filter((item) => item.foundBy === null).length;
+
   const recap = campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary);
 
   // Offered only once a turn has actually been played — the snapshot is
@@ -181,6 +195,12 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           {campaign.inputMode === "OWN_DEVICE"
             ? "everyone on their own device"
             : "one shared screen"}
+          {" · "}
+          <Link href={`/campaigns/${campaign.id}/finds`} className="underline hover:text-hearth-300">
+            {stillToFind > 0
+              ? `${stillToFind} ${stillToFind === 1 ? "thing" : "things"} still to find`
+              : "what you have found"}
+          </Link>
         </p>
       </header>
 

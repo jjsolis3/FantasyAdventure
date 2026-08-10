@@ -169,7 +169,7 @@ export async function logoutAction(): Promise<void> {
 const profileSchema = z.object({
   displayName: z.string().trim().min(1, "Tell us what to call you.").max(60, "That name is a bit long."),
   defaultReadingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
-  defaultTone: z.enum(["COZY", "ADVENTUROUS"]),
+  defaultTone: z.enum(["COZY", "ADVENTUROUS", "SPOOKY"]),
 });
 
 export async function updateProfileAction(_prev: FormState, formData: FormData): Promise<FormState> {

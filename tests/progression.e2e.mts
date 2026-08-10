@@ -157,6 +157,33 @@ try {
     systemEvents.map((event) => event.content).join(" | "),
   );
 
+  // ---- One place that shows everything the party has found ----------------
+  //
+  // Items were always being kept on whoever picked them up; what was missing
+  // was somewhere to see all of them at once, which is the only way a table on
+  // four separate phones can answer "do we have it?".
+  await page.goto(`${BASE}/campaigns/${campaign.id}/finds`);
+  const finds = await page.locator("main").innerText();
+  check("the finds page lists what was picked up", finds.includes("a smooth grey stone"));
+  check("and says who is carrying it", /Mira/.test(finds));
+
+  // What the storyline asked for in the chapters reached so far, with anything
+  // still missing called out.
+  const seeking = await db.storylineAct.findFirst({
+    where: { storyline: { campaigns: { some: { id: campaign.id } } }, index: 1 },
+    select: { seeks: true },
+  });
+  if ((seeking?.seeks.length ?? 0) > 0) {
+    check(
+      "and names what this chapter is still waiting on",
+      finds.includes("Still to find") && finds.includes(seeking!.seeks[0]),
+      seeking!.seeks.join(", "),
+    );
+  }
+
+  // Back to the table, which the rest of this test is standing at.
+  await page.goto(`${BASE}/campaigns/${campaign.id}/play`);
+
   const afterOne = await db.relationship.findFirstOrThrow();
   check("a single helpful moment does not unlock a move", afterOne.bondLevel === 0, `xp=${afterOne.bondXp}`);
 

@@ -45,9 +45,11 @@ reads aloud, and each chapter can be illustrated. Portraits are next.
 | ✅ | **M8** Running the table — turn order, taking somebody out, pausing |
 | ✅ | **M9** A storyteller that reads out loud, on every device, free |
 | ✅ | **M9** A picture of each chapter — optional, and off until you pay for it |
+| ✅ | **M9** A spooky register, and three adventures written for it |
+| ✅ | **M9** What you have found — one page, and what the chapter is still waiting on |
 | ⬜ | M9 character portraits |
 
-Seven starter adventures are seeded, each with a three-act spine the AI
+Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
 
 ### Creating the first account
@@ -243,6 +245,87 @@ again" button. Nothing is lost — the adventure sits exactly where it was.
 The transcript, the dice and every player's own words persist, so the game can
 be closed mid-scene and picked up next week. Closed chapters collapse into a
 "story so far" recap.
+
+### Three tones, and the floor under all of them
+
+| | |
+|---|---|
+| **Cozy** | Setbacks are inconveniences — a dropped basket, a sulking goat. Nothing lurks. |
+| **Adventurous** | Real tension, genuinely uncertain. Something can be behind the door; it never wants to hurt them. |
+| **Spooky** | Meant to frighten. Dread, being watched, being copied, not being believed, and the ordinary going subtly wrong. |
+
+**Spooky is written to actually work**, because a table that asks for
+frightening and gets "slightly odd" stops asking. The storyteller is told to
+build fear out of the specific and the ordinary — a door open one inch more than
+it was, a reflection a beat behind, a voice that knows their names — to let a
+frightening moment land without undercutting it with a joke in the same breath,
+and that the grown-ups do not believe them yet.
+
+The floor does not move. Whatever the tone: nobody dies, nobody is hurt, nothing
+is cruel, and problems are solved by kindness, cleverness and courage. In the
+spooky register that becomes a set of promises the storyteller has to keep —
+nothing catches them, nobody is taken, a chase ends in a hiding place or a
+slammed door, whatever it is turns out to *want* something (which is what makes
+it possible to talk to, trick, feed, free or forgive), and no scene ends with a
+character alone in the dark. Under all of it, the safety guard still reads every
+line before anybody sees it and regenerates rather than lets it through.
+
+Three of the seeded adventures are written for that register — a radio picking
+up a house that is running a few seconds behind, a figure that is one row nearer
+in every photograph, and a drowned village that has not finished its last
+evening. Each ends by turning the thing that frightened them into something that
+can be talked to.
+
+### Are the stories written, or made up?
+
+Both, and the split is the point.
+
+A **storyline** is a written template: a premise, an opening hook, and a
+three-act spine where each act carries a goal, a handful of optional beats, and
+sometimes a list of things the party should be able to find. Ten of them ship
+seeded, and they are the same for everyone.
+
+A **campaign** is one family's run through one of those, and almost none of it
+is written down in advance. Every word narrated is generated fresh from what
+your party actually did, what the storyteller remembers of it, and the tone,
+reading level and pacing copied onto that campaign at setup. Two families
+playing *The Dragon Who Lost Her Name* end up with two different stories, and
+the same family playing it twice would too. The beats are waypoints the
+storyteller is explicitly told to abandon if the party goes elsewhere — which
+they do, constantly, and it follows them.
+
+So: not a story that is re-rolled from nothing each time, and not a script being
+read out either. A spine, improvised over.
+
+**Adding your own** means editing `prisma/seed.ts` and redeploying. The seed
+upserts by slug and runs on every container start, so adding a storyline is
+additive and re-running it is safe; the acts of each storyline are replaced
+wholesale, because the file is the source of truth. An adventure already being
+played keeps its own tone and pacing, so editing a storyline never rewrites a
+story in progress.
+
+### What you have found
+
+`/campaigns/[id]/finds` is everything the party has picked up on this adventure
+— who is carrying it, and what it is — plus anything the chapters they have
+reached are still waiting on. Later chapters are not listed, because what a
+later chapter wants is a spoiler.
+
+Items were always being collected: the storyteller decides when somebody picks
+something up, and it is kept on whoever took it and stays with them after the
+adventure ends. What was missing was somewhere to see all of it at once —
+spread across four sheets on four phones, "do we have the key?" was a question
+the table could not answer without asking each other.
+
+The list of what is missing comes from the storyline rather than the model: an
+act names what it wants the party to come away holding, and the storyteller is
+told to make those findable — put where a search, a question or a kindness would
+turn them up — but never to force them into anybody's hands, and to let a party
+that solves the act another way carry on. Matching what was asked for against
+what is carried is deliberately forgiving, because the storyline says "the brass
+key" and the storyteller writes "a small brass key, green at the teeth". The
+storyteller is also told what the party already has, which is what stops it
+offering the same key every chapter.
 
 ### Hearing it, and seeing it
 
@@ -725,6 +808,7 @@ app/
   campaigns/        Adventure list, setup flow, campaign page, and the table
   campaigns/join/   Joining somebody else's adventure with a code
   campaigns/[id]/journal/  The whole story, laid out to be read back or printed
+  campaigns/[id]/finds/    What the party has, and what it is still looking for
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
@@ -760,6 +844,7 @@ lib/
     character-options.ts  Races, callings and skills offered by the builder
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
+    finds.ts        Matching what a chapter asked for against what is carried
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
     access.ts       Who may open an adventure, and answer for whom
@@ -776,6 +861,7 @@ tests/
   provider.test.ts  Unit tests — wire format, against a mock server
   narrator.test.ts  Unit tests — how a passage is broken up to be spoken
   images.test.ts    Unit tests — the prompt a picture is asked for with
+  finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup

@@ -261,6 +261,8 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     actTitle: act?.title ?? "The adventure",
     actGoal: act?.goal ?? "",
     actBeats: act?.beats ?? [],
+    actSeeks: act?.seeks ?? [],
+    itemsHeld: await heldItemNames(campaign.id),
     party: partyContext(campaign),
     bonds: bondContext(campaign),
     location: openScene?.location,
@@ -273,6 +275,23 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     currentTurnCounter: campaign.turnCounter,
     maxTokens,
   });
+}
+
+/**
+ * What the party is carrying that they found in *this* adventure.
+ *
+ * Told to the storyteller so it stops offering the brass key to a party that
+ * has been carrying the brass key since Tuesday — which is the single most
+ * common way a model with a short memory breaks the spell.
+ */
+async function heldItemNames(campaignId: string): Promise<string[]> {
+  const items = await db.inventoryItem.findMany({
+    where: { foundInCampaignId: campaignId },
+    select: { name: true },
+    orderBy: { name: "asc" },
+  });
+
+  return [...new Set(items.map((item) => item.name))];
 }
 
 async function nextOrdinal(sceneId: string): Promise<number> {

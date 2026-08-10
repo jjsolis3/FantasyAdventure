@@ -501,8 +501,22 @@ try {
     where: { campaignId: campaign.id, status: "OPEN" },
   });
 
-  // Nobody asked for this: opening the play screen did, which is the whole
-  // point — a picture appears beside the chapter without anybody pressing for it.
+  // Pictures are opt-in and cost money, so a suite run without a drawing
+  // service configured says so and moves on rather than failing. Set
+  // IMAGE_ENABLED, IMAGE_BASE_URL and IMAGE_MODEL on the app to exercise this;
+  // the mock model server draws a one-pixel PNG.
+  const probe = await hostContext.request.post(`${BASE}/api/campaigns/${campaign.id}/scene-image`, {
+    data: { sceneId: scene.id },
+    timeout: 60_000,
+  });
+  const picturesOn =
+    probe.ok() || !((await probe.text()).includes("switched off"));
+
+  if (!picturesOn) {
+    console.log("  ---- pictures are switched off for this run; skipping that section");
+  } else {
+  // Nobody asked for the first one: opening the play screen did, which is the
+  // whole point — a picture appears beside the chapter without anybody pressing.
   const drawnByLooking = await waitFor(
     "the chapter to be painted",
     async () => (await db.sceneImage.count({ where: { sceneId: scene.id } })) === 1,
@@ -550,6 +564,7 @@ try {
 
   const outsider = await strangerContext.request.get(`${BASE}/api/scenes/${scene.id}/image`);
   check("and nobody else can", outsider.status() === 404, String(outsider.status()));
+  }
 
   // ---- The journal ----------------------------------------------------------
   await guest.goto(`${BASE}/campaigns/${campaign.id}/journal`);

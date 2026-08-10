@@ -48,6 +48,16 @@ const INNOCENT = [
   /\bblood orange\b/gi,
   /\bbloodhound\b/gi,
   /\bhellebore\b/gi,
+  // A frightening story reaches for these constantly and means nothing by any
+  // of them. Without them the spooky tone would spend half its turns being
+  // regenerated over the word "deadbolt".
+  /\bdeadbolt(?:s|ed)?\b/gi,
+  /\bdead of winter\b/gi,
+  /\bdead silence\b/gi,
+  /\bdead[- ]?bolt(?:s|ed)?\b/gi,
+  /\bstopped dead\b/gi,
+  /\bdeadpan\b/gi,
+  /\bdeadline(?:s)?\b/gi,
 ];
 
 export type SafetyVerdict = { ok: true } | { ok: false; matched: string };
