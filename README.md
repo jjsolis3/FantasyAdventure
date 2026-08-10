@@ -8,11 +8,11 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 8 — One screen each
+## Status: Milestone 9 — Heard and seen
 
-The table no longer has to be one table. Every player can answer for their own
-adventurer from their own device, the round waits until everybody has, and the
-whole story can be read back or printed afterwards. Portraits are M9.
+The table no longer has to be one table, and the story no longer has to be read
+to be followed: every player can answer from their own device, the storyteller
+reads aloud, and each chapter can be illustrated. Portraits are next.
 
 | | |
 |---|---|
@@ -43,6 +43,8 @@ whole story can be read back or printed afterwards. Portraits are M9.
 | ✅ | **M8** "It's your turn" — a nudge that finds the player, not just the page |
 | ✅ | **M8** The journal — the whole story, laid out to be read back or printed |
 | ✅ | **M8** Running the table — turn order, taking somebody out, pausing |
+| ✅ | **M9** A storyteller that reads out loud, on every device, free |
+| ✅ | **M9** A picture of each chapter — optional, and off until you pay for it |
 | ⬜ | M9 character portraits |
 
 Seven starter adventures are seeded, each with a three-act spine the AI
@@ -241,6 +243,49 @@ again" button. Nothing is lost — the adventure sits exactly where it was.
 The transcript, the dice and every player's own words persist, so the game can
 be closed mid-scene and picked up next week. Closed chapters collapse into a
 "story so far" recap.
+
+### Hearing it, and seeing it
+
+**A storyteller that reads out loud.** Press *Read the story aloud* and every
+narration is spoken as it arrives — on whichever devices asked for it, so one
+person can listen while another reads. Any passage can be heard again from the
+transcript. The text never goes anywhere: this reads along with the page rather
+than replacing it, which is what a five-year-old who cannot read yet and an
+eleven-year-old who can both need out of the same screen.
+
+It uses the voice already in the browser rather than a cloud one, and that is a
+choice rather than a stopgap. It starts the instant the words land, it costs
+nothing per paragraph, it works when the internet does not, and it sends the
+story nowhere. Each device picks its own voice and speed, and modern phones and
+laptops ship good ones. A sentence at a time, because Chrome abandons utterances
+longer than about fifteen seconds — a bug old enough to vote — and because
+stopping is then instant.
+
+**A picture of each chapter.** Off by default, and the only thing in this app
+that costs money every time it is used, so it says so plainly at the switch:
+roughly a penny or two per chapter. Turn it on at Settings → Storyteller with a
+drawing service of its own — Claude does not draw, so this is usually a
+different provider from the storyteller.
+
+One picture per scene rather than per turn: a scene is somewhere the party stays
+for a while, so the picture stays true, and drawing on every turn would be a
+bill for pictures nobody had finished looking at. It is drawn when somebody first
+opens the chapter — never during a turn, so a slow or broken drawing service can
+never be why a turn hangs — and only ever once, however many devices open it at
+the same moment, because the unique constraint on the scene settles that rather
+than whoever's request arrived first.
+
+**The prompt is built, not passed through.** What the storyteller wrote is prose
+for children, but it is still model output, and handing it verbatim to a second
+model as an instruction is how one loose sentence becomes a picture nobody
+wanted. So dialogue is dropped, the reader stops being addressed, the text is
+trimmed to its scene-setting, and the whole thing is wrapped in a style and a
+subject this game is willing to put in front of a seven-year-old.
+
+The bytes live in Postgres rather than on disk, because the container is
+replaced on every deployment and a picture of the night the dragon learned her
+name should outlive a redeploy. They are served behind the same sign-in as the
+story.
 
 ### The journal
 
@@ -683,6 +728,7 @@ app/
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
+  api/scenes/[id]/image/     A chapter's picture, behind the same sign-in
   page.tsx          Landing page; lists seeded storylines
 lib/
   db.ts             Prisma singleton (adapter-based, connects on first use)
@@ -696,6 +742,7 @@ lib/
     actions.ts      Server actions for every auth form
   ai/
     provider.ts     OpenAI-compatible and Anthropic clients
+    images.ts       The drawing request, and the prompt it is safe to send
     settings.ts     Resolves config: database first, environment as fallback
     prompts.ts      The tone contract and every stage's prompt
     context.ts      The memory pyramid and token budgeting
@@ -703,6 +750,7 @@ lib/
     json.ts         Forgiving extraction plus the repair loop
     safety.ts       Last-line content guard
   engine/
+    scene-art.ts    Drawing a chapter once, outside the turn
     dice.ts         Checks and outcomes — the server rolls, not the model
     gm.ts           The four-stage pipeline, no database or HTTP
     play.ts         Wires the pipeline to the database
@@ -726,6 +774,8 @@ tests/
   engine.test.ts    Unit tests — dice, JSON repair, context, safety
   gm.test.ts        Unit tests — the pipeline, with a stubbed model
   provider.test.ts  Unit tests — wire format, against a mock server
+  narrator.test.ts  Unit tests — how a passage is broken up to be spoken
+  images.test.ts    Unit tests — the prompt a picture is asked for with
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup

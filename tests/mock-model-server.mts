@@ -15,10 +15,35 @@ const port = Number(process.argv[2] ?? 11499);
 const unsafeFirst = process.env.MOCK_UNSAFE === "1";
 let narrationCount = 0;
 
+/**
+ * The smallest real PNG: one transparent pixel.
+ *
+ * Enough to prove the whole path — request, bytes, storage, and serving them
+ * back with the right content type — without pretending to draw anything.
+ */
+const PIXEL_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 const server = createServer((request, response) => {
   let raw = "";
   request.on("data", (chunk) => (raw += chunk));
   request.on("end", () => {
+    // The drawing endpoint. A model named "…cannot-draw" refuses, so the
+    // "pictures failed and the story carried on regardless" path can be tested.
+    if (request.url?.includes("/images/generations")) {
+      const asked = JSON.parse(raw || "{}") as { model?: string; prompt?: string };
+
+      if ((asked.model ?? "").includes("cannot-draw")) {
+        response.writeHead(400, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "no such model" } }));
+        return;
+      }
+
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ data: [{ b64_json: PIXEL_PNG }] }));
+      return;
+    }
+
     const body = JSON.parse(raw || "{}") as {
       messages?: { content: string }[];
       model?: string;

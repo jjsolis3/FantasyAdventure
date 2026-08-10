@@ -25,6 +25,21 @@ const settingsSchema = z.object({
   // Empty means "leave whatever is stored alone"; the field is write-only.
   apiKey: z.string().optional(),
   clearApiKey: z.string().optional(),
+
+  // Pictures: a separate service from the prose, and the only thing here that
+  // costs money per use, so it is off unless somebody says otherwise.
+  imagesEnabled: z.string().optional(),
+  imageBaseUrl: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (value) => !value || /^https?:\/\//i.test(value),
+      "Must start with http:// or https://",
+    ),
+  imageModel: z.string().trim().max(120).optional(),
+  imageApiKey: z.string().optional(),
+  clearImageApiKey: z.string().optional(),
 });
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -49,36 +64,78 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     timeoutMs: formData.get("timeoutMs"),
     apiKey: formData.get("apiKey") ?? undefined,
     clearApiKey: formData.get("clearApiKey") ?? undefined,
+    imagesEnabled: formData.get("imagesEnabled") ?? undefined,
+    imageBaseUrl: formData.get("imageBaseUrl") ?? undefined,
+    imageModel: formData.get("imageModel") ?? undefined,
+    imageApiKey: formData.get("imageApiKey") ?? undefined,
+    clearImageApiKey: formData.get("clearImageApiKey") ?? undefined,
   });
 
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  const { apiKey, clearApiKey, narrationModel, reasoningEffort, ...rest } = parsed.data;
+  const {
+    apiKey,
+    clearApiKey,
+    narrationModel,
+    reasoningEffort,
+    imagesEnabled,
+    imageBaseUrl,
+    imageModel,
+    imageApiKey,
+    clearImageApiKey,
+    ...rest
+  } = parsed.data;
 
-  // Three cases for the key: clear it, replace it, or leave it untouched.
+  // Three cases for a key: clear it, replace it, or leave it untouched. The
+  // same three for both of them, so the shape is written once.
   let keyFields: { apiKeyCipher?: string | null; apiKeyHint?: string | null } = {};
+  let imageKeyFields: { imageApiKeyCipher?: string | null; imageApiKeyHint?: string | null } = {};
 
-  if (clearApiKey === "on") {
-    keyFields = { apiKeyCipher: null, apiKeyHint: null };
-  } else if (apiKey && apiKey.trim().length > 0) {
-    try {
+  try {
+    if (clearApiKey === "on") {
+      keyFields = { apiKeyCipher: null, apiKeyHint: null };
+    } else if (apiKey && apiKey.trim().length > 0) {
       keyFields = {
         apiKeyCipher: encryptSecret(apiKey.trim(), encryptionSecret()),
         apiKeyHint: hintFor(apiKey),
       };
-    } catch (error) {
-      if (error instanceof MissingSecretError) return { error: error.message };
-      throw error;
     }
+
+    if (clearImageApiKey === "on") {
+      imageKeyFields = { imageApiKeyCipher: null, imageApiKeyHint: null };
+    } else if (imageApiKey && imageApiKey.trim().length > 0) {
+      imageKeyFields = {
+        imageApiKeyCipher: encryptSecret(imageApiKey.trim(), encryptionSecret()),
+        imageApiKeyHint: hintFor(imageApiKey),
+      };
+    }
+  } catch (error) {
+    if (error instanceof MissingSecretError) return { error: error.message };
+    throw error;
+  }
+
+  const wantsImages = imagesEnabled === "on";
+  if (wantsImages && (!imageBaseUrl || !imageModel)) {
+    return {
+      error: "Pictures need somewhere to draw them. Give an address and a model, or switch them off.",
+      fieldErrors: {
+        ...(imageBaseUrl ? {} : { imageBaseUrl: "Required when pictures are on." }),
+        ...(imageModel ? {} : { imageModel: "Required when pictures are on." }),
+      },
+    };
   }
 
   const data = {
     ...rest,
     narrationModel: narrationModel?.trim() || null,
     reasoningEffort: reasoningEffort || null,
+    imagesEnabled: wantsImages,
+    imageBaseUrl: imageBaseUrl?.trim() || null,
+    imageModel: imageModel?.trim() || null,
     ...keyFields,
+    ...imageKeyFields,
     updatedById: admin.id,
     // Any change invalidates the previous test result.
     lastTestedAt: null,

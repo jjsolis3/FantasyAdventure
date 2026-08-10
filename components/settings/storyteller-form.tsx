@@ -33,6 +33,10 @@ export function StorytellerForm({
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
 
+  const [images, setImages] = useState(settings?.imagesEnabled ?? false);
+  const [imageKey, setImageKey] = useState("");
+  const [clearImageKey, setClearImageKey] = useState(false);
+
   function applyPreset(preset: ProviderPreset) {
     setKind(preset.kind);
     setBaseUrl(preset.baseUrl);
@@ -219,6 +223,95 @@ export function StorytellerForm({
               hint="Raise for a big model on modest hardware."
             />
           </div>
+        </section>
+
+        {/* ---- Pictures ---------------------------------------------------- */}
+        <section className="space-y-5 border-t border-hearth-800/50 pt-8">
+          <div>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">Pictures</h2>
+            <p className="text-sm text-hearth-400">
+              One illustration per chapter, drawn the first time somebody opens it and then kept.
+              This is the only thing here that costs money every time it is used — roughly a penny
+              or two a chapter — so it is off until you turn it on, and the story works exactly the
+              same without it.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              name="imagesEnabled"
+              checked={images}
+              onChange={(event) => setImages(event.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-hearth-100">Draw a picture of each chapter</span>
+              <span className="block text-sm text-hearth-400">
+                Needs a drawing service below. Claude does not draw, so this is usually a different
+                provider from the storyteller.
+              </span>
+            </span>
+          </label>
+
+          {images ? (
+            <>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="Drawing service address"
+                  name="imageBaseUrl"
+                  required={false}
+                  defaultValue={settings?.imageBaseUrl ?? "https://api.openai.com/v1"}
+                  error={state?.fieldErrors?.imageBaseUrl}
+                  hint="The same shape as a chat endpoint: it ends in /v1."
+                />
+                <Field
+                  label="Drawing model"
+                  name="imageModel"
+                  required={false}
+                  defaultValue={settings?.imageModel ?? "gpt-image-1"}
+                  error={state?.fieldErrors?.imageModel}
+                  hint="gpt-image-1 for OpenAI."
+                />
+              </div>
+
+              <div>
+                <Field
+                  label="Drawing service key"
+                  name="imageApiKey"
+                  type="password"
+                  required={false}
+                  value={imageKey}
+                  onChange={setImageKey}
+                  placeholder={
+                    settings?.hasImageApiKey
+                      ? "A key is saved — leave blank to keep it"
+                      : "The key for the drawing service"
+                  }
+                  error={state?.fieldErrors?.imageApiKey}
+                />
+                {settings?.hasImageApiKey ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <span className="text-sm text-hearth-400">
+                      Saved:{" "}
+                      <code className="rounded bg-hearth-950/70 px-1.5 py-0.5">
+                        {settings.imageApiKeyHint}
+                      </code>
+                    </span>
+                    <label className="flex items-center gap-2 text-sm text-hearth-300">
+                      <input
+                        type="checkbox"
+                        name="clearImageApiKey"
+                        checked={clearImageKey}
+                        onChange={(event) => setClearImageKey(event.target.checked)}
+                      />
+                      Remove it
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </section>
 
         <SubmitButton pendingLabel="Saving…">Save settings</SubmitButton>

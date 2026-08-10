@@ -497,6 +497,7 @@ model Scene {
   status   SceneStatus @default(OPEN)
 
   turns TurnEvent[]
+  image SceneImage?
 
   createdAt DateTime  @default(now())
   closedAt  DateTime?
@@ -542,6 +543,32 @@ model TurnEvent {
 
   @@unique([sceneId, ordinal])
   @@index([sceneId])
+}
+
+/// A picture of one chapter, drawn once and kept.
+///
+/// One per scene rather than per turn: a scene is a place the party is in for a
+/// while, so a picture of it stays true for several turns, and drawing on every
+/// turn would cost real money for pictures nobody has finished looking at.
+///
+/// The bytes live in the database rather than on disk, because the container is
+/// replaced on every deployment and a picture of the night the dragon learned
+/// her name should outlive a redeploy. They are small — one low-detail square
+/// each — and there are as many of them as there are chapters.
+model SceneImage {
+  id      String @id @default(cuid())
+  sceneId String @unique
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  data     Bytes
+  mimeType String @default("image/png")
+
+  /// What the picture was asked for, kept so an odd one can be understood
+  /// rather than only regenerated and hoped about.
+  prompt String
+  model  String
+
+  createdAt DateTime @default(now())
 }
 
 enum MemoryKind {
@@ -666,6 +693,16 @@ model AiSetting {
   /// thinking model such as Qwen3 spending its whole output budget on
   /// chain-of-thought and returning an empty answer.
   reasoningEffort String?
+
+  /// Pictures are a separate provider from prose, and usually a different
+  /// company: Anthropic draws nothing, and a family running a local model for
+  /// the storytelling still has to reach out somewhere to get a picture. Off by
+  /// default, because unlike everything else here it costs money per use.
+  imagesEnabled  Boolean @default(false)
+  imageBaseUrl   String?
+  imageModel     String?
+  imageApiKeyCipher String?
+  imageApiKeyHint   String?
 
   /// Result of the last connection test, so the page can show the state it was
   /// left in rather than looking untested after every reload.

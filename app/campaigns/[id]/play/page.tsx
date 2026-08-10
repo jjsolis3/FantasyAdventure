@@ -10,7 +10,9 @@ import type { AvailableMove } from "@/components/play/family-move-picker";
 import { kindFromPerspective, movesUnlockedAt } from "@/lib/game/rules";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import { currentRound } from "@/lib/game/rounds";
+import { resolveImageConfig } from "@/lib/ai/settings";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
+import { ScenePicture } from "@/components/play/scene-picture";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +44,18 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   if (!campaign) notFound();
 
   const membership = await membershipFor(campaign.id, user.id);
+
+  // Pictures are off unless a table has set up somewhere to draw them, so this
+  // asks once per page rather than letting every browser find out by failing.
+  const picturesOn = (await resolveImageConfig()) !== null;
   // Only OWN_DEVICE campaigns have a waiting room; a shared screen keeps its
   // answers on the page until they are sent.
   const round = campaign.inputMode === "OWN_DEVICE" ? await currentRound(campaign.id) : null;
 
   const openScene = campaign.scenes.find((scene) => scene.status === "OPEN");
+  const hasPicture = openScene
+    ? (await db.sceneImage.count({ where: { sceneId: openScene.id } })) > 0
+    : false;
 
   // Only the current scene is replayed in full. Earlier scenes are summarised
   // and shown as a recap, which is also exactly how the Game Master sees them.
@@ -191,6 +200,18 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           ))}
         </ul>
       </div>
+
+      {openScene ? (
+        <div className="mb-8">
+          <ScenePicture
+            campaignId={campaign.id}
+            sceneId={openScene.id}
+            sceneTitle={openScene.title}
+            hasImage={hasPicture}
+            enabled={picturesOn}
+          />
+        </div>
+      ) : null}
 
       <PartySheets sheets={sheets} />
 

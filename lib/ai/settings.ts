@@ -16,6 +16,7 @@ import {
   type ProviderKind,
   type ReasoningEffort,
 } from "@/lib/ai/provider";
+import type { ImageConfig } from "@/lib/ai/images";
 import { decryptSecret, encryptionSecret } from "@/lib/settings/secret-box";
 
 export const SETTINGS_ID = "singleton";
@@ -127,6 +128,11 @@ export type StoredSettings = {
   /** Never the key itself — only enough to recognise it. */
   apiKeyHint: string | null;
   hasApiKey: boolean;
+  imagesEnabled: boolean;
+  imageBaseUrl: string;
+  imageModel: string;
+  imageApiKeyHint: string | null;
+  hasImageApiKey: boolean;
   lastTestedAt: Date | null;
   lastTestOk: boolean | null;
   lastTestNote: string | null;
@@ -147,6 +153,11 @@ export async function readStoredSettings(): Promise<StoredSettings | null> {
     reasoningEffort: parseReasoningEffort(row.reasoningEffort),
     apiKeyHint: row.apiKeyHint,
     hasApiKey: row.apiKeyCipher !== null,
+    imagesEnabled: row.imagesEnabled,
+    imageBaseUrl: row.imageBaseUrl ?? "",
+    imageModel: row.imageModel ?? "",
+    imageApiKeyHint: row.imageApiKeyHint,
+    hasImageApiKey: row.imageApiKeyCipher !== null,
     lastTestedAt: row.lastTestedAt,
     lastTestOk: row.lastTestOk,
     lastTestNote: row.lastTestNote,
@@ -191,6 +202,33 @@ export async function resolveAiConfig(): Promise<AiConfig> {
     timeoutMs: row.timeoutMs,
     maxContextTokens: row.maxContextTokens,
     reasoningEffort: parseReasoningEffort(row.reasoningEffort),
+  };
+}
+
+/**
+ * How to reach the drawing service, or null when pictures are switched off.
+ *
+ * Null rather than a throw: not having pictures is an ordinary state of this
+ * app — the default one — and every caller has something sensible to do about
+ * it, which is nothing.
+ */
+export async function resolveImageConfig(): Promise<ImageConfig | null> {
+  const row = await db.aiSetting.findUnique({ where: { id: SETTINGS_ID } }).catch(() => null);
+
+  const enabled = row ? row.imagesEnabled : process.env.IMAGE_ENABLED === "true";
+  if (!enabled) return null;
+
+  const baseUrl = (row?.imageBaseUrl ?? process.env.IMAGE_BASE_URL ?? "").trim();
+  const model = (row?.imageModel ?? process.env.IMAGE_MODEL ?? "").trim();
+  if (!baseUrl || !model) return null;
+
+  const stored = row ? decryptSecret(row.imageApiKeyCipher, encryptionSecret()) : null;
+
+  return {
+    baseUrl,
+    model,
+    apiKey: stored ?? process.env.IMAGE_API_KEY?.trim() ?? null,
+    timeoutMs: row?.timeoutMs ?? 120_000,
   };
 }
 
