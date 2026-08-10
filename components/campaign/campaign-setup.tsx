@@ -8,6 +8,7 @@ import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { INPUT_MODE_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
 import { PACING_OPTIONS } from "@/lib/game/pacing";
+import type { InviteCandidate } from "@/lib/game/invites";
 
 export type StorylineChoice = {
   id: string;
@@ -34,10 +35,12 @@ export type CharacterChoice = {
 export function CampaignSetup({
   storylines,
   characters,
+  invitable,
   defaultReadingLevel,
 }: {
   storylines: StorylineChoice[];
   characters: CharacterChoice[];
+  invitable: InviteCandidate[];
   defaultReadingLevel: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(createCampaignAction, null);
@@ -51,6 +54,7 @@ export function CampaignSetup({
   const [pacing, setPacing] = useState("STANDARD");
   const [inputMode, setInputMode] = useState("SHARED_SCREEN");
   const [partyIds, setPartyIds] = useState<string[]>([]);
+  const [inviteIds, setInviteIds] = useState<string[]>([]);
 
   const chosen = storylines.find((storyline) => storyline.id === storylineId);
 
@@ -70,10 +74,21 @@ export function CampaignSetup({
     );
   }
 
+  function toggleInvite(id: string) {
+    setInviteIds((current) =>
+      current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
+    );
+  }
+
+  // Everyone who has been asked counts toward the party size. They are not in
+  // it yet — the adventure waits for them — but the storyline's minimum is a
+  // question about who is coming, not about who has replied.
+  const partySize = partyIds.length + inviteIds.length;
   const partySizeOk =
     chosen !== undefined &&
-    partyIds.length >= chosen.minPlayers &&
-    partyIds.length <= chosen.maxPlayers;
+    partyIds.length >= 1 &&
+    partySize >= chosen.minPlayers &&
+    partySize <= chosen.maxPlayers;
 
   return (
     <form action={formAction} className="space-y-10">
@@ -183,11 +198,6 @@ export function CampaignSetup({
 
             <p className="mt-3 text-sm text-hearth-400" aria-live="polite">
               {partyIds.length} chosen
-              {chosen && !partySizeOk
-                ? partyIds.length < chosen.minPlayers
-                  ? ` — pick at least ${chosen.minPlayers}`
-                  : ` — that is more than ${chosen.maxPlayers}`
-                : ""}
               {partyIds.length > 1 ? ". The numbers are the order they are asked each turn." : ""}
             </p>
           </>
@@ -196,6 +206,77 @@ export function CampaignSetup({
         {partyIds.map((id) => (
           <input key={id} type="hidden" name="partyIds" value={id} />
         ))}
+
+        {invitable.length > 0 ? (
+          <div className="mt-8 border-t border-hearth-800/40 pt-6">
+            <h3 className="mb-1 text-sm font-medium tracking-wide text-hearth-300 uppercase">
+              Ask somebody else along
+            </h3>
+            <p className="mb-4 text-sm text-hearth-400">
+              Adventurers played by other people. They will be asked, and the adventure waits until
+              they say yes — so nobody has to hand over their character to come along.
+            </p>
+
+            <div className="space-y-2">
+              {invitable.map((candidate) => {
+                const selected = inviteIds.includes(candidate.id);
+                return (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    onClick={() => toggleInvite(candidate.id)}
+                    aria-pressed={selected}
+                    className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      selected
+                        ? "border-moss-600 bg-moss-900/20"
+                        : "border-hearth-800/60 bg-hearth-900/30 hover:border-hearth-700"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs ${
+                        selected
+                          ? "border-moss-500 bg-moss-700 text-hearth-50"
+                          : "border-hearth-700 text-hearth-500"
+                      }`}
+                      aria-hidden
+                    >
+                      {selected ? "✓" : "+"}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-hearth-100">{candidate.name}</span>
+                      <span className="block text-sm text-hearth-400">
+                        {candidate.race} {candidate.archetype} · played by {candidate.playedBy}
+                      </span>
+                      {candidate.tie ? (
+                        <span className="mt-0.5 block text-sm text-moss-400">{candidate.tie}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="mt-3 text-sm text-hearth-400" aria-live="polite">
+              {inviteIds.length === 0
+                ? "Nobody invited yet."
+                : `${inviteIds.length} to invite — they will be asked once this adventure exists.`}
+            </p>
+          </div>
+        ) : null}
+
+        {inviteIds.map((id) => (
+          <input key={id} type="hidden" name="inviteIds" value={id} />
+        ))}
+
+        {chosen && !partySizeOk ? (
+          <p className="mt-4 text-sm text-hearth-300" aria-live="polite">
+            {partyIds.length === 0
+              ? "Pick at least one of your own adventurers to lead the way."
+              : partySize < chosen.minPlayers
+                ? `${chosen.title} needs ${chosen.minPlayers} — that is ${partySize} so far, counting anyone invited.`
+                : `That is ${partySize}, and ${chosen.title} takes at most ${chosen.maxPlayers}.`}
+          </p>
+        ) : null}
       </section>
 
       {/* ---- 3. Where everyone is sitting -------------------------------- */}

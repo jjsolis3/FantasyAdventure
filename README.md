@@ -8,12 +8,16 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 9 — Heard, seen, and yours
+## Status: Milestone 10 — A table nobody has to own
 
 The table no longer has to be one table, the story no longer has to be read to
 be followed, and the library is no longer fixed: every player can answer from
 their own device, the storyteller reads aloud and illustrates, and a family can
 write their own adventures without touching the code.
+
+And an adventure no longer has to be assembled out of characters one account
+owns. You can ask another player's adventurer along, and the story waits for
+them to say yes.
 
 | | |
 |---|---|
@@ -51,6 +55,7 @@ write their own adventures without touching the code.
 | ✅ | **M9** Character portraits — uploaded, not generated |
 | ✅ | **M9** Write your own adventures, without a redeployment |
 | ✅ | **M9** What the storyteller has used, and what it cost |
+| ✅ | **M10** Invite another player's adventurer, and wait for them to say yes |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -156,6 +161,11 @@ counters for one relationship drift apart the moment anything writes to only
 one of them. The pair is keyed on the smaller character id, and each side reads
 the relationship from its own perspective.
 
+A tie can be declared to one of your own adventurers, or to anyone yours has
+actually travelled with — which is what keeps "Wren is Mira's daughter"
+declarable once each child has their own sign-in. Those ties then lead the list
+of people you can ask along on the next adventure.
+
 A tie can be declared to an adventurer another account owns, so long as the two
 are travelling together — which is what makes bonds keep working after a family
 splits its characters across separate sign-ins. Either side can remove one.
@@ -186,13 +196,38 @@ point from the campaign's settings:
 The story stays single-threaded; only the typing moves apart. One transcript,
 one turn at a time, everybody looking at the same thing.
 
-**Getting everyone in.** Every adventure has a join code shaped like
-`PARTY-K3M9-PQ7T`, shown on its page with a link you can send. Anyone with
-their own sign-in types it at `/campaigns/join`, picks one of their own
-adventurers, and joins the party. Joining *is* membership — there is no
-separate invitation to accept, because the only reason to be in an adventure is
-to have somebody in it. Registration is still invite-only, so a stranger who
-somehow gets the code still cannot make an account to use it.
+**Getting everyone in, two ways.** A join code is for the person standing next
+to you. An invitation is for the person upstairs.
+
+Every adventure has a join code shaped like `PARTY-K3M9-PQ7T`, shown on its page
+with a link you can send. Anyone with their own sign-in types it at
+`/campaigns/join`, picks one of their own adventurers, and joins the party.
+Joining *is* membership — there is nothing to accept, because somebody who typed
+the code has already said yes. Registration is still invite-only, so a stranger
+who somehow gets the code cannot make an account to use it.
+
+**Invitations** run the other way. Setting up an adventure lists everybody
+else's adventurers as well as your own — family ties first, labelled with the
+tie ("child of Mira") and with who plays them, then everyone else. Pick one and
+they are *asked*: an invitation goes to whoever answers for that adventurer, and
+it shows up on their own adventures page with a yes and a no.
+
+This exists because without it a household where every player has their own
+sign-in and one character each could not start anything. A storyline needing two
+adventurers was unreachable when the party picker only ever offered your own —
+the only ways through were to build a second character and play both, or to
+gather everyone round one screen and type for them. Neither is what a family
+with four accounts wants.
+
+An invited adventurer is not in the party, and that distinction is load-bearing:
+they do not appear in the storyteller's context, on the party sheets, or in the
+list of people a round is waiting for. They count toward the storyline's minimum
+at setup, so the adventure can be arranged in one sitting — but **it will not
+begin until they answer**. The opening scene names everyone present, and starting
+without them would mean either a short party or somebody arriving into a scene
+that has already described who is there. Until then the owner sees who is being
+waited on, and can take an invitation back. A no is kept rather than deleted, so
+it reads as answered rather than vanished, and can be asked again.
 
 **A round.** Anyone can start one. Everybody sees the same board: who has
 answered, what they said, and who is still thinking. You answer only for the
@@ -917,6 +952,7 @@ lib/
     handover-actions.ts  Moving an adventurer to another account, intact
     access.ts       Who may open an adventure, and answer for whom
     rounds.ts       Collecting a round's answers from several devices
+    invites.ts      Who can be asked along, and what you have been asked to
 components/         Shared UI, site header, character builder
 scripts/
   gm-harness.ts     Drive one turn against a real model server
@@ -931,11 +967,13 @@ tests/
   images.test.ts    Unit tests — the prompt a picture is asked for with
   finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
+  invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
   play.e2e.mts        Browser-driven play, against the mock model
   rounds.e2e.mts      Two households, two browsers, one turn between them
+  invites.e2e.mts     Asking somebody else's adventurer, and waiting for yes
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test

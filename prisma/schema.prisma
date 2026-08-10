@@ -67,6 +67,7 @@ model User {
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
   roundAnswers   RoundAnswer[]
+  partyInvitesSent PartyInvite[] @relation("PartyInviter")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -172,6 +173,7 @@ model Character {
   skills        CharacterSkill[]
   inventory     InventoryItem[]
   partyMemberships PartyMember[]
+  partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
   portrait      CharacterPortrait?
   /// Relationships where this character is the "A" side, and the "B" side.
@@ -327,7 +329,8 @@ model Campaign {
   /// threads. Empty until the engine lands in M4.
   worldState Json @default("{}")
 
-  party  PartyMember[]
+  party   PartyMember[]
+  invites PartyInvite[]
   scenes Scene[]
   familyMoveUses FamilyMoveUse[]
   memories Memory[]
@@ -369,6 +372,55 @@ model PartyMember {
 
   @@unique([campaignId, characterId])
   @@index([characterId])
+}
+
+enum InviteStatus {
+  /// Asked, not yet answered.
+  PENDING
+  /// Answered yes. A PartyMember row exists from that moment on.
+  ACCEPTED
+  /// Answered no. Kept rather than deleted so the person who asked can see
+  /// they were answered, instead of watching the invitation quietly vanish.
+  DECLINED
+}
+
+/// An invitation for somebody else's adventurer to come along.
+///
+/// This is the other half of the join code. A code is for the person standing
+/// next to you; an invitation is for the person upstairs, or at their mother's
+/// — you pick their adventurer, they get asked, and nothing happens until they
+/// say yes. It is what lets a family start an adventure together without one
+/// account having to own every character in it.
+///
+/// Deliberately not a PartyMember with a flag. An invited adventurer is not in
+/// the party: they must not appear in the storyteller's context, on the party
+/// sheets, or in the list of people a round is waiting for. Keeping them in a
+/// separate table means none of those places has to remember to exclude them.
+model PartyInvite {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// Who is being asked. The invitation is addressed to the adventurer rather
+  /// than the account, because that is what the person inviting knows — and if
+  /// the character is handed over before it is answered, the invitation
+  /// correctly follows them to whoever holds them now.
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  invitedById String
+  invitedBy   User   @relation("PartyInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  status      InviteStatus @default(PENDING)
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  /// One invitation per adventurer per adventure. Asking twice re-uses the row.
+  @@unique([campaignId, characterId])
+  @@index([characterId])
+  @@index([invitedById])
 }
 
 enum RoundMode {

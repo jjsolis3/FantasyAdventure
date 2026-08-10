@@ -24,7 +24,8 @@ export function RelationshipEditor({
   characterId: string;
   characterName: string;
   relations: RelationRow[];
-  others: { id: string; name: string }[];
+  /** `playedBy` is set only for adventurers somebody else answers for. */
+  others: { id: string; name: string; playedBy?: string | null }[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(setRelationshipAction, null);
 
@@ -108,7 +109,7 @@ export function RelationshipEditor({
               >
                 {unrelated.map((other) => (
                   <option key={other.id} value={other.id} className="bg-hearth-950">
-                    {other.name}
+                    {other.playedBy ? `${other.name} (${other.playedBy})` : other.name}
                   </option>
                 ))}
               </select>

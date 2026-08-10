@@ -3,13 +3,14 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 import { CampaignSetup } from "@/components/campaign/campaign-setup";
+import { invitableCharacters } from "@/lib/game/invites";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewCampaignPage() {
   const sessionUser = await requireUser();
 
-  const [user, storylines, characters] = await Promise.all([
+  const [user, storylines, characters, invitable] = await Promise.all([
     db.user.findUniqueOrThrow({ where: { id: sessionUser.id } }),
     db.storyline.findMany({
       where: { isActive: true },
@@ -21,6 +22,7 @@ export default async function NewCampaignPage() {
       select: { id: true, name: true, race: true, archetype: true, ageBand: true },
       orderBy: { createdAt: "asc" },
     }),
+    invitableCharacters(sessionUser.id),
   ]);
 
   // Nothing to set up without a party; send people to build one instead.
@@ -49,6 +51,7 @@ export default async function NewCampaignPage() {
             actCount: storyline._count.acts,
           }))}
           characters={characters}
+          invitable={invitable}
           defaultReadingLevel={user.defaultReadingLevel}
         />
       </Card>

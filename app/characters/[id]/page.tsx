@@ -34,9 +34,23 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
   });
   if (!character) notFound();
 
+  // Your own adventurers, and anyone this one has actually travelled with.
+  // The second half matters once a household hands each child their own
+  // sign-in: "Wren is Mira's daughter" is then a tie between two accounts, and
+  // the action has always allowed it — this is the list catching up.
   const others = await db.character.findMany({
-    where: { userId: user.id, id: { not: character.id } },
-    select: { id: true, name: true },
+    where: {
+      id: { not: character.id },
+      OR: [
+        { userId: user.id },
+        {
+          partyMemberships: {
+            some: { campaign: { party: { some: { characterId: character.id } } } },
+          },
+        },
+      ],
+    },
+    select: { id: true, name: true, userId: true, user: { select: { displayName: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -114,7 +128,11 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             characterId={character.id}
             characterName={character.name}
             relations={relations}
-            others={others}
+            others={others.map((other) => ({
+              id: other.id,
+              name: other.name,
+              playedBy: other.userId === user.id ? null : other.user.displayName,
+            }))}
           />
         </Card>
 

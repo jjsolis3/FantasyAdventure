@@ -50,12 +50,16 @@ async function createWithJoinCode(
   }
 }
 
-function partyIdsFrom(formData: FormData): string[] {
+function idsFrom(formData: FormData, field: string): string[] {
   return [
     ...new Set(
-      formData.getAll("partyIds").filter((value): value is string => typeof value === "string"),
+      formData.getAll(field).filter((value): value is string => typeof value === "string"),
     ),
   ];
+}
+
+function partyIdsFrom(formData: FormData): string[] {
+  return idsFrom(formData, "partyIds");
 }
 
 export async function createCampaignAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -89,14 +93,31 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     return { error: "One of those adventurers could not be found." };
   }
 
-  if (characters.length < storyline.minPlayers) {
+  // Adventurers belonging to other accounts are asked rather than added. They
+  // count toward the party size here so an adventure can be set up in one go,
+  // but they do not become party members until they say yes — and the adventure
+  // will not begin until enough of them have.
+  const inviteIds = idsFrom(formData, "inviteIds").filter((id) => !partyIds.includes(id));
+  const invitees = await db.character.findMany({
+    where: { id: { in: inviteIds }, userId: { not: user.id } },
+    select: { id: true },
+  });
+  if (invitees.length !== inviteIds.length) {
+    return { error: "One of those adventurers could not be found." };
+  }
+
+  const size = characters.length + invitees.length;
+  if (characters.length === 0) {
+    return { error: "Choose at least one of your own adventurers to lead the way." };
+  }
+  if (size < storyline.minPlayers) {
     return {
-      error: `${storyline.title} needs at least ${storyline.minPlayers} adventurers. You have chosen ${characters.length}.`,
+      error: `${storyline.title} needs at least ${storyline.minPlayers} adventurers. You have chosen ${size}.`,
     };
   }
-  if (characters.length > storyline.maxPlayers) {
+  if (size > storyline.maxPlayers) {
     return {
-      error: `${storyline.title} takes at most ${storyline.maxPlayers} adventurers. You have chosen ${characters.length}.`,
+      error: `${storyline.title} takes at most ${storyline.maxPlayers} adventurers. You have chosen ${size}.`,
     };
   }
 
@@ -111,6 +132,9 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     party: {
       // Turn order follows the order they were listed in the form.
       create: partyIds.map((characterId, index) => ({ characterId, position: index })),
+    },
+    invites: {
+      create: inviteIds.map((characterId) => ({ characterId, invitedById: user.id })),
     },
   });
 
@@ -157,7 +181,14 @@ export async function updatePartyAction(_prev: FormState, formData: FormData): P
     select: { characterId: true },
   });
 
-  const size = partyIds.length + guests.length;
+  // People who have been asked but have not answered yet count toward the
+  // minimum here. Without that, an owner who invited a second adventurer could
+  // not save any change to the party until the invitation was accepted.
+  const invited = await db.partyInvite.count({
+    where: { campaignId: campaign.id, status: "PENDING" },
+  });
+
+  const size = partyIds.length + guests.length + invited;
   if (size < campaign.storyline.minPlayers) {
     return { error: `This adventure needs at least ${campaign.storyline.minPlayers} adventurers.` };
   }
