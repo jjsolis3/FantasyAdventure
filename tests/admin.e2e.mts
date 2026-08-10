@@ -260,6 +260,33 @@ try {
     usage.includes("counted rather than costed"),
   );
 
+  // ---- Prices are fractions -------------------------------------------------
+  //
+  // Every published price is a decimal — $0.30 per million tokens sent is a
+  // typical figure — and a number field that assumes whole numbers refuses them
+  // in the browser, before anything of ours is ever asked.
+  await admin.goto(`${BASE}/settings/storyteller`);
+  await admin.fill('input[name="inputPricePer1M"]', "0.30");
+  await admin.fill('input[name="outputPricePer1M"]', "2.50");
+  check(
+    "a fractional price is accepted by the field itself",
+    await admin.locator('input[name="outputPricePer1M"]').evaluate(
+      (input) => (input as HTMLInputElement).checkValidity(),
+    ),
+  );
+
+  await submitAndSettle(admin, 'button:has-text("Save settings")');
+  const priced = await db.aiSetting.findFirstOrThrow();
+  check("and stored as given", priced.inputPricePer1M === 0.3, String(priced.inputPricePer1M));
+  check("both of them", priced.outputPricePer1M === 2.5, String(priced.outputPricePer1M));
+
+  // With prices set, the usage page reports money rather than counting.
+  await admin.goto(`${BASE}/settings/usage`);
+  check(
+    "the usage page stops saying it cannot cost anything",
+    !(await admin.locator("main").innerText()).includes("counted rather than costed"),
+  );
+
   // ---- A picture of an adventurer -------------------------------------------
 
   const uploaded = await adminContext.request.post(`${BASE}/api/characters/${mira.id}/portrait`, {

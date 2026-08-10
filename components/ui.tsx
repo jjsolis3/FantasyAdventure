@@ -32,6 +32,8 @@ export function Field({
   hint,
   autoComplete,
   required = true,
+  step,
+  min,
 }: {
   label: string;
   name: string;
@@ -45,6 +47,14 @@ export function Field({
   hint?: string;
   autoComplete?: string;
   required?: boolean;
+  /**
+   * For `type="number"`. Without it the browser assumes whole numbers and
+   * refuses anything else — which is how a price of 0.30 came to be rejected
+   * with "the two nearest valid values are 0 and 1". Any field that can hold a
+   * fraction has to say so.
+   */
+  step?: string;
+  min?: string;
 }) {
   const controlled = value !== undefined && onChange !== undefined;
 
@@ -60,6 +70,8 @@ export function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}
+        step={step}
+        min={min}
         aria-invalid={error ? true : undefined}
         className={`w-full rounded-lg border bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:outline-none focus:ring-2 ${
           error

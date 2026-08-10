@@ -330,19 +330,28 @@ export function StorytellerForm({
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
+            {/* step="any" on every one of these: prices are fractions by
+                nature — a tenth of a cent is a normal figure on a pricing page
+                — and without it the browser silently insists on whole numbers. */}
             <Field
               label="Per million tokens sent"
               name="inputPricePer1M"
               type="number"
+              step="any"
+              min="0"
               required={false}
+              placeholder="0.30"
               defaultValue={settings?.inputPricePer1M != null ? String(settings.inputPricePer1M) : ""}
-              hint="Sometimes called input or prompt tokens."
+              hint="Sometimes called input or prompt tokens. Decimals are expected."
             />
             <Field
               label="Per million tokens written"
               name="outputPricePer1M"
               type="number"
+              step="any"
+              min="0"
               required={false}
+              placeholder="2.50"
               defaultValue={settings?.outputPricePer1M != null ? String(settings.outputPricePer1M) : ""}
               hint="Output tokens, and usually the dearer of the two."
             />
@@ -350,7 +359,10 @@ export function StorytellerForm({
               label="Per picture"
               name="imagePrice"
               type="number"
+              step="any"
+              min="0"
               required={false}
+              placeholder="0.01"
               defaultValue={settings?.imagePrice != null ? String(settings.imagePrice) : ""}
               hint="Only if you have pictures switched on."
             />
