@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
-import { deleteCharacterAction } from "@/lib/game/actions";
 import { Card, PageTitle } from "@/components/ui";
-import { SubmitButton } from "@/components/submit-button";
 import { CharacterForm } from "@/components/character/character-form";
+import { DeleteCharacter } from "@/components/character/delete-character";
+import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
 import { kindFromPerspective } from "@/lib/game/rules";
 
@@ -24,6 +24,10 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       inventory: { orderBy: { name: "asc" } },
       relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
       relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+      // Only so that removing them can say which stories they would leave.
+      partyMemberships: {
+        include: { campaign: { select: { id: true, title: true, status: true } } },
+      },
     },
   });
   if (!character) notFound();
@@ -136,17 +140,35 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
           />
         </Card>
 
+        <Card>
+          <h2 id="hand-over" className="font-display mb-3 scroll-mt-6 text-xl text-hearth-100">
+            Hand over
+          </h2>
+          <Handover
+            characterId={character.id}
+            characterName={character.name}
+            code={character.handoverCode}
+          />
+        </Card>
+
         <Card className="border-red-900/40">
           <h2 className="font-display mb-2 text-xl text-hearth-100">Remove</h2>
-          <p className="mb-4 text-sm text-hearth-400">
-            Deletes {character.name} and their family ties. This cannot be undone.
-          </p>
-          <form action={deleteCharacterAction}>
-            <input type="hidden" name="characterId" value={character.id} />
-            <SubmitButton variant="danger" pendingLabel="Removing…">
-              Remove {character.name}
-            </SubmitButton>
-          </form>
+          <DeleteCharacter
+            characterId={character.id}
+            characterName={character.name}
+            loss={{
+              level: character.level,
+              xp: character.xp,
+              skills: character.skills.length,
+              items: character.inventory.length,
+              ties: relations.length,
+              adventures: character.partyMemberships.map((member) => ({
+                id: member.campaign.id,
+                title: member.campaign.title,
+                finished: member.campaign.status === "COMPLETE",
+              })),
+            }}
+          />
         </Card>
       </div>
     </main>

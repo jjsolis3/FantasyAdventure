@@ -33,12 +33,18 @@ export default async function CharactersPage() {
         lead="Everyone who might come along. Build the whole family — you choose who travels when an adventure begins."
       />
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap gap-3">
         <Link
           href="/characters/new"
           className="inline-block rounded-lg bg-hearth-600 px-4 py-2 font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
         >
           Add an adventurer
+        </Link>
+        <Link
+          href="/characters/claim"
+          className="inline-block rounded-lg border border-hearth-700 px-4 py-2 font-medium text-hearth-200 transition-colors hover:bg-hearth-800/50"
+        >
+          Take one on
         </Link>
       </div>
 
@@ -46,7 +52,9 @@ export default async function CharactersPage() {
         <Card>
           <p className="text-hearth-200/70">
             No adventurers yet. Start with one — you can add the rest of the family afterwards and
-            tell the game how they are related.
+            tell the game how they are related. If somebody has already built yours, ask them for a
+            handover code and <Link href="/characters/claim" className="text-hearth-300 underline hover:text-hearth-200">take them on</Link>{" "}
+            instead, so nothing they have earned is lost.
           </p>
         </Card>
       ) : (

@@ -129,8 +129,17 @@ enum AgeBand {
 /// shared screen one household owns the whole party.
 model Character {
   id     String @id @default(cuid())
+  /// Who answers for them. Changed by a handover — everything an adventurer has
+  /// earned hangs off their id rather than this, so moving them to a child's
+  /// own account costs them nothing.
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Set while this adventurer is being offered to another account, and cleared
+  /// the moment somebody claims them. A code rather than a chosen recipient:
+  /// picking one would mean showing every player a list of the household's
+  /// accounts, and this is a thing you read out across the kitchen table.
+  handoverCode String? @unique
 
   name        String
   /// Free text, because "Fox-folk" should not be the limit of anyone's imagination.

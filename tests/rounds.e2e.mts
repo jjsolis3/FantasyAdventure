@@ -363,6 +363,106 @@ try {
     );
     check(`${who} sees the finished turn without touching anything`, caughtUp);
   }
+
+  // ---- Handing an adventurer to the player who actually plays them ----------
+  //
+  // The case every family will hit: one adult built the whole party before
+  // anybody else had a sign-in. Mira has to be able to move to the guest's
+  // account *with* everything she has earned, because a rebuilt Mira is a level
+  // 1 stranger and that is a worse answer than never splitting the accounts.
+  const beforeHandover = await db.character.findUniqueOrThrow({
+    where: { id: mira.id },
+    include: { skills: true, inventory: true },
+  });
+
+  await host.goto(`${BASE}/characters/${mira.id}`);
+  await submitAndSettle(host, 'button:has-text("Hand Mira to another player")');
+
+  const offered = await waitFor(
+    "a handover code",
+    async () =>
+      (await db.character.findUniqueOrThrow({ where: { id: mira.id } })).handoverCode !== null,
+    15_000,
+  );
+  check("the household can offer an adventurer", offered);
+  const handover = (await db.character.findUniqueOrThrow({ where: { id: mira.id } })).handoverCode!;
+  check("the code says what it is for", /^HAND-/.test(handover), handover);
+
+  // A code nobody was given is no use.
+  await strangerContext.newPage().then(async (page) => {
+    await page.goto(`${BASE}/characters/claim`);
+    await page.fill('input[name="code"]', "HAND-2222-3333");
+    await submitAndSettle(page, 'button:has-text("Take them on")');
+    await page.close();
+  });
+  check(
+    "a wrong code takes nobody",
+    (await db.character.findUniqueOrThrow({ where: { id: mira.id } })).userId === hostUser.id,
+  );
+
+  await guest.goto(`${BASE}/characters/claim`);
+  await guest.fill('input[name="code"]', handover);
+  await submitAndSettle(guest, 'button:has-text("Take them on")');
+
+  const moved = await waitFor(
+    "Mira to change hands",
+    async () =>
+      (await db.character.findUniqueOrThrow({ where: { id: mira.id } })).userId === guestUser.id,
+    15_000,
+  );
+  check("the adventurer moves to the other account", moved);
+
+  const afterHandover = await db.character.findUniqueOrThrow({
+    where: { id: mira.id },
+    include: { skills: true, inventory: true, partyMemberships: true },
+  });
+  check(
+    "with the experience they earned",
+    afterHandover.xp === beforeHandover.xp && afterHandover.level === beforeHandover.level,
+    `${beforeHandover.xp} xp -> ${afterHandover.xp} xp`,
+  );
+  check(
+    "with their skill ranks",
+    afterHandover.skills.length === beforeHandover.skills.length &&
+      afterHandover.skills.every((skill) =>
+        beforeHandover.skills.some((was) => was.name === skill.name && was.rank === skill.rank),
+      ),
+  );
+  check(
+    "with what they are carrying",
+    afterHandover.inventory.length === beforeHandover.inventory.length,
+    `${afterHandover.inventory.length} items`,
+  );
+  check("and still in the party, mid-adventure", afterHandover.partyMemberships.length === 1);
+  check("the code is spent", afterHandover.handoverCode === null);
+
+  // The point of the whole exercise: the player who now owns Mira can answer
+  // for her, and the household that built her no longer can — except as the
+  // owner of this adventure, who may still speak for anybody at their table.
+  const nextRound = await guestContext.request.post(`${BASE}/api/campaigns/${campaign.id}/round`, {
+    data: { action: "open", mode: "ACTION" },
+  });
+  check("a round opens after the handover", nextRound.ok(), String(nextRound.status()));
+
+  const guestSpeaksForMira = await guestContext.request.post(
+    `${BASE}/api/campaigns/${campaign.id}/round`,
+    { data: { action: "answer", characterId: mira.id, text: "I check the reeds again.", waiting: false } },
+  );
+  check(
+    "the new owner can answer for them",
+    guestSpeaksForMira.ok(),
+    String(guestSpeaksForMira.status()),
+  );
+
+  const strangerSpeaks = await strangerContext.request.post(
+    `${BASE}/api/campaigns/${campaign.id}/round`,
+    { data: { action: "answer", characterId: mira.id, text: "I do as I please.", waiting: false } },
+  );
+  check(
+    "somebody outside the adventure still cannot",
+    strangerSpeaks.status() === 404,
+    String(strangerSpeaks.status()),
+  );
 } finally {
   await browser.close();
   await db.$disconnect();

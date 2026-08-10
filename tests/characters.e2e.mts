@@ -228,9 +228,52 @@ try {
     check("the rejected spread was not saved", after.might === before.might, `might=${after.might}`);
   }
 
-  // ---- Deleting a character removes its ties ------------------------------
+  // ---- Deleting takes asking for, and then meaning it ----------------------
   await page.goto(`${BASE}/characters/${pip!.id}`);
-  await submitAndSettle(page, 'button:has-text("Remove Pip")');
+
+  // Nothing on the page deletes anything until it is asked for.
+  check(
+    "removing is not one press away",
+    (await page.locator('button:has-text("Remove Pip for good")').count()) === 0,
+  );
+
+  await page.click('button:has-text("Remove Pip…")');
+  const confirmation = page.locator("form").filter({ hasText: "Really remove Pip?" });
+  check(
+    "the confirmation says what would be lost",
+    (await confirmation.innerText()).includes("experience"),
+  );
+  check(
+    "and offers the handover that would lose none of it",
+    (await page.locator('a:has-text("Hand Pip to another player")').count()) === 1,
+  );
+  check(
+    "the final button is refused until the name is typed",
+    await page.locator('button:has-text("Remove Pip for good")').isDisabled(),
+  );
+
+  // A name that does not match keeps the door shut.
+  await page.fill('input[name="confirmName"]', "Pipp");
+  check(
+    "a mistyped name does not open it",
+    await page.locator('button:has-text("Remove Pip for good")').isDisabled(),
+  );
+
+  // Backing out leaves everything as it was, which is the path most people
+  // arriving at this screen should take.
+  await page.click('button:has-text("Keep them")');
+  check(
+    "backing out puts the door away again",
+    (await page.locator('button:has-text("Remove Pip for good")').count()) === 0,
+  );
+  check(
+    "and removes nobody",
+    (await db.character.findUnique({ where: { id: pip!.id } })) !== null,
+  );
+
+  await page.click('button:has-text("Remove Pip…")');
+  await page.fill('input[name="confirmName"]', "pip");
+  await submitAndSettle(page, 'button:has-text("Remove Pip for good")');
 
   check("character deleted", (await db.character.findUnique({ where: { id: pip!.id } })) === null);
   check("its family ties went with it", (await db.relationship.count()) === 0);
