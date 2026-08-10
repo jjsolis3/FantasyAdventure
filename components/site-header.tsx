@@ -23,18 +23,13 @@ export async function SiteHeader() {
             <Link href="/characters" className="text-sm text-hearth-300 hover:text-hearth-100">
               Adventurers
             </Link>
+            {/* One link rather than one per page: everything an administrator
+                touches now lives behind the hub, and the header is a family's
+                navigation before it is an operator's. */}
             {user.role === "ADMIN" ? (
-              <>
-                <Link href="/invites" className="text-sm text-hearth-300 hover:text-hearth-100">
-                  Invites
-                </Link>
-                <Link
-                  href="/settings/storyteller"
-                  className="text-sm text-hearth-300 hover:text-hearth-100"
-                >
-                  Storyteller
-                </Link>
-              </>
+              <Link href="/settings" className="text-sm text-hearth-300 hover:text-hearth-100">
+                Settings
+              </Link>
             ) : null}
             <Link href="/profile" className="text-sm text-hearth-300 hover:text-hearth-100">
               {user.displayName}

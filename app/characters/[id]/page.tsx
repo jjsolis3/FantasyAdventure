@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 import { CharacterForm } from "@/components/character/character-form";
 import { DeleteCharacter } from "@/components/character/delete-character";
+import { PortraitUpload } from "@/components/character/portrait-upload";
 import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
 import { kindFromPerspective } from "@/lib/game/rules";
@@ -28,6 +29,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       partyMemberships: {
         include: { campaign: { select: { id: true, title: true, status: true } } },
       },
+      portrait: { select: { version: true } },
     },
   });
   if (!character) notFound();
@@ -137,6 +139,15 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
               },
               skills: character.skills.map((skill) => skill.name),
             }}
+          />
+        </Card>
+
+        <Card>
+          <h2 className="font-display mb-3 text-xl text-hearth-100">Portrait</h2>
+          <PortraitUpload
+            characterId={character.id}
+            characterName={character.name}
+            version={character.portrait?.version ?? null}
           />
         </Card>
 

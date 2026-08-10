@@ -8,11 +8,12 @@ Conflicts resolve through kindness, cleverness and courage. Nobody dies.
 
 ---
 
-## Status: Milestone 9 — Heard and seen
+## Status: Milestone 9 — Heard, seen, and yours
 
-The table no longer has to be one table, and the story no longer has to be read
-to be followed: every player can answer from their own device, the storyteller
-reads aloud, and each chapter can be illustrated. Portraits are next.
+The table no longer has to be one table, the story no longer has to be read to
+be followed, and the library is no longer fixed: every player can answer from
+their own device, the storyteller reads aloud and illustrates, and a family can
+write their own adventures without touching the code.
 
 | | |
 |---|---|
@@ -47,7 +48,9 @@ reads aloud, and each chapter can be illustrated. Portraits are next.
 | ✅ | **M9** A picture of each chapter — optional, and off until you pay for it |
 | ✅ | **M9** A spooky register, and three adventures written for it |
 | ✅ | **M9** What you have found — one page, and what the chapter is still waiting on |
-| ⬜ | M9 character portraits |
+| ✅ | **M9** Character portraits — uploaded, not generated |
+| ✅ | **M9** Write your own adventures, without a redeployment |
+| ✅ | **M9** What the storyteller has used, and what it cost |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -93,6 +96,20 @@ they are a Pip or a Poppy, so it has to be instant and has to keep working when
 the model server is asleep. Given names are mixed rather than split by gender,
 so any name suits anyone, and a race the generator has never heard of still
 gets something sensible.
+
+**A portrait is uploaded, not generated.** A picture on the sheet, chosen from
+the character's own page and shown wherever they appear — the party sheets, the
+journal. Uploaded rather than drawn by a model on purpose: the case that
+actually comes up is a child who has drawn their character in felt-tip and wants
+*that* on the sheet, and a photograph of it beats anything a model would invent.
+It also costs nothing, needs no provider configured, works when the internet
+does not, and never sends a likeness of a real family through an API.
+
+The browser squares it off and shrinks it to 512px before it is sent, so a phone
+photograph is fine and what arrives is a portrait rather than four megabytes of
+kitchen. The server sniffs the first bytes rather than believing the file's own
+claim about what it is, and only the household that owns the adventurer can
+change it.
 
 **Adventurers can change hands.** Almost every family builds the whole party
 from one account, because one adult was holding the keyboard — and then wants
@@ -297,12 +314,26 @@ they do, constantly, and it follows them.
 So: not a story that is re-rolled from nothing each time, and not a script being
 read out either. A spine, improvised over.
 
-**Adding your own** means editing `prisma/seed.ts` and redeploying. The seed
-upserts by slug and runs on every container start, so adding a storyline is
-additive and re-running it is safe; the acts of each storyline are replaced
-wholesale, because the file is the source of truth. An adventure already being
-played keeps its own tone and pacing, so editing a storyline never rewrites a
-story in progress.
+**Writing your own** happens at Settings → Adventures, with no redeployment and
+no TypeScript: a title, a premise, an opening, and as many chapters as you want,
+each with a goal, some optional beats and a list of things to find. The labels
+say what each part does to the game, because otherwise there is no way to know
+why "goal" and "beats" are different boxes.
+
+Anything written or edited there is marked as **yours**, and that flag is the
+whole safety mechanism. The seed re-runs on every container start and replaces
+the chapters of every adventure it recognises — right for the ones it ships, and
+catastrophic for one somebody wrote on a Sunday evening. Once an adventure is
+yours the seed skips it entirely, which also means editing a shipped one opts it
+out of future improvements: to try something without that, **make a copy**.
+
+Nothing is ever deleted. A campaign points at its storyline for the premise and
+the chapter it is in, so removing one would take the spine out of a story
+half-told and leave a finished family's journal about nothing. The most that can
+be done is to stop offering it to new games.
+
+Adding one to `prisma/seed.ts` still works and is the right way to ship an
+adventure to somebody else's deployment.
 
 ### What you have found
 
@@ -546,6 +577,25 @@ not the whole campaign) and what makes swapping models mid-adventure harmless.
 The nearest thing to a conversation log is the `AiCall` table, which keeps the
 prompt and reply of every call so "the storyteller went weird" is something you
 can read back rather than guess at.
+
+### What it has used
+
+Every call the storyteller makes has been recorded since the pipeline was built
+— stage, model, latency, tokens, repairs, and a slice of what went in and came
+back. Settings → What it has used is where that finally gets read: totals, a
+breakdown by stage, by adventure and by model, and the last forty calls with
+their prompt and reply.
+
+Two questions it answers that nothing else can. **"What did last night cost?"** —
+once you have entered what your provider charges, which is asked for rather than
+built in, because prices change monthly and differ per provider and a rate in
+the code would be a confident lie a month later. Without prices it counts rather
+than costs, and says so, instead of reporting a reassuring `$0.00` to a table
+that has spent forty dollars.
+
+And **"why did it say that?"** — which no amount of staring at the transcript
+resolves, because the transcript is the output and the question is about the
+input.
 
 ### Choosing a model
 
@@ -809,6 +859,9 @@ app/
   campaigns/join/   Joining somebody else's adventure with a code
   campaigns/[id]/journal/  The whole story, laid out to be read back or printed
   campaigns/[id]/finds/    What the party has, and what it is still looking for
+  settings/         Administrator hub: storyteller, adventures, usage, invites
+  settings/adventures/     Writing and editing storylines in the app
+  settings/usage/          What every call used, and what it cost
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
@@ -827,6 +880,7 @@ lib/
   ai/
     provider.ts     OpenAI-compatible and Anthropic clients
     images.ts       The drawing request, and the prompt it is safe to send
+    usage.ts        Adding up calls, tokens and cost from what was recorded
     settings.ts     Resolves config: database first, environment as fallback
     prompts.ts      The tone contract and every stage's prompt
     context.ts      The memory pyramid and token budgeting
@@ -845,6 +899,7 @@ lib/
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
     finds.ts        Matching what a chapter asked for against what is carried
+    storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
     access.ts       Who may open an adventure, and answer for whom
@@ -862,11 +917,13 @@ tests/
   narrator.test.ts  Unit tests — how a passage is broken up to be spoken
   images.test.ts    Unit tests — the prompt a picture is asked for with
   finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
+  usage.test.ts     Unit tests — counting and costing, and refusing to guess
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
   play.e2e.mts        Browser-driven play, against the mock model
   rounds.e2e.mts      Two households, two browsers, one turn between them
+  admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

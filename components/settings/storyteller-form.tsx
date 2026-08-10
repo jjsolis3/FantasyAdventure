@@ -314,6 +314,56 @@ export function StorytellerForm({
           ) : null}
         </section>
 
+        {/* ---- What it costs ---------------------------------------------- */}
+        <section className="space-y-5 border-t border-hearth-800/50 pt-8">
+          <div>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">What your provider charges</h2>
+            <p className="text-sm text-hearth-400">
+              Optional, and not built in on purpose: prices change monthly and differ per provider,
+              so a number in the code would be wrong by the time you read it. Fill these in from
+              your provider&rsquo;s pricing page and{" "}
+              <a href="/settings/usage" className="underline hover:text-hearth-200">
+                what it has used
+              </a>{" "}
+              reports money instead of tokens. Leave them blank and it counts rather than costs.
+            </p>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label="Per million tokens sent"
+              name="inputPricePer1M"
+              type="number"
+              required={false}
+              defaultValue={settings?.inputPricePer1M != null ? String(settings.inputPricePer1M) : ""}
+              hint="Sometimes called input or prompt tokens."
+            />
+            <Field
+              label="Per million tokens written"
+              name="outputPricePer1M"
+              type="number"
+              required={false}
+              defaultValue={settings?.outputPricePer1M != null ? String(settings.outputPricePer1M) : ""}
+              hint="Output tokens, and usually the dearer of the two."
+            />
+            <Field
+              label="Per picture"
+              name="imagePrice"
+              type="number"
+              required={false}
+              defaultValue={settings?.imagePrice != null ? String(settings.imagePrice) : ""}
+              hint="Only if you have pictures switched on."
+            />
+            <Field
+              label="Currency"
+              name="currency"
+              required={false}
+              defaultValue={settings?.currency ?? "USD"}
+              hint="Only a label — no conversion happens."
+            />
+          </div>
+        </section>
+
         <SubmitButton pendingLabel="Saving…">Save settings</SubmitButton>
       </form>
 

@@ -596,6 +596,19 @@ async function main() {
   console.log("Seeding storylines…");
 
   for (const { acts, ...storyline } of storylines) {
+    // An adventure somebody has written or edited in the app is theirs, and this
+    // file is no longer the source of truth for it. Without this check, a
+    // redeploy would silently restore the shipped text over a family's own —
+    // and this seed runs on every container start.
+    const existing = await db.storyline.findUnique({
+      where: { slug: storyline.slug },
+      select: { isCustom: true },
+    });
+    if (existing?.isCustom) {
+      console.log(`  – ${storyline.title} (edited here; left alone)`);
+      continue;
+    }
+
     // Upsert so re-running the seed on an existing database is safe. Acts are
     // replaced wholesale rather than merged — the seed file is the source of truth.
     const record = await db.storyline.upsert({

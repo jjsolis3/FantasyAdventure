@@ -31,6 +31,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           character: {
             include: {
               user: { select: { id: true, displayName: true } },
+              portrait: { select: { version: true } },
               skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
@@ -156,6 +157,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
       .filter((bond) => inParty.has(bond.otherId)),
     playedBy: member.character.user.displayName,
     yours: member.character.userId === user.id,
+    portraitVersion: member.character.portrait?.version ?? null,
   }));
 
   // A count rather than the list: what is missing belongs on its own page, but
