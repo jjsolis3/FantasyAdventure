@@ -35,6 +35,7 @@ import {
   type PersonalAim,
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
+import { learnedMessage, practiceKey, readyToLearn, skillNameFrom } from "@/lib/game/practice";
 import {
   SKILL_XP_PER_USE,
   bondLevelFor,
@@ -771,6 +772,48 @@ export async function playTurn(
       }
     }
 
+    // What she has been trying, whether or not anything on her sheet covers it.
+    //
+    // This is the half that was missing. A girl who says "I climb the
+    // drainpipe" with no climbing skill used to roll, earn experience toward
+    // her level, and gain nothing that would make climbing easier next time —
+    // the attempt was forgotten the moment the dice landed. Now it is counted,
+    // and four of them make her someone who climbs.
+    //
+    // Counted regardless of the outcome, deliberately: a child who has failed
+    // to pick a lock four times has learned a great deal about locks.
+    for (const check of result.checks) {
+      if (!check.practice) continue;
+
+      const key = practiceKey(check.practice);
+      if (key.length < 3) continue;
+
+      const label = check.practice.trim().toLocaleLowerCase().slice(0, 30);
+
+      const practice = await tx.practice.upsert({
+        where: { characterId_key: { characterId: check.characterId, key } },
+        create: { characterId: check.characterId, key, label, attempts: 1 },
+        update: { attempts: { increment: 1 } },
+      });
+
+      const skills = await tx.characterSkill.findMany({
+        where: { characterId: check.characterId },
+        select: { name: true, rank: true },
+      });
+      if (!readyToLearn(practice, skills)) continue;
+
+      const name = skillNameFrom(practice.label);
+      await tx.characterSkill.create({
+        data: { characterId: check.characterId, name, rank: 1, xp: 0 },
+      });
+      await tx.practice.update({
+        where: { id: practice.id },
+        data: { learnedAtTurn: turnCounter },
+      });
+
+      milestones.push(learnedMessage(check.characterName, practice.label));
+    }
+
     // Bonds, from moments the extraction identified.
     for (const moment of result.extraction.bondMoments) {
       const from = campaign.party.find((member) => member.character.name === moment.from)?.characterId;
@@ -819,6 +862,8 @@ export async function playTurn(
           name: item.name,
           description: item.description ?? null,
           foundInCampaignId: campaign.id,
+          requiresSkill: item.requiresSkill ?? null,
+          requiresRank: item.requiresRank ?? null,
         },
         update: { quantity: { increment: 1 } },
       });
@@ -826,7 +871,9 @@ export async function playTurn(
       milestones.push(
         already
           ? `${item.character} picks up another ${item.name}.`
-          : `${item.character} is now carrying: ${item.name}`,
+          : item.requiresSkill
+            ? `${item.character} is now carrying: ${item.name} — but cannot use it yet. That will take ${item.requiresSkill}.`
+            : `${item.character} is now carrying: ${item.name}`,
       );
     }
 

@@ -8,7 +8,10 @@ import { DeleteCharacter } from "@/components/character/delete-character";
 import { PortraitUpload } from "@/components/character/portrait-upload";
 import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
-import { kindFromPerspective } from "@/lib/game/rules";
+import { kindFromPerspective, statPointsUnspent, type StatBlock } from "@/lib/game/rules";
+import { Growth } from "@/components/character/growth";
+import { signatureFor } from "@/lib/game/character-options";
+import { hasRequirement, lockedFor } from "@/lib/game/practice";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +40,15 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
     },
   });
   if (!character) notFound();
+
+  const stats: StatBlock = {
+    might: character.might,
+    wits: character.wits,
+    heart: character.heart,
+    spark: character.spark,
+  };
+  const unspent = statPointsUnspent(stats, character.xp);
+  const signature = signatureFor(character.archetype);
 
   // Grouped by adventure, newest first, which is the order she would tell you
   // about them in. An adventure that has since been deleted keeps its
@@ -110,9 +122,35 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="space-y-6">
-        {character.skills.length > 0 || character.inventory.length > 0 ? (
+        {/* Growth first, because when there is a point waiting to be spent this
+            is the reason she opened her own page. */}
+        <Card>
+          <h2 className="font-display mb-1 text-xl text-hearth-100">
+            {unspent > 0 ? "She has grown" : "What she is like"}
+          </h2>
+          <Growth characterId={character.id} stats={stats} xp={character.xp} yours />
+        </Card>
+
+        {/* Also shown for a character with neither yet: her calling's signature
+            is the one thing on this card she has from the moment she is made. */}
+        {signature || character.skills.length > 0 || character.inventory.length > 0 ? (
           <Card>
             <h2 className="font-display mb-4 text-xl text-hearth-100">What they can do</h2>
+
+            {/* The one thing her calling alone can do. Listed first, because
+                it is the only line on the sheet that is true of her and of
+                nobody else at the table. */}
+            {signature ? (
+              <div className="mb-4 rounded-lg border border-hearth-700/50 bg-hearth-800/20 p-3">
+                <p className="text-sm text-hearth-100">
+                  {signature.name}
+                  <span className="ml-2 text-xs tracking-wide text-hearth-400 uppercase">
+                    {character.archetype} only
+                  </span>
+                </p>
+                <p className="text-sm text-hearth-200/70">{signature.blurb}</p>
+              </div>
+            ) : null}
 
             {character.skills.length > 0 ? (
               <ul className="space-y-1">
@@ -131,15 +169,29 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
                   Carrying
                 </h3>
                 <ul className="space-y-1">
-                  {character.inventory.map((item) => (
-                    <li key={item.id} className="text-sm text-hearth-200/80">
-                      {item.name}
-                      {item.quantity > 1 ? <span className="text-hearth-400"> ×{item.quantity}</span> : null}
-                      {item.description ? (
-                        <span className="text-hearth-400"> — {item.description}</span>
-                      ) : null}
-                    </li>
-                  ))}
+                  {character.inventory.map((item) => {
+                    // Something she has not grown into yet says so plainly, and
+                    // says what would change it. A locked thing is only worth
+                    // carrying if you can see what it is waiting for.
+                    const lock = hasRequirement(item)
+                      ? lockedFor(item, { level: character.level, skills: character.skills })
+                      : { locked: false as const };
+
+                    return (
+                      <li key={item.id} className="text-sm text-hearth-200/80">
+                        {item.name}
+                        {item.quantity > 1 ? <span className="text-hearth-400"> ×{item.quantity}</span> : null}
+                        {item.description ? (
+                          <span className="text-hearth-400"> — {item.description}</span>
+                        ) : null}
+                        {lock.locked ? (
+                          <span className="block text-hearth-500">
+                            You cannot use this yet — it needs {lock.needs}.
+                          </span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </>
             ) : null}

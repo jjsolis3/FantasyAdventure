@@ -11,6 +11,7 @@ import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
 import { JoinCode } from "@/components/campaign/join-code";
+import { Packing, type Packer } from "@/components/campaign/packing";
 import { TableControls } from "@/components/campaign/table-controls";
 import {
   CAMPAIGN_STATUS_LABELS,
@@ -38,6 +39,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             include: {
               user: { select: { id: true, displayName: true } },
               skills: { orderBy: { name: "asc" } },
+              inventory: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
             },
@@ -73,8 +75,20 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const pendingInvites = campaign.invites.filter((invite) => invite.status === "PENDING");
   const declinedInvites = campaign.invites.filter((invite) => invite.status === "DECLINED");
 
-  // Whether the storyline's minimum is met by people who have actually agreed
-  // to come. Invitations do not count here — that is the whole point of them.
+  // Everybody travelling, with whatever they have packed so far. Somebody
+  // else's adventurer still appears — seeing that your sister has taken the
+  // lantern is how you decide not to — but only as a line of text.
+  const packers: Packer[] = campaign.party.map((member) => ({
+    characterId: member.characterId,
+    name: member.character.name,
+    archetype: member.character.archetype,
+    tone: campaign.tone,
+    packed: member.character.inventory
+      .filter((item) => item.brought && item.foundInCampaignId === campaign.id)
+      .map((item) => item.name),
+    yours: isOwner || member.character.userId === user.id,
+  }));
+
   const shortOfMinimum = campaign.party.length < campaign.storyline.minPlayers;
   const roomLeft = campaign.storyline.maxPlayers - campaign.party.length - pendingInvites.length;
 
@@ -272,6 +286,22 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             </>
           )}
         </Card>
+
+        {/* Packing, while the adventure is still being prepared. Placed above
+            the party editor because it is the thing to do next once everybody
+            has agreed to come, and it stops being offered the moment the story
+            starts — things arrive by being found after that. */}
+        {campaign.status === "SETUP" && packers.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">What are you bringing?</h2>
+            <p className="mb-5 text-sm text-hearth-400">
+              Two things each, packed before you set out. Nothing here is better than anything else
+              and none of it is scarce — but you cannot take everything, and what you brought is
+              what you will have. Change your minds as often as you like until the story starts.
+            </p>
+            <Packing campaignId={campaign.id} packers={packers} />
+          </Card>
+        ) : null}
 
         {isOwner && (pendingInvites.length > 0 || declinedInvites.length > 0 || canInvite) ? (
           <Card>
