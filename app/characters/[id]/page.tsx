@@ -10,6 +10,8 @@ import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
 import { kindFromPerspective, statPointsUnspent, type StatBlock } from "@/lib/game/rules";
 import { Growth } from "@/components/character/growth";
+import { KnackOffer, KnacksHeld } from "@/components/character/knacks";
+import { knacksUnspent, offerFor } from "@/lib/game/knacks";
 import { signatureFor } from "@/lib/game/character-options";
 import { hasRequirement, lockedFor } from "@/lib/game/practice";
 
@@ -37,6 +39,8 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         orderBy: { createdAt: "desc" },
         include: { campaign: { select: { id: true, title: true } } },
       },
+      knacks: { orderBy: { createdAt: "asc" } },
+      practices: { select: { key: true, attempts: true } },
     },
   });
   if (!character) notFound();
@@ -49,6 +53,22 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
   };
   const unspent = statPointsUnspent(stats, character.xp);
   const signature = signatureFor(character.archetype);
+
+  // What levelling up has bought her, and what is still waiting to be spent.
+  // The offer is a pure function of her own state, so it is the same three on
+  // every page load — an offer that reshuffled on refresh would turn a decision
+  // into a slot machine.
+  const takenKnacks = character.knacks.map((knack) => knack.key);
+  const knacksWaiting = knacksUnspent(character.level, takenKnacks.length);
+  const offered = knacksWaiting > 0
+    ? offerFor({
+        characterId: character.id,
+        level: character.level,
+        stats,
+        practices: character.practices,
+        taken: takenKnacks,
+      })
+    : [];
 
   // Grouped by adventure, newest first, which is the order she would tell you
   // about them in. An adventure that has since been deleted keeps its
@@ -122,13 +142,34 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="space-y-6">
-        {/* Growth first, because when there is a point waiting to be spent this
+        {/* A knack waiting to be chosen goes above everything. It is the reason
+            she opened her page, and it is the only thing here that will not
+            still be true tomorrow if she ignores it. */}
+        {offered.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">
+              Something new
+            </h2>
+            <KnackOffer characterId={character.id} offered={offered} unspent={knacksWaiting} />
+          </Card>
+        ) : null}
+
+        {/* Growth next, because when there is a point waiting to be spent this
             is the reason she opened her own page. */}
         <Card>
           <h2 className="font-display mb-1 text-xl text-hearth-100">
             {unspent > 0 ? "She has grown" : "What she is like"}
           </h2>
           <Growth characterId={character.id} stats={stats} xp={character.xp} yours />
+
+          {takenKnacks.length > 0 ? (
+            <>
+              <h3 className="mt-6 mb-2 text-sm font-medium tracking-wide text-hearth-400 uppercase">
+                What she has picked up
+              </h3>
+              <KnacksHeld held={character.knacks} />
+            </>
+          ) : null}
         </Card>
 
         {/* Also shown for a character with neither yet: her calling's signature

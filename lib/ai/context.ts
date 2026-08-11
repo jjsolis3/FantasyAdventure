@@ -15,6 +15,7 @@
 
 import { STAT_INFO, STATS, RELATIONSHIP_LABELS, type RelationshipKind } from "@/lib/game/rules";
 import { signatureFor } from "@/lib/game/character-options";
+import { narrativeHints } from "@/lib/game/knacks";
 
 /** Rough token estimate. Four characters per token is close enough for
  *  budgeting and costs nothing; being exact would need a tokenizer per model. */
@@ -32,6 +33,8 @@ export type PartyMemberContext = {
   level: number;
   stats: Record<(typeof STATS)[number], number>;
   skills: { name: string; rank: number }[];
+  /** Knack keys, for the ones the story itself has to honour. */
+  knacks?: string[];
 };
 
 export type BondContext = {
@@ -108,9 +111,15 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
     const signature = signatureFor(member.archetype);
     const own = signature ? ` Can always: ${signature.name} — ${signature.narrationHint}` : "";
 
+    // Knacks the story has to behave differently because of. The ones that are
+    // only a number are left out — the dice have already applied those, and
+    // repeating them here would just crowd the prompt.
+    const hints = narrativeHints(member.knacks ?? []);
+    const earned = hints.length > 0 ? `\n  ${hints.join("\n  ")}` : "";
+
     return (
       `- ${member.name} (${member.pronouns}), ${member.ageBand.toLowerCase()} ${member.race} ` +
-      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${own}`
+      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${own}${earned}`
     );
   });
 

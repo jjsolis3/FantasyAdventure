@@ -52,6 +52,12 @@ export type SnapshotState = {
   skills: { id: string; xp: number; rank: number }[];
   /** The practice ledger, so counting starts again from where it was. */
   practices: { id: string; attempts: number; learnedAtTurn: number | null }[];
+  /**
+   * Knacks she had. A turn can push her over a level, and undoing it has to put
+   * the choice back on the table rather than leaving her with something she was
+   * never really old enough for.
+   */
+  knackIds: string[];
   relationships: { id: string; bondXp: number; bondLevel: number }[];
   /**
    * Items that existed, in full. Anything newer was picked up this turn.
@@ -105,6 +111,7 @@ export async function captureSnapshot(
     characters,
     skills,
     practices,
+    knacks,
     relationships,
     inventory,
     memories,
@@ -118,6 +125,10 @@ export async function captureSnapshot(
       tx.character.findMany({ where: { id: { in: characterIds } } }),
       tx.characterSkill.findMany({ where: { characterId: { in: characterIds } } }),
       tx.practice.findMany({ where: { characterId: { in: characterIds } } }),
+      tx.characterKnack.findMany({
+        where: { characterId: { in: characterIds } },
+        select: { id: true },
+      }),
       tx.relationship.findMany({
         where: {
           characterAId: { in: characterIds },
@@ -158,6 +169,7 @@ export async function captureSnapshot(
       attempts: p.attempts,
       learnedAtTurn: p.learnedAtTurn,
     })),
+    knackIds: knacks.map((k) => k.id),
     relationships: relationships.map((r) => ({
       id: r.id,
       bondXp: r.bondXp,
@@ -294,6 +306,12 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
         data: { xp: skill.xp, rank: skill.rank },
       });
     }
+
+    // A knack taken on the strength of a level this turn granted goes back on
+    // the table with it.
+    await tx.characterKnack.deleteMany({
+      where: { characterId: { in: characterIdsForSkills }, id: { notIn: state.knackIds } },
+    });
 
     // And the ledger that would otherwise still say she had four goes at it.
     await tx.practice.deleteMany({

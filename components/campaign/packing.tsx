@@ -1,5 +1,5 @@
 import { bringSupplyAction, leaveSupplyAction } from "@/lib/game/loadout-actions";
-import { SUPPLIES_PER_CHARACTER, suppliesFor } from "@/lib/game/loadout";
+import { suppliesFor } from "@/lib/game/loadout";
 
 export type Packer = {
   characterId: string;
@@ -9,6 +9,8 @@ export type Packer = {
   tone: string;
   /** Names of supplies already in the pack, for this adventure. */
   packed: string[];
+  /** Two, or more for somebody whose knacks say so. */
+  allowance: number;
   /** False for somebody else's adventurer, whose pack is shown but not touched. */
   yours: boolean;
 };
@@ -30,7 +32,7 @@ export function Packing({ campaignId, packers }: { campaignId: string; packers: 
     <div className="space-y-6">
       {packers.map((packer) => {
         const offered = suppliesFor(packer.archetype, packer.tone);
-        const room = SUPPLIES_PER_CHARACTER - packer.packed.length;
+        const room = packer.allowance - packer.packed.length;
 
         return (
           <div key={packer.characterId}>
@@ -39,7 +41,7 @@ export function Packing({ campaignId, packers }: { campaignId: string; packers: 
               <p className="text-sm text-hearth-400">
                 {room > 0
                   ? `${room} more to choose`
-                  : `packed — ${packer.packed.length} of ${SUPPLIES_PER_CHARACTER}`}
+                  : `packed — ${packer.packed.length} of ${packer.allowance}`}
               </p>
             </div>
 
