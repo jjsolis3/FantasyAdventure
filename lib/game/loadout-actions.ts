@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { membershipFor } from "@/lib/game/access";
 import { SUPPLIES_PER_CHARACTER, wasOffered } from "@/lib/game/loadout";
+import { extraSupplies } from "@/lib/game/knacks";
 
 /**
  * Packing, and changing your mind about it.
@@ -32,7 +33,16 @@ async function loadoutContext(formData: FormData, userId: string) {
 
   const member = await db.partyMember.findFirst({
     where: { campaignId, characterId },
-    include: { character: { select: { id: true, userId: true, archetype: true } } },
+    include: {
+      character: {
+        select: {
+          id: true,
+          userId: true,
+          archetype: true,
+          knacks: { select: { key: true } },
+        },
+      },
+    },
   });
   if (!member) return null;
 
@@ -59,7 +69,10 @@ export async function bringSupplyAction(formData: FormData): Promise<void> {
   const packed = await db.inventoryItem.count({
     where: { characterId: character.id, foundInCampaignId: campaign.id, brought: true },
   });
-  if (packed >= SUPPLIES_PER_CHARACTER) return;
+  // Deep Pockets is exactly this line and nothing else: one more than everybody.
+  const allowance =
+    SUPPLIES_PER_CHARACTER + extraSupplies(character.knacks.map((knack) => knack.key));
+  if (packed >= allowance) return;
 
   await db.inventoryItem.upsert({
     where: { characterId_name: { characterId: character.id, name: supply.name } },

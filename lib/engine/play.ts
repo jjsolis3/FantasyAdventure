@@ -35,7 +35,8 @@ import {
   type PersonalAim,
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
-import { learnedMessage, practiceKey, readyToLearn, skillNameFrom } from "@/lib/game/practice";
+import { MAX_SKILLS, learnedMessage, practiceKey, readyToLearn, skillNameFrom } from "@/lib/game/practice";
+import { extraSkillRoom } from "@/lib/game/knacks";
 import {
   SKILL_XP_PER_USE,
   bondLevelFor,
@@ -183,6 +184,7 @@ async function loadCampaign(campaignId: string, userId: string) {
           character: {
             include: {
               skills: true,
+              knacks: { select: { key: true } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
             },
@@ -213,6 +215,7 @@ function partyContext(campaign: LoadedCampaign) {
       spark: member.character.spark,
     } as Record<StatKey, number>,
     skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
+    knacks: member.character.knacks.map((knack) => knack.key),
   }));
 }
 
@@ -609,6 +612,7 @@ export async function playTurn(
           spark: member.character.spark,
         } as Record<StatKey, number>,
         skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
+        knacks: member.character.knacks.map((knack) => knack.key),
       })),
       actions: accepted,
       correction: correction?.trim() || undefined,
@@ -750,7 +754,11 @@ export async function playTurn(
       await tx.character.update({ where: { id: characterId }, data: { xp, level } });
 
       if (level > character.level) {
-        milestones.push(`${character.name} reached level ${level}!`);
+        // Said with what it buys, because "reached level 3" on its own was
+        // exactly the announcement that used to mean nothing.
+        milestones.push(
+          `${character.name} reached level ${level}! There is something new waiting on her sheet.`,
+        );
       }
     }
 
@@ -800,7 +808,20 @@ export async function playTurn(
         where: { characterId: check.characterId },
         select: { name: true, rank: true },
       });
-      if (!readyToLearn(practice, skills)) continue;
+
+      // A Fast Learner has room for more than everybody else, which is the
+      // whole of what that knack buys.
+      const room =
+        MAX_SKILLS +
+        extraSkillRoom(
+          (
+            await tx.characterKnack.findMany({
+              where: { characterId: check.characterId },
+              select: { key: true },
+            })
+          ).map((knack) => knack.key),
+        );
+      if (!readyToLearn(practice, skills, room)) continue;
 
       const name = skillNameFrom(practice.label);
       await tx.characterSkill.create({

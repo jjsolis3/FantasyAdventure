@@ -12,6 +12,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
 import { JoinCode } from "@/components/campaign/join-code";
 import { Packing, type Packer } from "@/components/campaign/packing";
+import { SUPPLIES_PER_CHARACTER } from "@/lib/game/loadout";
+import { extraSupplies } from "@/lib/game/knacks";
 import { TableControls } from "@/components/campaign/table-controls";
 import {
   CAMPAIGN_STATUS_LABELS,
@@ -40,6 +42,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               user: { select: { id: true, displayName: true } },
               skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
+              knacks: { select: { key: true } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
             },
@@ -86,6 +89,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     packed: member.character.inventory
       .filter((item) => item.brought && item.foundInCampaignId === campaign.id)
       .map((item) => item.name),
+    allowance:
+      SUPPLIES_PER_CHARACTER + extraSupplies(member.character.knacks.map((knack) => knack.key)),
     yours: isOwner || member.character.userId === user.id,
   }));
 

@@ -21,6 +21,7 @@ import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, ty
 import { checkNarration, safetyReminder } from "@/lib/ai/safety";
 import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type Difficulty } from "@/lib/engine/dice";
 import type { StatKey } from "@/lib/game/rules";
+import { knackBonusFor } from "@/lib/game/knacks";
 
 /** Everything the pipeline needs, with no database or HTTP knowledge. */
 export type TurnInput = {
@@ -33,6 +34,8 @@ export type TurnInput = {
     name: string;
     stats: Record<StatKey, number>;
     skills: { name: string; rank: number }[];
+    /** Knack keys she has chosen, so their bonuses reach the dice. */
+    knacks?: string[];
   }[];
   actions: { characterId: string; text: string }[];
   /**
@@ -185,6 +188,7 @@ export async function runTurn(
       // The first word of "climbing the drainpipe to reach the window" is still
       // the right thing to file it under.
       practice: requested.practice?.trim() || requested.intent,
+      knackBonus: knackBonusFor(member.knacks ?? [], requested.stat as StatKey),
     };
 
     // The move applies to the one check it was aimed at, and only if that

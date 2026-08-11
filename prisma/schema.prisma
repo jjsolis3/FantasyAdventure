@@ -171,6 +171,7 @@ model Character {
   level Int @default(1)
 
   skills        CharacterSkill[]
+  knacks        CharacterKnack[]
   practices     Practice[]
   inventory     InventoryItem[]
   keepsakes     Keepsake[]
@@ -188,6 +189,29 @@ model Character {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+/// Something she can do that she could not do before.
+///
+/// Reaching a level used to be announced and then read by nothing at all — the
+/// number went up, the table was told, and not one thing about the character
+/// changed. A knack is what a level buys: one, chosen from three, and the three
+/// are drawn from what she has actually been doing rather than from a menu
+/// everybody sees.
+model CharacterKnack {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// Matches a key in lib/game/knacks.ts.
+  key String
+  /// Which level bought it, so a sheet can tell the story of her growing up.
+  chosenAtLevel Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([characterId, key])
+  @@index([characterId])
 }
 
 /// A kind of thing this adventurer keeps trying.

@@ -48,6 +48,14 @@ export type CheckRequest = {
    * practised is the kind of thing, not this particular attempt at it.
    */
   practice?: string;
+  /**
+   * What her knacks add to this kind of check.
+   *
+   * Separate from the skill bonus so the roll can be explained honestly: "+1
+   * because you are Sure-footed" is a different sentence from "+2 because you
+   * are good at climbing", and a child deserves to be told which is which.
+   */
+  knackBonus?: number;
 };
 
 /**
@@ -106,7 +114,7 @@ export function resolveCheck(
   roller: () => number = rollD20,
   move?: MoveEffect,
 ): CheckResult {
-  const modifier = statModifier(stats[request.stat]);
+  const modifier = statModifier(stats[request.stat]) + (request.knackBonus ?? 0);
   const skillBonus = request.skillRank ?? 0;
   const target = DIFFICULTIES[request.difficulty];
 

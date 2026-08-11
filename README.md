@@ -69,6 +69,7 @@ carrying it mean anything.
 | ✅ | **M10** Skills learned from what she actually kept trying |
 | ✅ | **M10** One thing each calling alone can do |
 | ✅ | **M10** Things found that she has not grown into yet |
+| ✅ | **M10** Knacks — what reaching a level finally buys |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -465,6 +466,47 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### Knacks
+
+What reaching a level finally buys. Levelling was announced and then read by
+nothing at all — the number went up, the table was told, and not one thing about
+the character changed. Now a level offers **three, and she takes one**.
+
+Two rules shape all of it.
+
+**The three are earned, not browsed.** They are drawn from what this character
+actually did — the stats she keeps rolling, the things she keeps trying — so a
+girl who has been climbing is offered *Sure-footed* and one who has been talking
+her way past people is offered *A Warm Word*. Two girls who levelled on the same
+evening see different lists, and nobody has to read a wiki to find the good
+build. Two of the three are the best matches; the third is a wildcard, so nobody
+gets funnelled into the same character every time.
+
+**None of them is a trap.** Every knack is worth having and none is strictly
+better than another, so a seven-year-old cannot make a choice here that she
+regrets four sessions later.
+
+The offer is a pure function of her own state, so it is the same three on every
+page load. An offer that reshuffled on refresh would turn a decision into a slot
+machine. The server recomputes it before granting anything, so a hand-posted form
+naming something she was never offered gets nothing.
+
+A knack does one of four things, and wherever possible it is a thing the *player*
+gets to do rather than a number that quietly goes up:
+
+| | |
+|---|---|
+| **Sure-footed** | Might comes easier — a real +1 in the dice, not a description |
+| **Good Listener** | Once a chapter, ask the storyteller one true thing about anybody in the scene. It has to answer |
+| **Deep Pockets** | One more thing in the pack before every adventure |
+| **Fast Learner** | Room on the sheet for two more of the things she has learned |
+| **Friend to All** | Nothing that meets her starts out hostile. It might still be frightened |
+| **Stubborn** | When something goes wrong for her, it goes a little less wrong than it might have |
+
+The storyteller is told only about the ones the story itself has to honour. A
+knack that is purely a number has already been applied by the dice, and repeating
+it in the prompt would just crowd it.
 
 ### Growing up
 
@@ -1111,6 +1153,7 @@ lib/
     journey.ts      Folding scene locations into the route the party walked
     loadout.ts      What each adventurer is offered to pack, and how much
     practice.ts     Getting good at what you keep doing, and what you cannot use yet
+    knacks.ts       What a level buys, and how the three offered are chosen
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -1134,6 +1177,7 @@ tests/
   journey.test.ts   Unit tests — one stop per place, and going back again
   loadout.test.ts   Unit tests — what is offered, and what may be packed
   growth.test.ts    Unit tests — the curve, the ledger, and locked things
+  knacks.test.ts    Unit tests — the offer is stable, earned, and really rolls
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
@@ -1145,6 +1189,7 @@ tests/
   quests.e2e.mts      Finishing a quest, spending the item, handing things over
   loadout.e2e.mts     Packing, unpacking, and a brought thing finishing a quest
   growth.e2e.mts      Spending a point, learning a skill, and undoing both
+  knacks.e2e.mts      Three offered, one taken, and one refused for being unearned
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves

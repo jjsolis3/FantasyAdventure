@@ -83,10 +83,12 @@ export type SkillRow = { name: string; rank: number };
 export function readyToLearn(
   practice: PracticeRow,
   skills: SkillRow[],
+  /** How many she may carry. Wider than the default for a Fast Learner. */
+  room: number = MAX_SKILLS,
 ): boolean {
   if (practice.learnedAtTurn !== null) return false;
   if (practice.attempts < ATTEMPTS_TO_LEARN) return false;
-  if (skills.length >= MAX_SKILLS) return false;
+  if (skills.length >= room) return false;
   return !coveredBy(practice.key, skills);
 }
 
