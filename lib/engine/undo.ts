@@ -46,8 +46,37 @@ export type SnapshotState = {
   characters: { id: string; xp: number; level: number }[];
   skills: { id: string; xp: number; rank: number }[];
   relationships: { id: string; bondXp: number; bondLevel: number }[];
-  /** Items that existed, with their counts. Anything newer was picked up. */
-  inventory: { id: string; quantity: number }[];
+  /**
+   * Items that existed, in full. Anything newer was picked up this turn.
+   *
+   * Whole rows rather than counts, because a turn can now *remove* an item:
+   * finishing a quest spends what it took. Restoring by id alone would try to
+   * update a row that is no longer there.
+   */
+  inventory: {
+    id: string;
+    characterId: string;
+    name: string;
+    description: string | null;
+    quantity: number;
+    foundInCampaignId: string | null;
+  }[];
+  /** Quest and objective state. Anything newer was opened this turn. */
+  quests: {
+    id: string;
+    status: string;
+    completedAtTurn: number | null;
+    completedAt: string | null;
+  }[];
+  objectives: {
+    id: string;
+    doneAtTurn: number | null;
+    itemName: string | null;
+    foundByCharacterId: string | null;
+    consumed: boolean;
+  }[];
+  /** Keepsakes that existed. Anything newer was made by spending an item. */
+  keepsakeIds: string[];
   /** Memories that existed. Anything newer was learned this turn. */
   memories: { id: string; content: string; importance: number; lastSeenAt: number }[];
   familyMoveUseIds: string[];
@@ -63,8 +92,19 @@ export async function captureSnapshot(
   campaignId: string,
   characterIds: string[],
 ): Promise<SnapshotState> {
-  const [campaign, scenes, characters, skills, relationships, inventory, memories, moveUses] =
-    await Promise.all([
+  const [
+    campaign,
+    scenes,
+    characters,
+    skills,
+    relationships,
+    inventory,
+    memories,
+    moveUses,
+    quests,
+    objectives,
+    keepsakes,
+  ] = await Promise.all([
       tx.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
       tx.scene.findMany({ where: { campaignId }, orderBy: { index: "asc" } }),
       tx.character.findMany({ where: { id: { in: characterIds } } }),
@@ -78,6 +118,12 @@ export async function captureSnapshot(
       tx.inventoryItem.findMany({ where: { characterId: { in: characterIds } } }),
       tx.memory.findMany({ where: { campaignId } }),
       tx.familyMoveUse.findMany({ where: { campaignId }, select: { id: true } }),
+      tx.quest.findMany({ where: { campaignId } }),
+      tx.questObjective.findMany({ where: { quest: { campaignId } } }),
+      tx.keepsake.findMany({
+        where: { characterId: { in: characterIds } },
+        select: { id: true },
+      }),
     ]);
 
   return {
@@ -103,7 +149,28 @@ export async function captureSnapshot(
       bondXp: r.bondXp,
       bondLevel: r.bondLevel,
     })),
-    inventory: inventory.map((i) => ({ id: i.id, quantity: i.quantity })),
+    inventory: inventory.map((i) => ({
+      id: i.id,
+      characterId: i.characterId,
+      name: i.name,
+      description: i.description,
+      quantity: i.quantity,
+      foundInCampaignId: i.foundInCampaignId,
+    })),
+    quests: quests.map((q) => ({
+      id: q.id,
+      status: q.status,
+      completedAtTurn: q.completedAtTurn,
+      completedAt: q.completedAt?.toISOString() ?? null,
+    })),
+    objectives: objectives.map((o) => ({
+      id: o.id,
+      doneAtTurn: o.doneAtTurn,
+      itemName: o.itemName,
+      foundByCharacterId: o.foundByCharacterId,
+      consumed: o.consumed,
+    })),
+    keepsakeIds: keepsakes.map((k) => k.id),
     memories: memories.map((m) => ({
       id: m.id,
       content: m.content,
@@ -211,18 +278,59 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
       });
     }
 
-    // Items picked up this turn go; items topped up go back to their old count.
+    // Items picked up this turn go; items topped up go back to their old count;
+    // items *spent* on finishing a quest come back, which is why this upserts
+    // rather than updates.
     const characterIds = campaign.party.map((member) => member.characterId);
     const keptItemIds = state.inventory.map((item) => item.id);
     await tx.inventoryItem.deleteMany({
       where: { characterId: { in: characterIds }, id: { notIn: keptItemIds } },
     });
     for (const item of state.inventory) {
-      await tx.inventoryItem.update({
+      await tx.inventoryItem.upsert({
         where: { id: item.id },
-        data: { quantity: item.quantity },
+        create: {
+          id: item.id,
+          characterId: item.characterId,
+          name: item.name,
+          description: item.description,
+          quantity: item.quantity,
+          foundInCampaignId: item.foundInCampaignId,
+        },
+        update: { quantity: item.quantity },
       });
     }
+
+    // Quests opened this turn go; the rest go back to how they stood, which
+    // un-finishes anything this turn completed and un-ticks what it found.
+    const keptQuestIds = state.quests.map((quest) => quest.id);
+    await tx.quest.deleteMany({ where: { campaignId, id: { notIn: keptQuestIds } } });
+    for (const quest of state.quests) {
+      await tx.quest.update({
+        where: { id: quest.id },
+        data: {
+          status: quest.status as "ACTIVE" | "COMPLETE" | "ABANDONED",
+          completedAtTurn: quest.completedAtTurn,
+          completedAt: quest.completedAt ? new Date(quest.completedAt) : null,
+        },
+      });
+    }
+    for (const objective of state.objectives) {
+      await tx.questObjective.update({
+        where: { id: objective.id },
+        data: {
+          doneAtTurn: objective.doneAtTurn,
+          itemName: objective.itemName,
+          foundByCharacterId: objective.foundByCharacterId,
+          consumed: objective.consumed,
+        },
+      });
+    }
+
+    // And the keepsakes the spending made.
+    await tx.keepsake.deleteMany({
+      where: { characterId: { in: characterIds }, id: { notIn: state.keepsakeIds } },
+    });
 
     // Same shape for memories: forget what was learned, restore what changed.
     const keptMemoryIds = state.memories.map((memory) => memory.id);

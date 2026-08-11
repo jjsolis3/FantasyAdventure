@@ -10,7 +10,8 @@ import type { AvailableMove } from "@/components/play/family-move-picker";
 import { kindFromPerspective, movesUnlockedAt } from "@/lib/game/rules";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import { currentRound } from "@/lib/game/rounds";
-import { reconcileFinds } from "@/lib/game/finds";
+import { questBoard } from "@/lib/game/quests";
+import { QuestList, QuestSummaryLink } from "@/components/campaign/quest-list";
 import { resolveImageConfig } from "@/lib/ai/settings";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { ScenePicture } from "@/components/play/scene-picture";
@@ -160,18 +161,21 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     portraitVersion: member.character.portrait?.version ?? null,
   }));
 
-  // A count rather than the list: what is missing belongs on its own page, but
-  // "there are two things you have not found" is worth knowing mid-scene.
-  const stillToFind = reconcileFinds(
-    campaign.storyline.acts
-      .filter((act) => act.index <= campaign.currentActIndex)
-      .flatMap((act) => act.seeks.map((name) => ({ name, actIndex: act.index, actTitle: act.title }))),
-    campaign.party.flatMap((member) =>
-      member.character.inventory
+  const quests = await questBoard(db, campaign.id);
+  const openQuests = quests.filter((quest) => quest.status === "ACTIVE");
+
+  // Everything the party is carrying from this adventure, for the tray. Kept
+  // here rather than a page away: "who has the key?" is a question that comes
+  // up in the middle of deciding what to do, and answering it should not mean
+  // leaving the table.
+  const pockets = campaign.party
+    .map((member) => ({
+      name: member.character.name,
+      items: member.character.inventory
         .filter((item) => item.foundInCampaignId === campaign.id)
-        .map((item) => ({ name: item.name, holder: member.character.name })),
-    ),
-  ).filter((item) => item.foundBy === null).length;
+        .map((item) => (item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name)),
+    }))
+    .filter((entry) => entry.items.length > 0);
 
   const recap = campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary);
 
@@ -198,13 +202,45 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
             ? "everyone on their own device"
             : "one shared screen"}
           {" · "}
-          <Link href={`/campaigns/${campaign.id}/finds`} className="underline hover:text-hearth-300">
-            {stillToFind > 0
-              ? `${stillToFind} ${stillToFind === 1 ? "thing" : "things"} still to find`
-              : "what you have found"}
-          </Link>
+          <QuestSummaryLink campaignId={campaign.id} quests={quests} />
         </p>
       </header>
+
+      {/* The quest board, foldable, at the table rather than a page away. Shut
+          by default so it never competes with the story, and remembered open
+          by the browser for a table that wants it up all evening. */}
+      {openQuests.length > 0 || pockets.length > 0 ? (
+        <details className="print-hide mb-6 rounded-xl border border-hearth-800/60 bg-hearth-900/20">
+          <summary className="cursor-pointer px-4 py-3 text-sm text-hearth-300 hover:text-hearth-200">
+            Quests and pockets
+          </summary>
+          <div className="space-y-5 px-4 pt-1 pb-4">
+            {openQuests.length > 0 ? <QuestList quests={openQuests} compact /> : null}
+
+            {pockets.length > 0 ? (
+              <div>
+                <h3 className="mb-2 text-xs tracking-wide text-hearth-400 uppercase">
+                  Who is carrying what
+                </h3>
+                <ul className="space-y-1">
+                  {pockets.map((entry) => (
+                    <li key={entry.name} className="text-sm text-hearth-200/80">
+                      <span className="text-hearth-100">{entry.name}</span> — {entry.items.join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <Link
+              href={`/campaigns/${campaign.id}/finds`}
+              className="inline-block text-sm text-hearth-300 underline hover:text-hearth-200"
+            >
+              The whole board, and handing things over →
+            </Link>
+          </div>
+        </details>
+      ) : null}
 
       {/* Party status bar — sticky so a ten-year-old can always see their stats,
           and offset by the height of the site header, which is sticky too. */}

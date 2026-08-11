@@ -225,6 +225,17 @@ export function skillProgress(xp: number): { rank: number; into: number; needed:
  */
 export const SKILL_XP_PER_USE = 1;
 
+/**
+ * What finishing a quest is worth, to everybody who was there.
+ *
+ * Shared rather than given to whoever happened to be holding the thing at the
+ * end: a chapter is finished by the party, and paying only the finder would
+ * turn a cooperative game into a race to grab. A good roll is worth 2, so a
+ * chapter is worth roughly four of them and a side quest half that — enough to
+ * feel like an event, not enough to make the dice pointless.
+ */
+export const QUEST_XP = { MAIN: 8, SIDE: 4 } as const;
+
 // ---- Family Moves ----------------------------------------------------------
 
 /**

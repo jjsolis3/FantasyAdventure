@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { memberCampaignFilter } from "@/lib/game/access";
 import { STATS, STAT_INFO, RELATIONSHIP_LABELS, kindFromPerspective } from "@/lib/game/rules";
 import { PrintButton } from "@/components/campaign/print-button";
+import { questBoard } from "@/lib/game/quests";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,8 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
     },
   });
   if (!campaign) notFound();
+
+  const quests = await questBoard(db, campaign.id);
 
   const names = new Map(campaign.party.map((member) => [member.characterId, member.character.name]));
   const inParty = new Set(campaign.party.map((member) => member.characterId));
@@ -176,6 +179,49 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
           })}
         </div>
       </section>
+
+      {/* ---- What they set out to do ---------------------------------------- */}
+      {quests.length > 0 ? (
+        <section className="mb-12">
+          <h2 className="font-display mb-4 border-b border-hearth-800/60 pb-2 text-2xl text-hearth-100">
+            What they set out to do
+          </h2>
+          <ul className="space-y-3">
+            {quests.map((quest) => (
+              <li key={quest.id} className="journal-entry">
+                <p className="text-hearth-100">
+                  {quest.title}
+                  <span className="text-hearth-400">
+                    {" · "}
+                    {quest.status === "COMPLETE"
+                      ? "finished"
+                      : quest.status === "ABANDONED"
+                        ? "left behind"
+                        : "still open"}
+                  </span>
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {quest.objectives.map((objective) => (
+                    <li key={objective.id} className="text-sm text-hearth-200/70">
+                      {objective.done ? "✓" : "○"} {objective.text}
+                      {objective.done && objective.foundByName ? (
+                        <span className="text-hearth-400">
+                          {" — "}
+                          {objective.foundByName} found{" "}
+                          {objective.itemName && objective.itemName !== objective.text
+                            ? objective.itemName
+                            : "it"}
+                          {objective.consumed ? ", and gave it up to finish this" : ""}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {/* ---- The story ----------------------------------------------------- */}
       {told.length === 0 ? (
