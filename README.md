@@ -62,6 +62,8 @@ carrying it mean anything.
 | ✅ | **M10** Spending what a quest took, and keeping it as a keepsake |
 | ✅ | **M10** Handing an item to somebody else in the party |
 | ✅ | **M10** An aim of her own each chapter, private until she finishes it |
+| ✅ | **M10** The shelf — everything an adventurer has given up, across every story |
+| ✅ | **M10** Where they went — the route a family walked, drawn in the journal |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -458,6 +460,29 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### Where they went, and what they gave up
+
+**The route.** Every scene has always recorded a location and nothing ever
+showed it back, so a family who spent four evenings crossing a valley had no way
+to see they had crossed anything. The journal now draws the places in the order
+they were found: consecutive scenes in one place are a single stop, coming back
+somewhere later is a new stop marked *back again*, and a scene the storyteller
+never named a place for stays wherever the party already was — they did not
+teleport. Matching is forgiving about the storyteller's own inconsistency, since
+the same field returns as "the barley field", "The Barley Field" and "barley
+field" across three scenes.
+
+Deliberately a route rather than a map. There are no coordinates anywhere in the
+data, and inventing some would produce a confident little cartography that
+contradicts the story — a village drawn east of a river the narration put it west
+of. A line of places claims only what is actually known.
+
+**The shelf.** An adventurer's own page gathers everything she has ever given up
+to finish a quest, grouped by the adventure it happened on, across every story
+she has been in. Keepsakes outlive the adventure that made them: delete the
+campaign and they gather under "an adventure since forgotten" rather than
+vanishing, because the thing still happened to her.
 
 ### Hearing it, and seeing it
 
@@ -1001,6 +1026,7 @@ lib/
     campaign-actions.ts  Server actions for campaigns and party
     finds.ts        Matching what a chapter asked for against what is carried
     quests.ts       Quests, ticking them off, and spending what it took
+    journey.ts      Folding scene locations into the route the party walked
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -1021,6 +1047,7 @@ tests/
   images.test.ts    Unit tests — the prompt a picture is asked for with
   finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
   quests.test.ts    Unit tests — resolving objectives, and what finishing says
+  journey.test.ts   Unit tests — one stop per place, and going back again
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow

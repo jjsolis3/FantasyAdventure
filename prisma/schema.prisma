@@ -221,11 +221,18 @@ model Keepsake {
   note String
 
   /// Which adventure it was spent on, so a sheet can say where.
+  ///
+  /// Nulled rather than deleted if the adventure ever is: giving something up
+  /// happened to her whether or not the record of the story survives, and a
+  /// shelf that quietly loses a row is worse than one that says "an adventure
+  /// since forgotten".
   campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([characterId])
+  @@index([campaignId])
 }
 
 /// How a quest came to exist.
@@ -474,6 +481,7 @@ model Campaign {
   scenes Scene[]
   familyMoveUses FamilyMoveUse[]
   quests   Quest[]
+  keepsakes Keepsake[]
   memories Memory[]
   aiCalls  AiCall[]
   rounds   TurnRound[]
