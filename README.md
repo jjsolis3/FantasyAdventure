@@ -65,6 +65,10 @@ carrying it mean anything.
 | ✅ | **M10** The shelf — everything an adventurer has given up, across every story |
 | ✅ | **M10** Where they went — the route a family walked, drawn in the journal |
 | ✅ | **M10** What are you bringing? — packing before you set out |
+| ✅ | **M10** Stats that grow — one point every ten experience, hers to place |
+| ✅ | **M10** Skills learned from what she actually kept trying |
+| ✅ | **M10** One thing each calling alone can do |
+| ✅ | **M10** Things found that she has not grown into yet |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -461,6 +465,51 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### Growing up
+
+A character used to be finished the moment she was built. Twelve points spent
+once, and those four numbers were identical at level 9 — nothing on the sheet
+moved except a skill rank, so a girl could play six adventures and her adventurer
+would be the same adventurer. Levelling up was announced and then consulted by
+nothing at all.
+
+**Stats grow now.** One point every ten experience, and she chooses where it
+goes. The sheet fills from twenty at the outset to forty-eight at the far end of
+a long career. Points are one-way — refunds would turn a sheet into a puzzle to
+optimise between chapters — and what she has spent is read off the stats
+themselves rather than stored, so there is no counter to drift out of step.
+
+The modifier curve flattens above five: two points buy one. Left as a straight
+line a maxed stat would be +9 and a HARD check would land on a roll of 6, at
+which point the storyteller may as well not ask. With the curve she is +6 and
+still needs a 10, so the moment before the die stops is still a moment. Nothing
+below six changes, so no adventurer who already exists is worth less than she was.
+
+**Skills are learned from what she keeps trying.** Skill experience used to be
+awarded only when a check happened to name a skill she already had — so a girl
+who said *"I climb the drainpipe"*, with nothing on her sheet about climbing,
+rolled, earned experience toward her level, and got nothing whatsoever that would
+make climbing easier next time. The attempt was forgotten the moment the dice
+landed.
+
+Every check is now filed under the *kind* of thing it was, which the storyteller
+names in a word, and four tries at the same kind of thing makes it a real skill.
+Counted whether or not she succeeded: a child who has failed to pick a lock four
+times has learned a great deal about locks.
+
+**Each calling can do one thing nobody else can.** Archetype used to be
+decoration — it suggested three skills in the builder and granted nothing, so two
+Guardians and a Trickster played identically once the dice were rolling. A
+Guardian can *Step In* and take a roll somebody else just failed; a Scholar can
+ask the storyteller one true thing about anything in the scene, and it must
+answer. The storyteller is told about them, so a Trickster's "there is always
+another way" only means something if the scene has one.
+
+**Some things found are beyond her for now.** A silver flute she cannot play, a
+book she cannot read — it sits in her pack, named, saying exactly what would
+change that. This is the alternative to a gear shop: a far better reason to want
+to grow than a price tag, costing nothing and taking nothing from anybody else.
 
 ### What are you bringing?
 
@@ -1061,6 +1110,7 @@ lib/
     quests.ts       Quests, ticking them off, and spending what it took
     journey.ts      Folding scene locations into the route the party walked
     loadout.ts      What each adventurer is offered to pack, and how much
+    practice.ts     Getting good at what you keep doing, and what you cannot use yet
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -1083,6 +1133,7 @@ tests/
   quests.test.ts    Unit tests — resolving objectives, and what finishing says
   journey.test.ts   Unit tests — one stop per place, and going back again
   loadout.test.ts   Unit tests — what is offered, and what may be packed
+  growth.test.ts    Unit tests — the curve, the ledger, and locked things
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
@@ -1093,6 +1144,7 @@ tests/
   invites.e2e.mts     Asking somebody else's adventurer, and waiting for yes
   quests.e2e.mts      Finishing a quest, spending the item, handing things over
   loadout.e2e.mts     Packing, unpacking, and a brought thing finishing a quest
+  growth.e2e.mts      Spending a point, learning a skill, and undoing both
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves

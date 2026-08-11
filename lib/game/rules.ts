@@ -19,8 +19,54 @@ export const STAT_INFO: Record<StatKey, { label: string; blurb: string }> = {
 // across four stats averages 3 — competent everywhere, exceptional nowhere,
 // unless you choose otherwise.
 export const STAT_MIN = 1;
+/** The highest a stat may be *built* at. Growth goes further; see STAT_CEILING. */
 export const STAT_MAX = 5;
 export const STAT_BUDGET = 12;
+
+/**
+ * The highest a stat can ever reach, through play.
+ *
+ * A character used to be finished the moment she was built: twelve points spent
+ * once, and those four numbers were identical at level 9. Nothing on the sheet
+ * moved except a skill rank, which meant a girl could play six adventures and
+ * her adventurer would be the same adventurer. That is how a table stops
+ * wanting to play.
+ *
+ * So the sheet now fills up — from twenty at the outset to forty-eight at the
+ * far end of a long career, which takes hundreds of experience to reach and is
+ * meant to.
+ */
+export const STAT_CEILING = 12;
+
+/**
+ * How much experience buys the next point.
+ *
+ * One sphere lights up every ten, which is roughly five good rolls or one
+ * chapter finished — often enough to feel like it is happening, rarely enough
+ * that it stays an event.
+ */
+export const XP_PER_STAT_POINT = 10;
+
+/** How many points of growth this much experience has earned, in total. */
+export function statPointsEarned(xp: number): number {
+  return Math.floor(xp / XP_PER_STAT_POINT);
+}
+
+/**
+ * How many she has left to spend.
+ *
+ * Derived rather than stored: what she has spent is simply how far her stats
+ * have risen above the budget she was built with. No column to drift out of
+ * step with the stats themselves, and no migration to invent one.
+ */
+export function statPointsUnspent(stats: StatBlock, xp: number): number {
+  return Math.max(0, statPointsEarned(xp) - (totalSpent(stats) - STAT_BUDGET));
+}
+
+/** Whether one more point may go into this stat. */
+export function canRaise(stats: StatBlock, xp: number, stat: StatKey): boolean {
+  return statPointsUnspent(stats, xp) > 0 && stats[stat] < STAT_CEILING;
+}
 
 export const SKILLS_PER_CHARACTER = 2;
 
@@ -68,9 +114,60 @@ export function validateStats(stats: StatBlock): StatValidation {
   return { ok: true };
 }
 
-/** The modifier a stat contributes to a d20 check. */
+/**
+ * Enforced when an existing adventurer is saved, rather than built.
+ *
+ * The build rule — exactly twelve points, none above five — is right for making
+ * a character and wrong for one who has been playing. She has earned points
+ * since, and spent them, so her sheet legitimately adds up to more than twelve
+ * and may hold a six. Validating an edit against the build budget would tell a
+ * girl her own grown adventurer is illegal and refuse to save her.
+ *
+ * So this checks what she is actually allowed: nothing above the ceiling, and
+ * no more spent in total than she has earned.
+ */
+export function validateGrownStats(stats: StatBlock, xp: number): StatValidation {
+  for (const stat of STATS) {
+    const value = stats[stat];
+    if (!Number.isInteger(value)) {
+      return { ok: false, reason: `${STAT_INFO[stat].label} must be a whole number.` };
+    }
+    if (value < STAT_MIN || value > STAT_CEILING) {
+      return {
+        ok: false,
+        reason: `${STAT_INFO[stat].label} must be between ${STAT_MIN} and ${STAT_CEILING}.`,
+      };
+    }
+  }
+
+  const allowed = STAT_BUDGET + statPointsEarned(xp);
+  const spent = totalSpent(stats);
+  if (spent > allowed) {
+    return {
+      ok: false,
+      reason: `That spends ${spent} points, which is ${spent - allowed} too many.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * The modifier a stat contributes to a d20 check.
+ *
+ * Straight up to 5, then flattening: above that, two points buy one. The
+ * flattening is what keeps the dice worth rolling. Left as a straight line, a
+ * maxed stat would be +9, and a HARD check would land on a roll of 6 — at which
+ * point the storyteller may as well not ask. With the curve the same character
+ * is +6 and still needs a 10, so the moment before the die stops is still a
+ * moment.
+ *
+ * Nothing below 6 changes, so no adventurer who already exists is worth less
+ * than she was yesterday.
+ */
 export function statModifier(value: number): number {
-  return value - 3;
+  if (value <= 5) return value - 3;
+  return 2 + Math.ceil((value - 5) / 2);
 }
 
 // ---- Relationships ---------------------------------------------------------

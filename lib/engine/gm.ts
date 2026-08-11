@@ -181,6 +181,10 @@ export async function runTurn(
       intent: requested.intent,
       skillRank: skill?.rank,
       skillName: skill?.name,
+      // Falls back to the intent when the storyteller does not name a practice.
+      // The first word of "climbing the drainpipe to reach the window" is still
+      // the right thing to file it under.
+      practice: requested.practice?.trim() || requested.intent,
     };
 
     // The move applies to the one check it was aimed at, and only if that

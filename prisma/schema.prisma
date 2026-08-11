@@ -171,6 +171,7 @@ model Character {
   level Int @default(1)
 
   skills        CharacterSkill[]
+  practices     Practice[]
   inventory     InventoryItem[]
   keepsakes     Keepsake[]
   questFinds    QuestObjective[]
@@ -187,6 +188,38 @@ model Character {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+/// A kind of thing this adventurer keeps trying.
+///
+/// Skill experience used to be awarded only when a check happened to name a
+/// skill she already had. So a girl who said "I climb the drainpipe" — with
+/// nothing on her sheet about climbing — rolled, earned experience toward her
+/// level, and got nothing whatsoever that would make climbing easier next time.
+/// The attempt was forgotten the moment the dice landed, which is the opposite
+/// of how anybody learns anything.
+///
+/// This is the ledger of what she has actually been doing. Enough attempts at
+/// the same kind of thing and it becomes a skill she really has.
+model Practice {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// Normalised, for counting: "climb", "persuade".
+  key   String
+  /// As the storyteller named it, for the announcement: "climbing".
+  label String
+
+  attempts Int @default(0)
+  /// Set once this turned into a real skill, so it stops being counted twice.
+  learnedAtTurn Int?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([characterId, key])
+  @@index([characterId])
 }
 
 model CharacterSkill {
@@ -361,6 +394,19 @@ model InventoryItem {
 
   /// Which adventure it came from, so a journal can say where.
   foundInCampaignId String?
+
+  /// What she needs before this is any use to her.
+  ///
+  /// The alternative to a gear shop. A thing found in the story can be beyond
+  /// her for now — a silver flute she cannot play, a book she cannot read — and
+  /// that is a far better reason to want to grow than a price tag. It sits in
+  /// her pack, named and visible, until she has grown into it.
+  ///
+  /// Null on almost everything. Most objects are just objects.
+  requiresSkill String?
+  requiresRank  Int?
+  /// Or a plain level, for things that are simply beyond a beginner.
+  requiresLevel Int?
 
   /// True when it was packed before setting out rather than found on the way.
   ///

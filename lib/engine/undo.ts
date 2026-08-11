@@ -44,7 +44,14 @@ export type SnapshotState = {
     closedAt: string | null;
   }[];
   characters: { id: string; xp: number; level: number }[];
+  /**
+   * Skills as they stood. Anything newer was *learned* this turn, which is now
+   * possible — enough practice at something turns into a skill, and taking the
+   * turn back has to take that with it.
+   */
   skills: { id: string; xp: number; rank: number }[];
+  /** The practice ledger, so counting starts again from where it was. */
+  practices: { id: string; attempts: number; learnedAtTurn: number | null }[];
   relationships: { id: string; bondXp: number; bondLevel: number }[];
   /**
    * Items that existed, in full. Anything newer was picked up this turn.
@@ -97,6 +104,7 @@ export async function captureSnapshot(
     scenes,
     characters,
     skills,
+    practices,
     relationships,
     inventory,
     memories,
@@ -109,6 +117,7 @@ export async function captureSnapshot(
       tx.scene.findMany({ where: { campaignId }, orderBy: { index: "asc" } }),
       tx.character.findMany({ where: { id: { in: characterIds } } }),
       tx.characterSkill.findMany({ where: { characterId: { in: characterIds } } }),
+      tx.practice.findMany({ where: { characterId: { in: characterIds } } }),
       tx.relationship.findMany({
         where: {
           characterAId: { in: characterIds },
@@ -144,6 +153,11 @@ export async function captureSnapshot(
     })),
     characters: characters.map((c) => ({ id: c.id, xp: c.xp, level: c.level })),
     skills: skills.map((s) => ({ id: s.id, xp: s.xp, rank: s.rank })),
+    practices: practices.map((p) => ({
+      id: p.id,
+      attempts: p.attempts,
+      learnedAtTurn: p.learnedAtTurn,
+    })),
     relationships: relationships.map((r) => ({
       id: r.id,
       bondXp: r.bondXp,
@@ -264,10 +278,34 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
       });
     }
 
+    // A skill learned this turn goes away with it; the rest go back to the
+    // ranks they held. Delete before update, so the ids left to update are all
+    // ones that still exist.
+    const characterIdsForSkills = campaign.party.map((member) => member.characterId);
+    await tx.characterSkill.deleteMany({
+      where: {
+        characterId: { in: characterIdsForSkills },
+        id: { notIn: state.skills.map((skill) => skill.id) },
+      },
+    });
     for (const skill of state.skills) {
       await tx.characterSkill.update({
         where: { id: skill.id },
         data: { xp: skill.xp, rank: skill.rank },
+      });
+    }
+
+    // And the ledger that would otherwise still say she had four goes at it.
+    await tx.practice.deleteMany({
+      where: {
+        characterId: { in: characterIdsForSkills },
+        id: { notIn: state.practices.map((practice) => practice.id) },
+      },
+    });
+    for (const practice of state.practices) {
+      await tx.practice.update({
+        where: { id: practice.id },
+        data: { attempts: practice.attempts, learnedAtTurn: practice.learnedAtTurn },
       });
     }
 

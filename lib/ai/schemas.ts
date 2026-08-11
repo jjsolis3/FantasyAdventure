@@ -23,6 +23,15 @@ export const adjudicationSchema = z.object({
         difficulty: difficultySchema,
         /** What they are attempting, phrased for narration. */
         intent: z.string().min(1).max(300),
+        /**
+         * The *kind* of thing being attempted, in a word: "climbing",
+         * "persuading", "sneaking".
+         *
+         * This is what makes practice countable. The intent is a sentence about
+         * this particular moment and no two are ever the same; the practice is
+         * the thing she keeps doing, and four of them make a skill.
+         */
+        practice: z.string().max(30).nullish(),
       }),
     )
     .max(8)
@@ -79,6 +88,15 @@ export const extractionSchema = z.object({
         character: z.string().min(1),
         name: z.string().min(1).max(60),
         description: z.string().max(200).nullish(),
+        /**
+         * What she would need before this is any use to her.
+         *
+         * The alternative to a gear shop: a silver flute she cannot play yet is
+         * a better reason to want to grow than a price tag. Null on almost
+         * everything — most objects are just objects.
+         */
+        requiresSkill: z.string().max(40).nullish(),
+        requiresRank: z.coerce.number().int().min(1).max(4).nullish(),
       }),
     )
     .max(6)

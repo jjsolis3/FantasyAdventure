@@ -133,11 +133,16 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 
 Reply with ONLY this JSON, no other text:
 {
-  "checks": [{"character": "<name>", "stat": "<one of ${STATS.join("|")}>", "difficulty": "EASY|NORMAL|HARD", "intent": "<what they are attempting>"}],
+  "checks": [{"character": "<name>", "stat": "<one of ${STATS.join("|")}>", "difficulty": "EASY|NORMAL|HARD", "intent": "<what they are attempting>", "practice": "<one word for the kind of thing>"}],
   "automatic": [{"character": "<name>", "effect": "<what simply happens>"}]
 }
 
-Every character must appear in exactly one of the two lists.`;
+Every character must appear in exactly one of the two lists.
+
+"practice" is the KIND of thing being attempted, not this particular attempt:
+"climbing", "persuading", "sneaking", "listening", "mending", "swimming". One
+word, a plain everyday one, and the SAME word every time that kind of thing
+comes up — it is how a character slowly gets good at what she keeps doing.`;
 }
 
 /** Stage 3 — narrate, given the dice results. */
@@ -201,7 +206,7 @@ Reply with ONLY this JSON, no other text:
   "location": "<where they are now, or null if unchanged>",
   "memories": [{"kind": "FACT|NPC|PLACE|PLOT_THREAD", "key": "<short handle>", "content": "<one sentence>", "importance": 1-5}],
   "bondMoments": [{"from": "<character>", "to": "<character>", "why": "<what they did for them>"}],
-  "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>"}],
+  "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>", "requiresSkill": null, "requiresRank": null}],
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "actComplete": false,
@@ -219,6 +224,10 @@ Rules:
 - sceneComplete is true only if the party has moved somewhere new or time has jumped.
 - itemsGained is ONLY for objects a character is now carrying. Not scenery, not
   things they merely looked at.
+- requiresSkill is for the rare object somebody is not ready for — a flute they
+  cannot play, a book they cannot read. Name a skill and a rank from 1 to 4.
+  They still carry it; they just cannot use it yet, and that gives them
+  something to grow toward. Leave both null for almost everything.
 - deedsDone may ONLY contain things from the list above, and only when the
   passage shows them actually finished. Do not invent entries. Usually [].
 - questsOpened is for a NEW errand the passage introduced that the party could

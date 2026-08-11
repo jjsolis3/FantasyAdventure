@@ -106,7 +106,8 @@ const server = createServer((request, response) => {
       // Fenced, with a preamble — exactly what a 7B model tends to emit.
       content =
         'Sure, here you go:\n```json\n{"checks":[{"character":"Mira","stat":"heart","difficulty":"NORMAL",' +
-        '"intent":"Speak with Animals to hum to the frightened creature"}],"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
+        '"intent":"Speak with Animals to hum to the frightened creature","practice":"humming"}],' +
+        '"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
     } else if (prompt.includes("extract what should be remembered")) {
       // Trailing comma, and a bond moment naming someone real.
       content =

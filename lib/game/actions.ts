@@ -11,6 +11,7 @@ import {
   RELATIONSHIP_KINDS,
   SKILLS_PER_CHARACTER,
   canonicalPair,
+  validateGrownStats,
   validateStats,
   type RelationshipKind,
   type StatBlock,
@@ -116,7 +117,10 @@ export async function updateCharacterAction(_prev: FormState, formData: FormData
   const { might, wits, heart, spark, gender, description, ...rest } = parsed.data;
   const stats: StatBlock = { might, wits, heart, spark };
 
-  const statCheck = validateStats(stats);
+  // Against what she has grown into, not what she was built with. An adventurer
+  // who has earned points and spent them adds up to more than the build budget,
+  // and checking an edit against that budget would call her own sheet illegal.
+  const statCheck = validateGrownStats(stats, existing.xp);
   if (!statCheck.ok) return { error: statCheck.reason };
 
   const skills = parseSkills(formData);

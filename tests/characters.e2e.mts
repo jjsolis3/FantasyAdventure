@@ -212,16 +212,32 @@ try {
 
   // ---- Illegal stat spreads are refused server-side -----------------------
   {
-    // The UI cannot produce this, so drive the action the way a crafted post would.
+    // The UI cannot produce this, so drive the action the way a crafted post
+    // would. The stat fields are React-controlled hidden inputs, so assigning
+    // .value is not enough — a re-render before submit puts the legal value
+    // back, which made this flaky depending on what else was on the page. So
+    // the managed inputs are stripped of their names, plain ones are appended
+    // in their place, and the form is submitted in the same tick.
     const before = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
     await page.goto(`${BASE}/characters/${mira!.id}`);
     await page.evaluate(() => {
+      const form = document.querySelector<HTMLInputElement>('input[name="characterId"]')?.closest("form");
+      if (!form) throw new Error("The edit form was not found.");
+
       for (const stat of ["might", "wits", "heart", "spark"]) {
-        const input = document.querySelector<HTMLInputElement>(`input[name="${stat}"]`);
-        if (input) input.value = "5";
+        for (const managed of form.querySelectorAll<HTMLInputElement>(`input[name="${stat}"]`)) {
+          managed.removeAttribute("name");
+        }
+        const crafted = document.createElement("input");
+        crafted.type = "hidden";
+        crafted.name = stat;
+        crafted.value = "5";
+        form.appendChild(crafted);
       }
+
+      form.requestSubmit();
     });
-    await submitAndSettle(page, 'button:has-text("Save changes")');
+    await page.waitForLoadState("networkidle").catch(() => {});
 
     check("an over-budget spread is rejected", /too many/i.test(await alertText(page)), await alertText(page));
     const after = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });

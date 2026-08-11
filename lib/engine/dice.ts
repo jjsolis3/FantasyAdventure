@@ -41,6 +41,13 @@ export type CheckRequest = {
   /** Rank of a relevant skill, if the character has one. */
   skillRank?: number;
   skillName?: string;
+  /**
+   * The kind of thing being attempted, in a word — "climbing", "persuading".
+   *
+   * Carried through the roll so the turn can file it afterwards. What gets
+   * practised is the kind of thing, not this particular attempt at it.
+   */
+  practice?: string;
 };
 
 /**

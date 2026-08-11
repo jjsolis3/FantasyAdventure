@@ -14,6 +14,7 @@
  */
 
 import { STAT_INFO, STATS, RELATIONSHIP_LABELS, type RelationshipKind } from "@/lib/game/rules";
+import { signatureFor } from "@/lib/game/character-options";
 
 /** Rough token estimate. Four characters per token is close enough for
  *  budgeting and costs nothing; being exact would need a tokenizer per model. */
@@ -101,9 +102,15 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
         : "";
     const description = member.description ? ` ${member.description}` : "";
 
+    // The one thing this calling alone can do. Named here so the storyteller
+    // leaves room for it — a Trickster's "there is always another way" only
+    // means anything if the scene has one.
+    const signature = signatureFor(member.archetype);
+    const own = signature ? ` Can always: ${signature.name} — ${signature.narrationHint}` : "";
+
     return (
       `- ${member.name} (${member.pronouns}), ${member.ageBand.toLowerCase()} ${member.race} ` +
-      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}`
+      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${own}`
     );
   });
 
