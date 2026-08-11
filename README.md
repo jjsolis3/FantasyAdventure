@@ -64,6 +64,7 @@ carrying it mean anything.
 | ✅ | **M10** An aim of her own each chapter, private until she finishes it |
 | ✅ | **M10** The shelf — everything an adventurer has given up, across every story |
 | ✅ | **M10** Where they went — the route a family walked, drawn in the journal |
+| ✅ | **M10** What are you bringing? — packing before you set out |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -460,6 +461,38 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### What are you bringing?
+
+The ritual before setting out, and the thing every child who has played anything
+on a screen already knows: you pick your kit, and then the game starts. Until
+now an adventure simply began with everybody's pockets empty.
+
+Two things each, chosen on the campaign page while it is still being prepared,
+and changeable right up until the story begins. The list is composed rather than
+fixed — a couple of things her calling suggests, a couple the story's mood
+suggests, and the staples anybody would take. A Beastfriend is offered a bag of
+seeds; a spooky story offers a candle that will not blow out and a bell on a
+string. An unrecognised calling still gets the staples, so the Cloud Baker packs
+a rope and a lantern like everybody else.
+
+Deliberately a list and not a shop. **There is no wrong answer**: everything here
+is useful somewhere, nothing is better than anything else, and nothing is scarce.
+A shop would need an economy, a balance pass and a currency, and would quietly
+turn a cooperative game into a comparison — one girl with the good sword and one
+without. Two is the number because it makes a real decision: taking the mirror
+means not taking the bell.
+
+The payoff needed no new machinery. A packed item is an ordinary inventory row
+tagged to that adventure, so **the quest board reads it exactly like something
+found in the story** — bringing the rope from home is a perfectly good way to
+have a rope, and "we brought the rope!" finishes a quest. Only the journal tells
+the two apart, because *set out with* and *came home with* are different kinds of
+good.
+
+Packing closes when the story opens. Reaching back into the cupboard mid-chapter
+would make every "do we have one?" answerable with yes, and the whole point is
+that you decided beforehand.
 
 ### Where they went, and what they gave up
 
@@ -1027,6 +1060,7 @@ lib/
     finds.ts        Matching what a chapter asked for against what is carried
     quests.ts       Quests, ticking them off, and spending what it took
     journey.ts      Folding scene locations into the route the party walked
+    loadout.ts      What each adventurer is offered to pack, and how much
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -1048,6 +1082,7 @@ tests/
   finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
   quests.test.ts    Unit tests — resolving objectives, and what finishing says
   journey.test.ts   Unit tests — one stop per place, and going back again
+  loadout.test.ts   Unit tests — what is offered, and what may be packed
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
@@ -1057,6 +1092,7 @@ tests/
   rounds.e2e.mts      Two households, two browsers, one turn between them
   invites.e2e.mts     Asking somebody else's adventurer, and waiting for yes
   quests.e2e.mts      Finishing a quest, spending the item, handing things over
+  loadout.e2e.mts     Packing, unpacking, and a brought thing finishing a quest
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves

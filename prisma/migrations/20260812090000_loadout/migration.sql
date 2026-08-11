@@ -1,0 +1,11 @@
+-- What you packed, as against what you found.
+--
+-- A loadout item is an ordinary inventory row: it belongs to the character, it
+-- is tagged with the adventure, and quests read it out of her pockets exactly
+-- like anything else. Bringing the rope from home is a perfectly good way to
+-- have a rope, and "we brought the rope!" is the entire point of packing one.
+--
+-- This flag exists only so that a journal can tell "set out with" from "found
+-- on the way", and so the packing screen knows which of her things it may put
+-- back — it must never unpack something she found in the story.
+ALTER TABLE "InventoryItem" ADD COLUMN "brought" BOOLEAN NOT NULL DEFAULT false;

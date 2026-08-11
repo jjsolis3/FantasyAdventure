@@ -16,7 +16,7 @@
     "seed": "tsx prisma/seed.ts",
     "gm:harness": "tsx scripts/gm-harness.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:e2e": "tsx tests/auth.e2e.mts && tsx tests/characters.e2e.mts && tsx tests/campaigns.e2e.mts && tsx tests/play.e2e.mts && tsx tests/rounds.e2e.mts && tsx tests/invites.e2e.mts && tsx tests/quests.e2e.mts && tsx tests/personal-quests.e2e.mts && tsx tests/progression.e2e.mts && tsx tests/settings.e2e.mts && tsx tests/admin.e2e.mts",
+    "test:e2e": "tsx tests/auth.e2e.mts && tsx tests/characters.e2e.mts && tsx tests/campaigns.e2e.mts && tsx tests/play.e2e.mts && tsx tests/rounds.e2e.mts && tsx tests/invites.e2e.mts && tsx tests/quests.e2e.mts && tsx tests/loadout.e2e.mts && tsx tests/personal-quests.e2e.mts && tsx tests/progression.e2e.mts && tsx tests/settings.e2e.mts && tsx tests/admin.e2e.mts",
     "mock:model": "tsx tests/mock-model-server.mts"
   },
   "dependencies": {

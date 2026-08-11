@@ -362,6 +362,15 @@ model InventoryItem {
   /// Which adventure it came from, so a journal can say where.
   foundInCampaignId String?
 
+  /// True when it was packed before setting out rather than found on the way.
+  ///
+  /// Both kinds count toward a quest — bringing the rope from home is a
+  /// perfectly good way to have a rope, and "we brought the rope!" is the whole
+  /// payoff of packing one. The flag exists so a journal can tell the two
+  /// apart, and so the packing screen knows which of an adventurer's things it
+  /// is allowed to put back.
+  brought Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   @@unique([characterId, name])

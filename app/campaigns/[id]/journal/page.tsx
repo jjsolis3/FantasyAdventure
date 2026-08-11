@@ -166,10 +166,24 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
                   </p>
                 ) : null}
 
-                {member.character.inventory.length > 0 ? (
+                {/* What she packed, and what the story gave her, told apart —
+                    "we brought the rope" and "we found the key" are different
+                    kinds of good, and a single list flattens both. */}
+                {member.character.inventory.filter((item) => item.brought).length > 0 ? (
+                  <p className="mt-1 text-sm text-hearth-200/70">
+                    Set out with:{" "}
+                    {member.character.inventory
+                      .filter((item) => item.brought)
+                      .map((item) => item.name)
+                      .join(", ")}
+                  </p>
+                ) : null}
+
+                {member.character.inventory.filter((item) => !item.brought).length > 0 ? (
                   <p className="mt-1 text-sm text-hearth-200/70">
                     Came home with:{" "}
                     {member.character.inventory
+                      .filter((item) => !item.brought)
                       .map((item) => (item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name))
                       .join(", ")}
                   </p>
