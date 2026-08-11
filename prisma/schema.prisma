@@ -172,6 +172,8 @@ model Character {
 
   skills        CharacterSkill[]
   inventory     InventoryItem[]
+  keepsakes     Keepsake[]
+  questFinds    QuestObjective[]
   partyMemberships PartyMember[]
   partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
@@ -199,6 +201,125 @@ model CharacterSkill {
 
   @@unique([characterId, name])
   @@index([characterId])
+}
+
+/// Something a character gave up, and what it bought.
+///
+/// The counterpart to spending an item on a quest. A brass key handed over to
+/// open a door is gone from the pack — that is the point of it — but a child
+/// who watched their find silently disappear from their sheet has been robbed,
+/// not rewarded. So the item leaves the inventory and arrives here, naming what
+/// it was for. Nothing anybody earned ever just vanishes.
+model Keepsake {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name String
+  /// "opened the door beneath the mill" — what giving it up accomplished.
+  note String
+
+  /// Which adventure it was spent on, so a sheet can say where.
+  campaignId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([characterId])
+}
+
+/// How a quest came to exist.
+enum QuestKind {
+  /// One per chapter of the storyline, opened as the party reaches it.
+  MAIN
+  /// Something the storyteller introduced and the party may take or leave.
+  SIDE
+}
+
+enum QuestStatus {
+  ACTIVE
+  COMPLETE
+  /// The story moved past it. Kept, so the journal can be honest about what
+  /// the party left undone rather than pretending it was never asked.
+  ABANDONED
+}
+
+/// What an objective wants.
+enum ObjectiveKind {
+  /// Somebody has to be carrying the thing. Resolves itself by looking at the
+  /// party's pockets, so the storyteller cannot forget to tick it off.
+  FIND
+  /// Something to do rather than hold. Only the storyteller can say it is done.
+  DEED
+}
+
+/// Something the party is trying to accomplish.
+///
+/// The storyline has always described its chapters, and a chapter has always
+/// been able to name things the party should come away holding — but none of it
+/// was ever *recorded* as done. A screen could say "still looking for the brass
+/// key" by comparing lists on every page load, and that was all: finding it
+/// changed nothing, completed nothing, and was never announced.
+///
+/// A quest is that list made durable. It has a moment of completion, which is
+/// the thing worth playing for.
+model Quest {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  kind    QuestKind   @default(MAIN)
+  status  QuestStatus @default(ACTIVE)
+  title   String
+  /// One line, in the players' own terms. Never the act's goal — that is
+  /// written at the Game Master and gives away how the chapter works.
+  summary String
+
+  /// Which chapter this is the quest for. Null for side quests, which is what
+  /// lets one main quest per act be enforced without constraining the rest.
+  actIndex Int?
+
+  openedAtTurn    Int  @default(0)
+  completedAtTurn Int?
+  completedAt     DateTime?
+
+  objectives QuestObjective[]
+
+  createdAt DateTime @default(now())
+
+  /// One main quest per chapter. Postgres treats NULLs as distinct here, so
+  /// side quests are unconstrained by the same index.
+  @@unique([campaignId, actIndex])
+  @@index([campaignId])
+}
+
+model QuestObjective {
+  id      String @id @default(cuid())
+  questId String
+  quest   Quest  @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  kind ObjectiveKind @default(FIND)
+  text String
+  /// Display order, which for a chapter is the order the storyline listed them.
+  position Int
+
+  doneAtTurn Int?
+
+  /// What actually satisfied a FIND, which is rarely the words the storyline
+  /// used: the chapter asks for "the brass key" and a child comes back with
+  /// "a small brass key, green at the teeth".
+  itemName String?
+  /// Who was carrying it. Recorded at the moment it is ticked off, so handing
+  /// the item on afterwards does not rewrite who found it.
+  foundByCharacterId String?
+  foundBy            Character? @relation(fields: [foundByCharacterId], references: [id], onDelete: SetNull)
+
+  /// Set when completing the quest spent the item — it left the pack and
+  /// became a keepsake.
+  consumed Boolean @default(false)
+
+  @@index([questId])
+  @@index([foundByCharacterId])
 }
 
 /// Something the party picked up, was given, or made. Kept per character
@@ -333,6 +454,7 @@ model Campaign {
   invites PartyInvite[]
   scenes Scene[]
   familyMoveUses FamilyMoveUse[]
+  quests   Quest[]
   memories Memory[]
   aiCalls  AiCall[]
   rounds   TurnRound[]

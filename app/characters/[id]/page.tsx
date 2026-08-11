@@ -30,6 +30,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         include: { campaign: { select: { id: true, title: true, status: true } } },
       },
       portrait: { select: { version: true } },
+      keepsakes: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!character) notFound();
@@ -86,7 +87,9 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="space-y-6">
-        {character.skills.length > 0 || character.inventory.length > 0 ? (
+        {character.skills.length > 0 ||
+        character.inventory.length > 0 ||
+        character.keepsakes.length > 0 ? (
           <Card>
             <h2 className="font-display mb-4 text-xl text-hearth-100">What they can do</h2>
 
@@ -114,6 +117,22 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
                       {item.description ? (
                         <span className="text-hearth-400"> — {item.description}</span>
                       ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+
+            {character.keepsakes.length > 0 ? (
+              <>
+                <h3 className="mt-5 mb-2 text-sm font-medium tracking-wide text-hearth-400 uppercase">
+                  Given up
+                </h3>
+                <ul className="space-y-1">
+                  {character.keepsakes.map((keepsake) => (
+                    <li key={keepsake.id} className="text-sm text-hearth-200/80">
+                      {keepsake.name}
+                      <span className="text-hearth-400"> — {keepsake.note}</span>
                     </li>
                   ))}
                 </ul>

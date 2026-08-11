@@ -175,14 +175,26 @@ export function extractionPrompt(options: {
    * adventures ran whatever length the model felt like.
    */
   pacing?: string;
+  /**
+   * Objectives currently on the board that are not about carrying something.
+   *
+   * Given so that "deedsDone" can be matched rather than invented: the model is
+   * asked which of *these* happened, not what the party achieved in general.
+   * Finds need no such list — they are settled by looking in people's pockets.
+   */
+  openDeeds?: string[];
 }): string {
+  const deeds = options.openDeeds?.length
+    ? `\nTHINGS THE PARTY IS CURRENTLY TRYING TO DO:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
+    : "";
+
   return `Read this passage from a story and extract what should be remembered.
 
 PASSAGE:
 ${options.narration}
 
 The characters in the party are: ${options.partyNames.join(", ")}.
-
+${deeds}
 Reply with ONLY this JSON, no other text:
 {
   "sceneTitle": "<short title, or null if unchanged>",
@@ -190,6 +202,8 @@ Reply with ONLY this JSON, no other text:
   "memories": [{"kind": "FACT|NPC|PLACE|PLOT_THREAD", "key": "<short handle>", "content": "<one sentence>", "importance": 1-5}],
   "bondMoments": [{"from": "<character>", "to": "<character>", "why": "<what they did for them>"}],
   "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>"}],
+  "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
+  "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "actComplete": false,
   "sceneComplete": false
 }
@@ -205,6 +219,13 @@ Rules:
 - sceneComplete is true only if the party has moved somewhere new or time has jumped.
 - itemsGained is ONLY for objects a character is now carrying. Not scenery, not
   things they merely looked at.
+- deedsDone may ONLY contain things from the list above, and only when the
+  passage shows them actually finished. Do not invent entries. Usually [].
+- questsOpened is for a NEW errand the passage introduced that the party could
+  choose to take on — a neighbour's missing cat, a promise made, a debt owed.
+  Only when it is a real, findable thing somebody asked for. Never restate what
+  the party is already doing, and never open one just to have something to say:
+  most turns start nothing, and [] is the right answer.
 - Use [] for empty lists, never null.`;
 }
 

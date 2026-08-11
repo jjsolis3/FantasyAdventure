@@ -17,7 +17,9 @@ write their own adventures without touching the code.
 
 And an adventure no longer has to be assembled out of characters one account
 owns. You can ask another player's adventurer along, and the story waits for
-them to say yes.
+them to say yes. What the party is trying to do is now a board they can look at
+— and finishing a quest costs them the thing it took, which is what makes
+carrying it mean anything.
 
 | | |
 |---|---|
@@ -51,11 +53,14 @@ them to say yes.
 | ✅ | **M9** A storyteller that reads out loud, on every device, free |
 | ✅ | **M9** A picture of each chapter — optional, and off until you pay for it |
 | ✅ | **M9** A spooky register, and three adventures written for it |
-| ✅ | **M9** What you have found — one page, and what the chapter is still waiting on |
+| ✅ | **M9** What you have found — one page, and who is carrying it |
 | ✅ | **M9** Character portraits — uploaded, not generated |
 | ✅ | **M9** Write your own adventures, without a redeployment |
 | ✅ | **M9** What the storyteller has used, and what it cost |
 | ✅ | **M10** Invite another player's adventurer, and wait for them to say yes |
+| ✅ | **M10** Quests — chapters and side quests, tracked, finished and paid for |
+| ✅ | **M10** Spending what a quest took, and keeping it as a keepsake |
+| ✅ | **M10** Handing an item to somebody else in the party |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -383,12 +388,41 @@ be done is to stop offering it to new games.
 Adding one to `prisma/seed.ts` still works and is the right way to ship an
 adventure to somebody else's deployment.
 
-### What you have found
+### The quest board
 
-`/campaigns/[id]/finds` is everything the party has picked up on this adventure
-— who is carrying it, and what it is — plus anything the chapters they have
-reached are still waiting on. Later chapters are not listed, because what a
-later chapter wants is a spoiler.
+`/campaigns/[id]/finds` is what the party set out to do, what they are carrying,
+and what it cost to finish. Later chapters are not listed, because what a later
+chapter wants is a spoiler.
+
+**A chapter opens its own quest** as the party reaches it, with an objective for
+each thing the chapter names. **A find resolves itself**: an objective asking for
+the brass key is met the moment somebody is carrying something that looks like a
+brass key — no model call, nothing for the storyteller to forget. **A deed** is
+the other kind, for objectives that are about doing rather than holding, and only
+the storyteller can say one is done; it is asked which of the *listed* deeds just
+happened, so it can report one but never invent one.
+
+**The storyteller can open side quests** — a neighbour's missing cat, a promise
+made — capped at two a turn and five open, because a model asked "did you start
+anything?" every turn will happily say yes every turn.
+
+**Finishing spends what it took.** When the last thing a quest was waiting for
+turns up, the quest completes: the table is told which item finished it and who
+handed it over, everybody travelling gains experience, and the item leaves that
+character's pack. A key that stays in your pocket after it has opened the door
+was never really the price of anything. But it does not simply vanish — it
+arrives on their sheet as a **keepsake** naming what it bought, because an item
+that disappeared off a child's sheet reads as a punishment for having found it.
+
+**Anything can be handed to somebody else.** Until now whoever picked a thing up
+was stuck with it, which is a strange rule for a game about a family helping each
+other — and a real problem when the chapter wants the key and the key is in the
+pocket of the child who has gone to bed. You move your own adventurer's things;
+whoever is running the table can move anybody's.
+
+Taking a turn back un-finishes any quest it finished, puts the spent item back in
+the pack and removes the keepsake, so the whole moment is reversible rather than
+half of it.
 
 Items were always being collected: the storyteller decides when somebody picks
 something up, and it is kept on whoever took it and stays with them after the
@@ -396,7 +430,7 @@ adventure ends. What was missing was somewhere to see all of it at once —
 spread across four sheets on four phones, "do we have the key?" was a question
 the table could not answer without asking each other.
 
-The list of what is missing comes from the storyline rather than the model: an
+What a chapter asks for comes from the storyline rather than the model: an
 act names what it wants the party to come away holding, and the storyteller is
 told to make those findable — put where a search, a question or a kindness would
 turn them up — but never to force them into anybody's hands, and to let a party
@@ -906,7 +940,7 @@ app/
   campaigns/        Adventure list, setup flow, campaign page, and the table
   campaigns/join/   Joining somebody else's adventure with a code
   campaigns/[id]/journal/  The whole story, laid out to be read back or printed
-  campaigns/[id]/finds/    What the party has, and what it is still looking for
+  campaigns/[id]/finds/    The quest board: what they set out to do, and carry
   settings/         Administrator hub: storyteller, adventures, usage, invites
   settings/adventures/     Writing and editing storylines in the app
   settings/usage/          What every call used, and what it cost
@@ -947,6 +981,7 @@ lib/
     actions.ts      Server actions for characters and family ties
     campaign-actions.ts  Server actions for campaigns and party
     finds.ts        Matching what a chapter asked for against what is carried
+    quests.ts       Quests, ticking them off, and spending what it took
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -966,6 +1001,7 @@ tests/
   narrator.test.ts  Unit tests — how a passage is broken up to be spoken
   images.test.ts    Unit tests — the prompt a picture is asked for with
   finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
+  quests.test.ts    Unit tests — resolving objectives, and what finishing says
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
@@ -974,6 +1010,7 @@ tests/
   play.e2e.mts        Browser-driven play, against the mock model
   rounds.e2e.mts      Two households, two browsers, one turn between them
   invites.e2e.mts     Asking somebody else's adventurer, and waiting for yes
+  quests.e2e.mts      Finishing a quest, spending the item, handing things over
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test

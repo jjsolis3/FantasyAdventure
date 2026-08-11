@@ -46,6 +46,12 @@ export type TurnInput = {
   correction?: string;
   /** Where the story is and how long this family likes an act to run. */
   pacing?: string;
+  /**
+   * Objectives on the quest board that are not about carrying something, so the
+   * extraction can report which of them the passage just finished rather than
+   * inventing achievements.
+   */
+  openDeeds?: string[];
   /** A Family Move the table chose to spend this turn, if any. */
   familyMove?: {
     key: string;
@@ -237,6 +243,8 @@ export async function runTurn(
     memories: [],
     bondMoments: [],
     itemsGained: [],
+    deedsDone: [],
+    questsOpened: [],
     actComplete: false,
     sceneComplete: false,
   };
@@ -249,6 +257,7 @@ export async function runTurn(
             pacing: input.pacing,
             narration,
             partyNames: input.party.map((member) => member.name),
+            openDeeds: input.openDeeds,
           }),
           hint,
         ),
@@ -269,6 +278,10 @@ export async function runTurn(
   extraction.itemsGained = extraction.itemsGained.filter(
     (item) => findMember(input.party, item.character) !== undefined,
   );
+
+  // A deed can only be one of the ones the party was asked about. With nothing
+  // on the board there is nothing it could be reporting, whatever it said.
+  if (!input.openDeeds || input.openDeeds.length === 0) extraction.deedsDone = [];
 
   extraction.bondMoments = extraction.bondMoments.filter((moment) => {
     const from = findMember(input.party, moment.from);

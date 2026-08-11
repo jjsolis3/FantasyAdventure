@@ -27,6 +27,7 @@ import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
 import { memberCampaignFilter } from "@/lib/game/access";
+import { advanceQuests, openMainQuest } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
 import {
   SKILL_XP_PER_USE,
@@ -387,6 +388,11 @@ export async function beginCampaign(
       data: { status: "ACTIVE", lastPlayedAt: new Date() },
     });
 
+    // The first chapter's quest opens with the story. Later ones open as the
+    // party reaches them — what a chapter is asking for is a spoiler.
+    const firstAct = campaign.storyline.acts.find((act) => act.index === 1);
+    if (firstAct) await openMainQuest(tx, campaign.id, firstAct, 0);
+
     return created;
   });
 
@@ -482,6 +488,21 @@ export async function playTurn(
     orderBy: { ordinal: "desc" },
   });
 
+  // Deeds still outstanding, so the extraction can say which of them the
+  // passage finished. Finds are not asked about — they settle themselves by
+  // looking in people's pockets.
+  const openDeeds = (
+    await db.questObjective.findMany({
+      where: {
+        kind: "DEED",
+        doneAtTurn: null,
+        quest: { campaignId: campaign.id, status: "ACTIVE" },
+      },
+      select: { text: true },
+      orderBy: { position: "asc" },
+    })
+  ).map((objective) => objective.text);
+
   const result = await runTurn(
     {
       context: built.text,
@@ -520,6 +541,7 @@ export async function playTurn(
             }
           : null,
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
+      openDeeds,
     },
     calls,
     undefined,
@@ -708,6 +730,35 @@ export async function playTurn(
       });
     }
 
+    // Acts are 1-based, so the final one sits at `length`. This once compared
+    // against `length - 1`, which ended every three-chapter storyline after the
+    // second — the last chapter was never played and its quest never opened.
+    const isFinalAct = campaign.currentActIndex >= campaign.storyline.acts.length;
+    const advancesAct = result.extraction.actComplete && !isFinalAct;
+    const finishes = result.extraction.actComplete && isFinalAct;
+    campaignComplete = finishes;
+
+    // Quests come after the items, because finding the last thing a chapter
+    // asked for is what finishes it — and before the announcements, because
+    // finishing it is the thing most worth announcing.
+    milestones.push(
+      ...(await advanceQuests(tx, {
+        campaignId: campaign.id,
+        party: campaign.party.map((member) => ({
+          characterId: member.characterId,
+          characterName: member.character.name,
+        })),
+        turn: turnCounter,
+        deedsDone: result.extraction.deedsDone,
+        questsOpened: result.extraction.questsOpened,
+        actComplete: result.extraction.actComplete,
+        act: campaign.storyline.acts.find((act) => act.index === campaign.currentActIndex),
+        nextAct: advancesAct
+          ? campaign.storyline.acts.find((act) => act.index === campaign.currentActIndex + 1)
+          : undefined,
+      })),
+    );
+
     for (const milestone of milestones) {
       await tx.turnEvent.create({
         data: { sceneId: scene.id, ordinal: ordinal++, type: "SYSTEM", content: milestone },
@@ -742,17 +793,6 @@ export async function playTurn(
         },
       });
     }
-
-    // Acts are zero-indexed, so the final one sits at `length - 1`. Comparing
-    // against `length` let the last act advance to an index that does not
-    // exist — where buildCampaignContext falls back to acts[0] and quietly
-    // steers the story back to its opening goals. An adventure could never
-    // end; it looped, and nothing ever set the COMPLETE status the schema
-    // already had.
-    const isFinalAct = campaign.currentActIndex >= campaign.storyline.acts.length - 1;
-    const advancesAct = result.extraction.actComplete && !isFinalAct;
-    const finishes = result.extraction.actComplete && isFinalAct;
-    campaignComplete = finishes;
 
     if (finishes) {
       await tx.turnEvent.create({

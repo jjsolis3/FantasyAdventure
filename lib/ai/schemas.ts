@@ -84,6 +84,41 @@ export const extractionSchema = z.object({
     .max(6)
     .default([]),
 
+  /**
+   * Objectives the party accomplished that are not about holding something.
+   *
+   * Only ever *matched* against objectives that already exist — the model
+   * cannot invent a thing it has done, only report that one of the listed ones
+   * happened. Free text because it is describing the moment in its own words.
+   */
+  deedsDone: z.array(z.string().min(1).max(200)).max(4).default([]),
+
+  /**
+   * Errands the storyteller has just introduced and would like on the board.
+   *
+   * Bounded hard. A model asked "did you start anything?" every single turn
+   * will happily say yes every single turn, and a tracker full of errands
+   * nobody chose is worse than no tracker at all.
+   */
+  questsOpened: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(80),
+        summary: z.string().min(1).max(200),
+        objectives: z
+          .array(
+            z.object({
+              kind: z.enum(["FIND", "DEED"]).default("DEED"),
+              text: z.string().min(1).max(120),
+            }),
+          )
+          .min(1)
+          .max(3),
+      }),
+    )
+    .max(2)
+    .default([]),
+
   /** True when the party has clearly finished what this act was about. */
   actComplete: z.coerce.boolean().default(false),
   /** True when the scene has changed place or time enough to close it. */

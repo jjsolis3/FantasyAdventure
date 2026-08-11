@@ -224,3 +224,55 @@ test("a deflection note reaches the narration prompt", async () => {
   await runTurn({ ...baseInput, deflectionNote: "DEFLECT THIS" }, calls);
   assert.match(calls.prosePrompts[0], /DEFLECT THIS/);
 });
+
+test("a deed cannot be reported when nothing was asked about", async () => {
+  // Without a board there is nothing "deedsDone" could be describing, whatever
+  // the model felt like claiming.
+  const calls = stub({
+    extraction:
+      '{"memories":[],"deedsDone":["they fixed the mill wheel"],"actComplete":false,"sceneComplete":false}',
+  });
+
+  const result = await runTurn(baseInput, calls);
+  assert.deepEqual(result.extraction.deedsDone, []);
+});
+
+test("a deed is kept when the party was asked about one", async () => {
+  const calls = stub({
+    extraction:
+      '{"memories":[],"deedsDone":["they fixed the mill wheel"],"actComplete":false,"sceneComplete":false}',
+  });
+
+  const result = await runTurn(
+    { ...baseInput, openDeeds: ["Get the mill wheel turning again"] },
+    calls,
+  );
+  assert.deepEqual(result.extraction.deedsDone, ["they fixed the mill wheel"]);
+});
+
+test("open deeds are put in front of the storyteller", async () => {
+  const calls = stub({});
+  await runTurn({ ...baseInput, openDeeds: ["Get the mill wheel turning again"] }, calls);
+
+  const extraction = calls.jsonPrompts.find((prompt) =>
+    prompt.includes("extract what should be remembered"),
+  );
+  assert.ok(
+    extraction?.includes("Get the mill wheel turning again"),
+    "the board was not shown to the extraction step",
+  );
+});
+
+test("a side quest the storyteller opens survives extraction", async () => {
+  const calls = stub({
+    extraction:
+      '{"memories":[],"questsOpened":[{"title":"The Missing Cat","summary":"The baker has lost her cat.",' +
+      '"objectives":[{"kind":"FIND","text":"the baker\'s cat"}]}],"actComplete":false,"sceneComplete":false}',
+  });
+
+  const result = await runTurn(baseInput, calls);
+
+  assert.equal(result.extraction.questsOpened.length, 1);
+  assert.equal(result.extraction.questsOpened[0].title, "The Missing Cat");
+  assert.equal(result.extraction.questsOpened[0].objectives[0].kind, "FIND");
+});

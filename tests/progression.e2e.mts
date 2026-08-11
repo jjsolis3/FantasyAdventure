@@ -176,7 +176,7 @@ try {
   if ((seeking?.seeks.length ?? 0) > 0) {
     check(
       "and names what this chapter is still waiting on",
-      finds.includes("Still to find") && finds.includes(seeking!.seeks[0]),
+      finds.includes("Quests") && finds.includes(seeking!.seeks[0]),
       seeking!.seeks.join(", "),
     );
   }
