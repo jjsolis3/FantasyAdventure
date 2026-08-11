@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/auth/session";
 import { deleteCampaignAction } from "@/lib/game/campaign-actions";
 import { leaveCampaignAction } from "@/lib/game/party-actions";
 import { memberCampaignFilter } from "@/lib/game/access";
+import { invitableCharacters } from "@/lib/game/invites";
+import { cancelInviteAction, inviteCharacterAction } from "@/lib/game/invite-actions";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
@@ -42,6 +44,15 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           },
         },
       },
+      invites: {
+        where: { status: { in: ["PENDING", "DECLINED"] } },
+        orderBy: { createdAt: "asc" },
+        include: {
+          character: {
+            select: { id: true, name: true, user: { select: { displayName: true } } },
+          },
+        },
+      },
     },
   });
   if (!campaign) notFound();
@@ -58,6 +69,22 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
 
   const partyIds = campaign.party.map((member) => member.characterId);
   const inParty = new Set(partyIds);
+
+  const pendingInvites = campaign.invites.filter((invite) => invite.status === "PENDING");
+  const declinedInvites = campaign.invites.filter((invite) => invite.status === "DECLINED");
+
+  // Whether the storyline's minimum is met by people who have actually agreed
+  // to come. Invitations do not count here — that is the whole point of them.
+  const shortOfMinimum = campaign.party.length < campaign.storyline.minPlayers;
+  const roomLeft = campaign.storyline.maxPlayers - campaign.party.length - pendingInvites.length;
+
+  // Only the owner sends invitations, and only while the story has not started.
+  const canInvite = isOwner && campaign.status === "SETUP" && roomLeft > 0;
+  const invitable = canInvite
+    ? await invitableCharacters(user.id, {
+        exclude: [...partyIds, ...pendingInvites.map((invite) => invite.characterId)],
+      })
+    : [];
 
   // Bonds that exist between two characters who are both travelling. Ties to
   // someone left at home are real but cannot come up in this adventure.
@@ -196,6 +223,24 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         <Card>
           {campaign.party.length === 0 ? (
             <Alert tone="info">Choose a party below before the adventure can begin.</Alert>
+          ) : campaign.status === "SETUP" && shortOfMinimum ? (
+            <>
+              <h2 className="font-display mb-2 text-xl text-hearth-100">
+                {pendingInvites.length > 0 ? "Waiting on the others" : "Not enough adventurers yet"}
+              </h2>
+              <p className="mb-4 text-sm text-hearth-400">
+                {pendingInvites.length > 0
+                  ? `${campaign.storyline.title} needs ${campaign.storyline.minPlayers} adventurers, and ${pendingInvites
+                      .map((invite) => invite.character.name)
+                      .join(", ")} ${pendingInvites.length === 1 ? "has" : "have"} been asked. The adventure begins as soon as ${pendingInvites.length === 1 ? "they say" : "they all say"} yes — nothing is lost while you wait.`
+                  : `${campaign.storyline.title} needs ${campaign.storyline.minPlayers} adventurers and the party has ${campaign.party.length}. Invite somebody, or share the code below.`}
+              </p>
+              {pendingInvites.length > 0 ? (
+                <p className="text-sm text-hearth-500">
+                  Whoever plays them will see the invitation on their own adventures page.
+                </p>
+              ) : null}
+            </>
           ) : (
             <>
               <h2 className="font-display mb-2 text-xl text-hearth-100">
@@ -227,6 +272,93 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             </>
           )}
         </Card>
+
+        {isOwner && (pendingInvites.length > 0 || declinedInvites.length > 0 || canInvite) ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">Ask somebody along</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              An invitation goes to whoever plays that adventurer. They answer for themselves, and
+              the adventure waits for them — nobody has to hand a character over to play together.
+            </p>
+
+            {pendingInvites.length > 0 ? (
+              <ul className="mb-5 space-y-2">
+                {pendingInvites.map((invite) => (
+                  <li
+                    key={invite.id}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hearth-800/60 p-3"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-hearth-100">{invite.character.name}</span>
+                      <span className="block text-sm text-hearth-400">
+                        asked · played by {invite.character.user.displayName}
+                      </span>
+                    </span>
+                    <form action={cancelInviteAction}>
+                      <input type="hidden" name="inviteId" value={invite.id} />
+                      <button
+                        type="submit"
+                        aria-label={`Take back the invitation to ${invite.character.name}`}
+                        className="rounded-lg border border-hearth-700 px-3 py-1.5 text-sm text-hearth-300 transition-colors hover:bg-hearth-800/50"
+                      >
+                        Take it back
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {declinedInvites.length > 0 ? (
+              <p className="mb-5 text-sm text-hearth-400">
+                {declinedInvites.map((invite) => invite.character.name).join(", ")} cannot come this
+                time. You can ask again below.
+              </p>
+            ) : null}
+
+            {canInvite ? (
+              invitable.length === 0 ? (
+                <p className="text-sm text-hearth-400">
+                  Nobody else has an adventurer yet. The code below works for anyone who makes one.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {invitable.map((candidate) => (
+                    <li
+                      key={candidate.id}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hearth-800/60 p-3"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-hearth-100">{candidate.name}</span>
+                        <span className="block text-sm text-hearth-400">
+                          {candidate.race} {candidate.archetype} · played by {candidate.playedBy}
+                        </span>
+                        {candidate.tie ? (
+                          <span className="mt-0.5 block text-sm text-moss-400">{candidate.tie}</span>
+                        ) : null}
+                      </span>
+                      <form action={inviteCharacterAction}>
+                        <input type="hidden" name="campaignId" value={campaign.id} />
+                        <input type="hidden" name="characterId" value={candidate.id} />
+                        <button
+                          type="submit"
+                          aria-label={`Invite ${candidate.name}`}
+                          className="rounded-lg bg-hearth-600 px-3 py-1.5 text-sm font-medium text-hearth-50 transition-colors hover:bg-hearth-500"
+                        >
+                          Invite
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : isOwner && campaign.status === "SETUP" ? (
+              <p className="text-sm text-hearth-400">
+                The party is as large as {campaign.storyline.title} takes.
+              </p>
+            ) : null}
+          </Card>
+        ) : null}
 
         {campaign.status === "COMPLETE" ? null : (
           <Card>

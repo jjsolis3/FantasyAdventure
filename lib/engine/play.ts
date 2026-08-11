@@ -303,6 +303,12 @@ async function nextOrdinal(sceneId: string): Promise<number> {
   return (last?.ordinal ?? 0) + 1;
 }
 
+/** "Bramble", "Bramble and Fen", "Bramble, Fen and Wren". */
+function formatList(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 /**
  * Narrates the opening scene and moves the campaign to ACTIVE.
  *
@@ -318,6 +324,25 @@ export async function beginCampaign(
   if (!campaign) throw new Error("Campaign not found.");
   if (campaign.status !== "SETUP") throw new Error("This adventure has already begun.");
   if (campaign.party.length === 0) throw new Error("Nobody is in the party.");
+
+  // Whoever was invited has not answered yet, and the story is about to name
+  // everybody in the opening scene. Beginning without them would mean either a
+  // party short of what the storyline needs, or somebody arriving into a scene
+  // that has already described who is there.
+  if (campaign.party.length < campaign.storyline.minPlayers) {
+    const waiting = await db.partyInvite.findMany({
+      where: { campaignId: campaign.id, status: "PENDING" },
+      select: { character: { select: { name: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    const names = waiting.map((invite) => invite.character.name);
+
+    throw new Error(
+      names.length > 0
+        ? `Still waiting for ${formatList(names)} to accept.`
+        : `${campaign.storyline.title} needs at least ${campaign.storyline.minPlayers} adventurers.`,
+    );
+  }
 
   const config = await resolveAiConfig();
   const records: AiCallRecord[] = [];

@@ -2,7 +2,10 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { memberCampaignWhere } from "@/lib/game/access";
+import { pendingInvitesFor } from "@/lib/game/invites";
+import { respondToInviteAction } from "@/lib/game/invite-actions";
 import {
   CAMPAIGN_STATUS_LABELS,
   INPUT_MODE_LABELS,
@@ -28,7 +31,10 @@ export default async function CampaignsPage() {
     orderBy: [{ lastPlayedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
   });
 
-  const characterCount = await db.character.count({ where: { userId: user.id } });
+  const [characterCount, invites] = await Promise.all([
+    db.character.count({ where: { userId: user.id } }),
+    pendingInvitesFor(user.id),
+  ]);
 
   // Which adventures are waiting on *this* player. Somebody who opens the app
   // between school runs should not have to go into each one to find out whether
@@ -59,6 +65,44 @@ export default async function CampaignsPage() {
         title="Adventures"
         lead="Each adventure remembers its own party, its own tone, and everything that has happened so far."
       />
+
+      {invites.length > 0 ? (
+        <div className="mb-6 space-y-3">
+          {invites.map((invite) => (
+            <Card key={invite.id} className="border-moss-700/50 bg-moss-900/10">
+              <h2 className="font-display text-lg text-hearth-100">
+                {invite.invitedBy} has asked {invite.characterName} along
+              </h2>
+              <p className="mt-1 text-sm text-hearth-300">
+                {invite.campaignTitle} · {invite.storylineTitle}
+              </p>
+              <p className="mt-2 text-sm text-hearth-400">
+                {invite.stale
+                  ? "That adventure has already finished."
+                  : "It will not begin until you answer. Say yes and you will see the same story they do, answering for your own adventurer."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {invite.stale ? null : (
+                  <form action={respondToInviteAction}>
+                    <input type="hidden" name="inviteId" value={invite.id} />
+                    <input type="hidden" name="answer" value="accept" />
+                    <SubmitButton pendingLabel="Joining…">
+                      Yes, {invite.characterName} is coming
+                    </SubmitButton>
+                  </form>
+                )}
+                <form action={respondToInviteAction}>
+                  <input type="hidden" name="inviteId" value={invite.id} />
+                  <input type="hidden" name="answer" value="decline" />
+                  <SubmitButton variant="secondary" pendingLabel="Declining…">
+                    Not this time
+                  </SubmitButton>
+                </form>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mb-6">
         {characterCount === 0 ? (
