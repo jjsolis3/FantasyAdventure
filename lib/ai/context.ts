@@ -16,6 +16,7 @@
 import { STAT_INFO, STATS, RELATIONSHIP_LABELS, type RelationshipKind } from "@/lib/game/rules";
 import { signatureFor } from "@/lib/game/character-options";
 import { narrativeHints } from "@/lib/game/knacks";
+import { renderKnownPeople, type KnownPerson } from "@/lib/game/acquaintances";
 
 /** Rough token estimate. Four characters per token is close enough for
  *  budgeting and costs nothing; being exact would need a tokenizer per model. */
@@ -83,6 +84,14 @@ export type ContextInput = {
    * one table are not all pushing on the same one.
    */
   personalAims?: { character: string; aim: string }[];
+  /**
+   * People this party met on earlier adventures and might run into again.
+   *
+   * Empty on a family's first story, which is most of them — so this costs
+   * nothing until there is a back catalogue to draw on, and then it is the
+   * thing that makes the world feel lived in rather than reset.
+   */
+  knownPeople?: KnownPerson[];
   party: PartyMemberContext[];
   bonds: BondContext[];
   location?: string | null;
@@ -211,6 +220,9 @@ export function buildContext(input: ContextInput): BuiltContext {
           .map((entry) => `- ${entry.character}: ${entry.aim}`)
           .join("\n")}`
       : "",
+    // Offered rather than required. A chapter bent around an old acquaintance
+    // because the prompt insisted is worse than one that never mentions them.
+    renderKnownPeople(input.knownPeople ?? []),
     "",
     "THE PARTY:",
     renderParty(input.party, input.bonds),

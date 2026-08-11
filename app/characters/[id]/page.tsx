@@ -40,6 +40,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         include: { campaign: { select: { id: true, title: true } } },
       },
       knacks: { orderBy: { createdAt: "asc" } },
+      acquaintances: { orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }] },
       practices: { select: { key: true, attempts: true } },
     },
   });
@@ -237,6 +238,36 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
               </>
             ) : null}
 
+          </Card>
+        ) : null}
+
+        {/* Who she knows. Empty until a family has finished an adventure, and
+            then the quiet proof that being kind to somebody was worth it —
+            they are still out there, and they remember her. */}
+        {character.acquaintances.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">People she knows</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Everyone {character.name} has met and might run into again.
+            </p>
+            <ul className="space-y-2">
+              {character.acquaintances.map((person) => (
+                <li key={person.id} className="rounded-lg border border-hearth-800/50 p-3">
+                  <p className="text-sm text-hearth-100">
+                    {person.name}
+                    {person.timesMet > 1 ? (
+                      <span className="ml-2 text-xs tracking-wide text-hearth-400 uppercase">
+                        {person.timesMet} adventures
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="text-sm text-hearth-200/70">{person.about}</p>
+                  <p className="mt-0.5 text-sm text-hearth-500">
+                    Met on {person.metInCampaignTitle}.
+                  </p>
+                </li>
+              ))}
+            </ul>
           </Card>
         ) : null}
 

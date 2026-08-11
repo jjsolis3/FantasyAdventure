@@ -38,6 +38,12 @@ import { pacingGuidance } from "@/lib/game/pacing";
 import { MAX_SKILLS, learnedMessage, practiceKey, readyToLearn, skillNameFrom } from "@/lib/game/practice";
 import { extraSkillRoom } from "@/lib/game/knacks";
 import {
+  acquaintanceKey,
+  metMessage,
+  whoComesHome,
+  type KnownPerson,
+} from "@/lib/game/acquaintances";
+import {
   SKILL_XP_PER_USE,
   bondLevelFor,
   familyMoveByKey,
@@ -275,6 +281,7 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     actSeeks: act?.seeks ?? [],
     itemsHeld: await heldItemNames(campaign.id),
     personalAims: await personalAimsFor(campaign.id),
+    knownPeople: await knownPeopleFor(campaign),
     party: partyContext(campaign),
     bonds: bondContext(campaign),
     location: openScene?.location,
@@ -328,6 +335,52 @@ async function personalAimsFor(campaignId: string): Promise<{ character: string;
       character: quest.secretFor!.name,
       aim: quest.objectives[0]?.text ?? quest.summary,
     }));
+}
+
+/**
+ * People this party met on earlier adventures.
+ *
+ * Gathered across everybody travelling and merged, because "Mira and Rowan both
+ * know the beekeeper" is a different and better sentence than the same person
+ * listed twice. Anybody met on *this* adventure is left out — they are already
+ * in the campaign's own memory, and offering the storyteller a reunion with
+ * somebody standing in front of it would be strange.
+ */
+async function knownPeopleFor(campaign: LoadedCampaign): Promise<KnownPerson[]> {
+  const rows = await db.acquaintance.findMany({
+    where: {
+      characterId: { in: campaign.party.map((member) => member.characterId) },
+      NOT: { metInCampaignId: campaign.id },
+    },
+    orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }],
+  });
+  if (rows.length === 0) return [];
+
+  const namesById = new Map(
+    campaign.party.map((member) => [member.characterId, member.character.name]),
+  );
+
+  const merged = new Map<string, KnownPerson>();
+  for (const row of rows) {
+    const existing = merged.get(row.key);
+    const who = namesById.get(row.characterId);
+
+    if (existing) {
+      if (who && !existing.knownBy.includes(who)) existing.knownBy.push(who);
+      existing.timesMet = Math.max(existing.timesMet, row.timesMet);
+      continue;
+    }
+
+    merged.set(row.key, {
+      name: row.name,
+      about: row.about,
+      metInCampaignTitle: row.metInCampaignTitle,
+      timesMet: row.timesMet,
+      knownBy: who ? [who] : [],
+    });
+  }
+
+  return [...merged.values()];
 }
 
 async function nextOrdinal(sceneId: string): Promise<number> {
@@ -1002,6 +1055,54 @@ export async function playTurn(
           content: `${campaign.storyline.title} is complete. What a journey.`,
         },
       });
+
+      // The people worth remembering come home with the party.
+      //
+      // Done at the ending rather than as they are met, because an adventure is
+      // the unit that decides who mattered: somebody introduced in chapter one
+      // and never seen again is a walk-on, and only by the end is that clear.
+      const remembered = await tx.memory.findMany({
+        where: { campaignId: campaign.id, kind: "NPC" },
+        select: { key: true, content: true, importance: true },
+      });
+
+      const coming = whoComesHome(remembered);
+      const names: string[] = [];
+
+      for (const npc of coming) {
+        const key = acquaintanceKey(npc.key);
+
+        for (const member of campaign.party) {
+          // Upsert rather than create: meeting somebody again on a later
+          // adventure raises the count instead of making a second stranger.
+          await tx.acquaintance.upsert({
+            where: { characterId_key: { characterId: member.characterId, key } },
+            create: {
+              characterId: member.characterId,
+              key,
+              name: npc.key,
+              about: npc.content,
+              metInCampaignId: campaign.id,
+              metInCampaignTitle: campaign.title,
+              timesMet: 1,
+            },
+            update: { timesMet: { increment: 1 }, about: npc.content },
+          });
+        }
+
+        names.push(npc.key);
+      }
+
+      if (names.length > 0) {
+        await tx.turnEvent.create({
+          data: {
+            sceneId: scene.id,
+            ordinal: ordinal++,
+            type: "SYSTEM",
+            content: metMessage(names),
+          },
+        });
+      }
     }
 
     await tx.campaign.update({

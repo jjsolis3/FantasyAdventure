@@ -70,6 +70,7 @@ carrying it mean anything.
 | ✅ | **M10** One thing each calling alone can do |
 | ✅ | **M10** Things found that she has not grown into yet |
 | ✅ | **M10** Knacks — what reaching a level finally buys |
+| ✅ | **M10** People the family already knows, who turn up again |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -466,6 +467,38 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### People the family already knows
+
+NPC memories have always been recorded, and have always died with the campaign
+that made them. A family could spend four evenings winning over a frightened
+beekeeper, finish the story, and begin the next one in a world where nobody had
+ever met him — which is the one thing a game about a family building a life
+together really should not do. The reward for being kind to somebody ought to be
+that they are still there.
+
+Finishing an adventure now brings home the people who mattered. **Not everybody
+graduates**: a story remembers a dozen names, most of them walk-ons, and if all
+of them followed the party home the list would be noise within two adventures
+and the storyteller would bring back the stallholder instead of the beekeeper.
+Only the ones the story treated as mattering come along, four at most.
+
+They hang off the **character** rather than the account, so they survive an
+adventurer being handed to a child's own sign-in, and so a reunion can be
+personal — the beekeeper remembers *Mira*, not "the party". Meeting somebody
+again on a later adventure raises a count rather than making a second stranger,
+and the storyteller is told which it is: a third meeting reads differently from a
+first.
+
+The next adventure's storyteller is shown who this party knows and **invited** to
+use one if there is a natural place for them — at most one per chapter, and never
+at the expense of the story that is actually happening. A chapter bent around an
+old acquaintance because the prompt insisted is worse than one that never
+mentions them. On a family's first adventure the block is empty and costs
+nothing, which is most adventures.
+
+Everyone she knows is listed on her own page, with what they are like and which
+story they met on.
 
 ### Knacks
 
@@ -1154,6 +1187,7 @@ lib/
     loadout.ts      What each adventurer is offered to pack, and how much
     practice.ts     Getting good at what you keep doing, and what you cannot use yet
     knacks.ts       What a level buys, and how the three offered are chosen
+    acquaintances.ts  Who comes home from an adventure, and how they are offered back
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -1178,6 +1212,7 @@ tests/
   loadout.test.ts   Unit tests — what is offered, and what may be packed
   growth.test.ts    Unit tests — the curve, the ledger, and locked things
   knacks.test.ts    Unit tests — the offer is stable, earned, and really rolls
+  acquaintances.test.ts  Unit tests — who graduates, and recognising them again
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
@@ -1190,6 +1225,7 @@ tests/
   loadout.e2e.mts     Packing, unpacking, and a brought thing finishing a quest
   growth.e2e.mts      Spending a point, learning a skill, and undoing both
   knacks.e2e.mts      Three offered, one taken, and one refused for being unearned
+  acquaintances.e2e.mts  Two adventures, and somebody who remembers you in the second
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves

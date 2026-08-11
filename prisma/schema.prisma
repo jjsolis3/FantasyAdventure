@@ -172,6 +172,7 @@ model Character {
 
   skills        CharacterSkill[]
   knacks        CharacterKnack[]
+  acquaintances Acquaintance[]
   practices     Practice[]
   inventory     InventoryItem[]
   keepsakes     Keepsake[]
@@ -189,6 +190,46 @@ model Character {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+/// Somebody this adventurer has met, who outlives the adventure.
+///
+/// NPC memories have always been recorded, and have always died with the
+/// campaign that made them. So a family could spend four evenings winning over
+/// a frightened beekeeper, finish the story, and start the next one in a world
+/// where nobody had ever met him — which is a strange thing for a game about
+/// a family building a life together.
+///
+/// Hung off the character rather than the account, so it survives an adventurer
+/// being handed to a child's own sign-in, and so a reunion can be personal: the
+/// beekeeper remembers *Mira*, not "the party".
+model Acquaintance {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// Normalised, for recognising the same person again: "beekeeper".
+  key  String
+  /// As the storyteller named them.
+  name String
+  /// What they are like, carried over from what was remembered about them.
+  about String
+
+  /// Which adventure they were met on. Kept as a title as well as an id,
+  /// because the id goes when the campaign does and the memory should not.
+  metInCampaignId    String?
+  metInCampaignTitle String
+
+  /// How many adventures they have now turned up in. A reunion with somebody
+  /// met three times reads differently from a first one, and the storyteller is
+  /// told which it is.
+  timesMet Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([characterId, key])
+  @@index([characterId])
 }
 
 /// Something she can do that she could not do before.
