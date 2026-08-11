@@ -11,7 +11,6 @@ import {
   RELATIONSHIP_KINDS,
   SKILLS_PER_CHARACTER,
   canonicalPair,
-  validateGrownStats,
   validateStats,
   type RelationshipKind,
   type StatBlock,
@@ -114,34 +113,35 @@ export async function updateCharacterAction(_prev: FormState, formData: FormData
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  const { might, wits, heart, spark, gender, description, ...rest } = parsed.data;
-  const stats: StatBlock = { might, wits, heart, spark };
-
-  // Against what she has grown into, not what she was built with. An adventurer
-  // who has earned points and spent them adds up to more than the build budget,
-  // and checking an edit against that budget would call her own sheet illegal.
-  const statCheck = validateGrownStats(stats, existing.xp);
-  if (!statCheck.ok) return { error: statCheck.reason };
-
-  const skills = parseSkills(formData);
+  // Deliberately only who she is — not what she can do.
+  //
+  // Stats and skills both grow through play now, and this form is the builder.
+  // Letting it write them back meant two editors for the same rows, one of
+  // which still believed the rule was "exactly twelve points and two skills":
+  // saving a typo fix would have undone every point she had spent and deleted
+  // every skill she had earned. Points are raised on the sheet, one at a time,
+  // and skills arrive by being practised. Nothing here can take either away.
+  const { might: _might, wits: _wits, heart: _heart, spark: _spark, gender, description, ...rest } =
+    parsed.data;
 
   await db.$transaction(async (tx) => {
     await tx.character.update({
       where: { id },
-      data: { ...rest, ...stats, gender: gender || null, description: description || null },
+      data: { ...rest, gender: gender || null, description: description || null },
     });
 
-    // Replace the skill set, but keep rank and xp for skills that survive the
-    // edit — losing a skill's progress because a name was retyped would be a
-    // rotten surprise mid-campaign.
-    await tx.characterSkill.deleteMany({ where: { characterId: id, name: { notIn: skills } } });
-    for (const name of skills) {
-      await tx.characterSkill.upsert({
-        where: { characterId_name: { characterId: id, name } },
-        create: { characterId: id, name },
-        update: {},
-      });
-    }
+    // Skills are deliberately not touched here.
+    //
+    // This used to replace the whole set from the form, which was right when
+    // the only skills that existed were the two picked in the builder. It is
+    // badly wrong now: a skill learned in play — four goes at climbing turning
+    // into Climbing — is not in the builder's list and does not survive being
+    // "replaced". Opening a sheet to fix a typo in a description would have
+    // quietly deleted everything she had earned, which is about the worst thing
+    // a save button can do.
+    //
+    // So the builder builds and play grows, and the two never write to the same
+    // rows. Nothing here can cost her a skill.
   });
 
   revalidatePath("/characters");
