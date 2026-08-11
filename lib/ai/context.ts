@@ -71,6 +71,14 @@ export type ContextInput = {
    */
   actSeeks?: string[];
   itemsHeld?: string[];
+  /**
+   * What each character is quietly hoping to do this chapter.
+   *
+   * The storyteller is the only one who sees all of these — that is the whole
+   * mechanism. Its job is to leave each of them a door, so that four players at
+   * one table are not all pushing on the same one.
+   */
+  personalAims?: { character: string; aim: string }[];
   party: PartyMemberContext[];
   bonds: BondContext[];
   location?: string | null;
@@ -174,6 +182,18 @@ export function buildContext(input: ContextInput): BuiltContext {
       : "",
     (input.itemsHeld?.length ?? 0) > 0
       ? `Already found and being carried: ${(input.itemsHeld ?? []).join(", ")}. Do not offer these again.`
+      : "",
+    // The one part of the context that is per-player rather than per-party.
+    // Without it four children take turns nudging the same plot; with it each
+    // of them has something only they are looking for.
+    (input.personalAims?.length ?? 0) > 0
+      ? `WHAT EACH OF THEM QUIETLY WANTS. Only you know these. Over this chapter, give ` +
+        `each character at least one opening to act on theirs — a person to talk to, a thing ` +
+        `to notice, a moment where it would be natural. Never announce them, never have a ` +
+        `character state theirs aloud, and never make one of them the thing the party must ` +
+        `do next:\n${(input.personalAims ?? [])
+          .map((entry) => `- ${entry.character}: ${entry.aim}`)
+          .join("\n")}`
       : "",
     "",
     "THE PARTY:",

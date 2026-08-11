@@ -133,10 +133,14 @@ try {
   );
   check("and nothing is done yet", quest.objectives.every((objective) => objective.doneAtTurn === null));
 
-  // A later chapter's quest is a spoiler and must not exist yet.
+  // A later chapter's quest is a spoiler and must not exist yet. Counted by
+  // chapter rather than in total, because personal quests legitimately open
+  // alongside this one.
   check(
     "later chapters keep their secrets",
-    (await db.quest.count({ where: { campaignId: campaign.id } })) === 1,
+    (await db.quest.count({
+      where: { campaignId: campaign.id, kind: "MAIN", actIndex: { gt: 1 } },
+    })) === 0,
   );
 
   // ---- Somebody turns up the thing ----------------------------------------
@@ -248,6 +252,31 @@ try {
       })
     ).foundInCampaignId === campaign.id,
   );
+
+  // ---- The shelf ------------------------------------------------------------
+  // The record of what she has done, on her own page, named by the adventure it
+  // happened on rather than as a loose pile.
+  await page.goto(`${BASE}/characters/${mira.id}`);
+  const sheet = (await page.textContent("main")) ?? "";
+  check("her page has a shelf", sheet.includes("The shelf"));
+  check("with what she gave up on it", sheet.includes(foundName));
+  check("and what it bought", sheet.includes(quest.title));
+  check(
+    "filed under the adventure it happened on",
+    sheet.includes(campaign.title),
+    campaign.title,
+  );
+
+  // ---- Where they went ------------------------------------------------------
+  await page.goto(`${BASE}/campaigns/${campaign.id}/journal`);
+  const journal = (await page.textContent("main")) ?? "";
+  const scenes = await db.scene.findMany({ where: { campaignId: campaign.id } });
+  const placed = scenes.find((scene) => scene.location !== null);
+
+  check("the journal draws the route", journal.includes("Where they went"));
+  if (placed?.location) {
+    check("naming where they have been", journal.includes(placed.location), placed.location);
+  }
 
   // ---- Taking the turn back -------------------------------------------------
   // A quest that finished on a turn the table takes back must un-finish, or the

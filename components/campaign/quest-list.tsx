@@ -13,11 +13,13 @@ export type QuestObjectiveView = {
 
 export type QuestView = {
   id: string;
-  kind: "MAIN" | "SIDE";
+  kind: "MAIN" | "SIDE" | "PERSONAL";
   status: "ACTIVE" | "COMPLETE" | "ABANDONED";
   title: string;
   summary: string;
   actIndex: number | null;
+  secretForCharacterId: string | null;
+  secretForName: string | null;
   objectives: QuestObjectiveView[];
 };
 
@@ -26,6 +28,31 @@ const STATUS_STYLES: Record<QuestView["status"], string> = {
   COMPLETE: "border-moss-800/50 bg-moss-900/10",
   ABANDONED: "border-hearth-800/40 bg-hearth-950/40",
 };
+
+/** A personal quest is marked so it never reads as something the party owes. */
+function QuestBadge({ quest }: { quest: QuestView }) {
+  if (quest.kind === "SIDE") {
+    return (
+      <span className="rounded-full border border-hearth-700/50 bg-hearth-800/40 px-2 py-0.5 text-xs text-hearth-300">
+        side quest
+      </span>
+    );
+  }
+
+  if (quest.kind === "PERSONAL") {
+    return (
+      <span className="rounded-full border border-hearth-500/50 bg-hearth-600/20 px-2 py-0.5 text-xs text-hearth-200">
+        {/* Once it is finished the whole table can see it, so it has to say
+            whose it was — otherwise the reveal has no name on it. */}
+        {quest.status === "ACTIVE"
+          ? "just for you"
+          : `${quest.secretForName ?? "somebody"}'s own`}
+      </span>
+    );
+  }
+
+  return null;
+}
 
 /**
  * The quest board.
@@ -65,11 +92,7 @@ export function QuestList({ quests, compact = false }: { quests: QuestView[]; co
                 {quest.status === "COMPLETE" ? "✓" : quest.status === "ABANDONED" ? "—" : "○"}
               </span>
               <span className="font-display min-w-0 flex-1 text-hearth-100">{quest.title}</span>
-              {quest.kind === "SIDE" ? (
-                <span className="rounded-full border border-hearth-700/50 bg-hearth-800/40 px-2 py-0.5 text-xs text-hearth-300">
-                  side quest
-                </span>
-              ) : null}
+              <QuestBadge quest={quest} />
               <span className="text-sm text-hearth-400">
                 {quest.status === "COMPLETE"
                   ? "done"

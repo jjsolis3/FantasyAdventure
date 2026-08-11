@@ -174,6 +174,7 @@ model Character {
   inventory     InventoryItem[]
   keepsakes     Keepsake[]
   questFinds    QuestObjective[]
+  personalQuests Quest[]         @relation("PersonalQuests")
   partyMemberships PartyMember[]
   partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
@@ -220,11 +221,18 @@ model Keepsake {
   note String
 
   /// Which adventure it was spent on, so a sheet can say where.
+  ///
+  /// Nulled rather than deleted if the adventure ever is: giving something up
+  /// happened to her whether or not the record of the story survives, and a
+  /// shelf that quietly loses a row is worse than one that says "an adventure
+  /// since forgotten".
   campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([characterId])
+  @@index([campaignId])
 }
 
 /// How a quest came to exist.
@@ -233,6 +241,9 @@ enum QuestKind {
   MAIN
   /// Something the storyteller introduced and the party may take or leave.
   SIDE
+  /// One girl's own aim for a chapter. Hers to see and hers to finish, and
+  /// shown to the rest of the party only once she has.
+  PERSONAL
 }
 
 enum QuestStatus {
@@ -275,9 +286,21 @@ model Quest {
   /// written at the Game Master and gives away how the chapter works.
   summary String
 
-  /// Which chapter this is the quest for. Null for side quests, which is what
-  /// lets one main quest per act be enforced without constraining the rest.
+  /// Which chapter this belongs to. Null for side quests, which arrive whenever
+  /// the story throws them up rather than belonging to a chapter.
   actIndex Int?
+
+  /// Whose aim this is, for a PERSONAL quest.
+  ///
+  /// Four players following one quest is one player with four mouths. A thread
+  /// of her own — grounded in her calling, not the plot — is what makes the
+  /// evening different for each of them.
+  ///
+  /// Private in the sense that it stays off everybody else's board until she
+  /// finishes it, at which point the whole table is told. The storyteller
+  /// always knows all of them; that is how it engineers her a moment.
+  secretForCharacterId String?
+  secretFor            Character? @relation("PersonalQuests", fields: [secretForCharacterId], references: [id], onDelete: Cascade)
 
   openedAtTurn    Int  @default(0)
   completedAtTurn Int?
@@ -287,10 +310,13 @@ model Quest {
 
   createdAt DateTime @default(now())
 
-  /// One main quest per chapter. Postgres treats NULLs as distinct here, so
-  /// side quests are unconstrained by the same index.
-  @@unique([campaignId, actIndex])
+  /// "One main quest per chapter" was a unique index here until personal
+  /// quests arrived carrying a chapter of their own. Postgres would not have
+  /// enforced the rule anyway once any column went null, so it is guarded where
+  /// it can actually be checked — every opener looks before it creates, inside
+  /// the turn's own transaction.
   @@index([campaignId])
+  @@index([secretForCharacterId])
 }
 
 model QuestObjective {
@@ -455,6 +481,7 @@ model Campaign {
   scenes Scene[]
   familyMoveUses FamilyMoveUse[]
   quests   Quest[]
+  keepsakes Keepsake[]
   memories Memory[]
   aiCalls  AiCall[]
   rounds   TurnRound[]

@@ -61,6 +61,9 @@ carrying it mean anything.
 | ✅ | **M10** Quests — chapters and side quests, tracked, finished and paid for |
 | ✅ | **M10** Spending what a quest took, and keeping it as a keepsake |
 | ✅ | **M10** Handing an item to somebody else in the party |
+| ✅ | **M10** An aim of her own each chapter, private until she finishes it |
+| ✅ | **M10** The shelf — everything an adventurer has given up, across every story |
+| ✅ | **M10** Where they went — the route a family walked, drawn in the journal |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -406,6 +409,24 @@ happened, so it can report one but never invent one.
 made — capped at two a turn and five open, because a model asked "did you start
 anything?" every turn will happily say yes every turn.
 
+**Everybody gets an aim of their own.** As each chapter opens, the storyteller is
+asked for one small thing per character — grounded in her calling rather than the
+plot, so that an aim which would make just as much sense handed to somebody else
+is the wrong aim. Four players following one quest is one player with four
+mouths; a thread of her own is what makes the same evening different for each of
+them.
+
+These are hers to see. A personal quest stays off everybody else's board until
+she finishes it, and then the whole table is told whose it was. Visibility
+follows who owns the adventurer rather than who is hosting, which gets both kinds
+of table right without a special case: on one shared screen the parent owns every
+character and sees everything, which is what running the table needs; on four
+phones each girl sees only her own. Finishing one pays her alone — it was the one
+thing on the board that was hers, and splitting it four ways would take that back.
+
+The storyteller is the only one who sees all of them at once, and is told to
+leave each character an opening rather than announce anything.
+
 **Finishing spends what it took.** When the last thing a quest was waiting for
 turns up, the quest completes: the table is told which item finished it and who
 handed it over, everybody travelling gains experience, and the item leaves that
@@ -439,6 +460,29 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### Where they went, and what they gave up
+
+**The route.** Every scene has always recorded a location and nothing ever
+showed it back, so a family who spent four evenings crossing a valley had no way
+to see they had crossed anything. The journal now draws the places in the order
+they were found: consecutive scenes in one place are a single stop, coming back
+somewhere later is a new stop marked *back again*, and a scene the storyteller
+never named a place for stays wherever the party already was — they did not
+teleport. Matching is forgiving about the storyteller's own inconsistency, since
+the same field returns as "the barley field", "The Barley Field" and "barley
+field" across three scenes.
+
+Deliberately a route rather than a map. There are no coordinates anywhere in the
+data, and inventing some would produce a confident little cartography that
+contradicts the story — a village drawn east of a river the narration put it west
+of. A line of places claims only what is actually known.
+
+**The shelf.** An adventurer's own page gathers everything she has ever given up
+to finish a quest, grouped by the adventure it happened on, across every story
+she has been in. Keepsakes outlive the adventure that made them: delete the
+campaign and they gather under "an adventure since forgotten" rather than
+vanishing, because the thing still happened to her.
 
 ### Hearing it, and seeing it
 
@@ -982,6 +1026,7 @@ lib/
     campaign-actions.ts  Server actions for campaigns and party
     finds.ts        Matching what a chapter asked for against what is carried
     quests.ts       Quests, ticking them off, and spending what it took
+    journey.ts      Folding scene locations into the route the party walked
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact
@@ -1002,6 +1047,7 @@ tests/
   images.test.ts    Unit tests — the prompt a picture is asked for with
   finds.test.ts     Unit tests — is the thing in your pocket the thing asked for
   quests.test.ts    Unit tests — resolving objectives, and what finishing says
+  journey.test.ts   Unit tests — one stop per place, and going back again
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
   auth.e2e.mts      Browser-driven auth flow
@@ -1011,6 +1057,7 @@ tests/
   rounds.e2e.mts      Two households, two browsers, one turn between them
   invites.e2e.mts     Asking somebody else's adventurer, and waiting for yes
   quests.e2e.mts      Finishing a quest, spending the item, handing things over
+  personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test

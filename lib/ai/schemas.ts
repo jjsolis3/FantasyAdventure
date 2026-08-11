@@ -127,6 +127,35 @@ export const extractionSchema = z.object({
 
 export type Extraction = z.infer<typeof extractionSchema>;
 
+/**
+ * One aim per character for the chapter ahead.
+ *
+ * Asked for by name rather than left to the storyteller's discretion, because a
+ * model told "give everyone something to do" reliably gives the loudest
+ * character three things and the quiet one nothing.
+ */
+export const personalQuestsSchema = z.object({
+  aims: z
+    .array(
+      z.object({
+        character: z.string().min(1),
+        title: z.string().min(1).max(80),
+        summary: z.string().min(1).max(200),
+        /**
+         * Deliberately one. A chapter-sized aim with three steps is a second
+         * plot competing with the real one, and four of those at a table of
+         * four is chaos.
+         */
+        objective: z.object({
+          kind: z.enum(["FIND", "DEED"]).default("DEED"),
+          text: z.string().min(1).max(120),
+        }),
+      }),
+    )
+    .max(6)
+    .default([]),
+});
+
 /** Scene summary produced when a scene closes. */
 export const summarySchema = z.object({
   summary: z.string().min(1).max(1200),

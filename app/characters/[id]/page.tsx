@@ -30,10 +30,33 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         include: { campaign: { select: { id: true, title: true, status: true } } },
       },
       portrait: { select: { version: true } },
-      keepsakes: { orderBy: { createdAt: "desc" } },
+      keepsakes: {
+        orderBy: { createdAt: "desc" },
+        include: { campaign: { select: { id: true, title: true } } },
+      },
     },
   });
   if (!character) notFound();
+
+  // Grouped by adventure, newest first, which is the order she would tell you
+  // about them in. An adventure that has since been deleted keeps its
+  // keepsakes — the thing still happened to her — so they gather under one
+  // honest heading rather than disappearing.
+  const shelf: { campaignId: string | null; title: string; keepsakes: typeof character.keepsakes }[] =
+    [];
+  for (const keepsake of character.keepsakes) {
+    const campaignId = keepsake.campaign?.id ?? null;
+    const existing = shelf.find((group) => group.campaignId === campaignId);
+    if (existing) {
+      existing.keepsakes.push(keepsake);
+    } else {
+      shelf.push({
+        campaignId,
+        title: keepsake.campaign?.title ?? "An adventure since forgotten",
+        keepsakes: [keepsake],
+      });
+    }
+  }
 
   // Your own adventurers, and anyone this one has actually travelled with.
   // The second half matters once a household hands each child their own
@@ -87,9 +110,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="space-y-6">
-        {character.skills.length > 0 ||
-        character.inventory.length > 0 ||
-        character.keepsakes.length > 0 ? (
+        {character.skills.length > 0 || character.inventory.length > 0 ? (
           <Card>
             <h2 className="font-display mb-4 text-xl text-hearth-100">What they can do</h2>
 
@@ -123,21 +144,38 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
               </>
             ) : null}
 
-            {character.keepsakes.length > 0 ? (
-              <>
-                <h3 className="mt-5 mb-2 text-sm font-medium tracking-wide text-hearth-400 uppercase">
-                  Given up
-                </h3>
-                <ul className="space-y-1">
-                  {character.keepsakes.map((keepsake) => (
-                    <li key={keepsake.id} className="text-sm text-hearth-200/80">
-                      {keepsake.name}
-                      <span className="text-hearth-400"> — {keepsake.note}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
+          </Card>
+        ) : null}
+
+        {/* The shelf: everything this adventurer has ever given up, across
+            every story she has been in. Its own card rather than a footnote
+            under what she can do, because this is the one part of the sheet
+            that is purely a record of what she has done — and the reason a
+            child comes back to look at their own page. */}
+        {shelf.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">The shelf</h2>
+            <p className="mb-5 text-sm text-hearth-400">
+              Things {character.name} gave up to finish something, and what each one bought.
+            </p>
+
+            <div className="space-y-5">
+              {shelf.map((group) => (
+                <div key={group.campaignId ?? "forgotten"}>
+                  <h3 className="mb-2 text-sm font-medium tracking-wide text-hearth-400 uppercase">
+                    {group.title}
+                  </h3>
+                  <ul className="space-y-1">
+                    {group.keepsakes.map((keepsake) => (
+                      <li key={keepsake.id} className="text-sm text-hearth-200/80">
+                        {keepsake.name}
+                        <span className="text-hearth-400"> — {keepsake.note}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </Card>
         ) : null}
 

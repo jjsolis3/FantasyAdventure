@@ -233,8 +233,12 @@ export const SKILL_XP_PER_USE = 1;
  * turn a cooperative game into a race to grab. A good roll is worth 2, so a
  * chapter is worth roughly four of them and a side quest half that — enough to
  * feel like an event, not enough to make the dice pointless.
+ *
+ * A personal quest is the exception and pays only her. It is the one thing on
+ * the board that was hers, and splitting it four ways would take that back. Set
+ * between the two so it is worth chasing without being the best way to level.
  */
-export const QUEST_XP = { MAIN: 8, SIDE: 4 } as const;
+export const QUEST_XP = { MAIN: 8, SIDE: 4, PERSONAL: 6 } as const;
 
 // ---- Family Moves ----------------------------------------------------------
 

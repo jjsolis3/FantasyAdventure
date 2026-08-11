@@ -115,6 +115,26 @@ const server = createServer((request, response) => {
         '"bondMoments":[{"from":"Rowan","to":"Mira","why":"stood between her and the noise"}],' +
         '"itemsGained":[{"character":"Mira","name":"a smooth grey stone","description":"warm to the touch"}],' +
         '"actComplete":false,"sceneComplete":false,}';
+    } else if (prompt.includes("aim of their own")) {
+      // One per character, echoed back from the names in the request, so the
+      // test exercises the real matching rather than a hard-coded party.
+      //
+      // Read from the party block specifically. The context above it is full of
+      // bulleted lines too — act beats, things to find — and a regex loose
+      // enough to catch those hands back aims addressed to "She can breathe
+      // fire but flinches when she does".
+      const block = prompt.split("aim of their own for this chapter:")[1] ?? "";
+      const named = [...block.split("\n\nReply with")[0].matchAll(/^- (.+?), /gm)].map(
+        (match) => match[1],
+      );
+      content = JSON.stringify({
+        aims: named.map((name) => ({
+          character: name,
+          title: `${name}'s own errand`,
+          summary: `See if you can manage something only you would think of, ${name}.`,
+          objective: { kind: "DEED", text: `${name} does the thing only she would do` },
+        })),
+      });
     } else if (prompt.includes("Summarise this scene")) {
       content = '{"summary":"The family met something frightened in the barley and calmed it."}';
     } else if (prompt.includes("This is the very first scene")) {

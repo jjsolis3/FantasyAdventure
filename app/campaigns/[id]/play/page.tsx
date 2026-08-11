@@ -161,7 +161,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     portraitVersion: member.character.portrait?.version ?? null,
   }));
 
-  const quests = await questBoard(db, campaign.id);
+  const quests = await questBoard(db, campaign.id, user.id);
   const openQuests = quests.filter((quest) => quest.status === "ACTIVE");
 
   // Everything the party is carrying from this adventure, for the tray. Kept

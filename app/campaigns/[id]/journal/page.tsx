@@ -6,6 +6,7 @@ import { memberCampaignFilter } from "@/lib/game/access";
 import { STATS, STAT_INFO, RELATIONSHIP_LABELS, kindFromPerspective } from "@/lib/game/rules";
 import { PrintButton } from "@/components/campaign/print-button";
 import { questBoard } from "@/lib/game/quests";
+import { journeyFrom, placesVisited } from "@/lib/game/journey";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
   });
   if (!campaign) notFound();
 
-  const quests = await questBoard(db, campaign.id);
+  const quests = await questBoard(db, campaign.id, user.id);
 
   const names = new Map(campaign.party.map((member) => [member.characterId, member.character.name]));
   const inParty = new Set(campaign.party.map((member) => member.characterId));
@@ -74,6 +75,12 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
   });
 
   const told = campaign.scenes.filter((scene) => scene.turns.length > 0);
+
+  // Only scenes that actually happened. A scene opened and never played has a
+  // location the party never saw, and putting it on the route would promise a
+  // place that is not in the story.
+  const journey = journeyFrom(told);
+  const places = placesVisited(journey);
 
   return (
     <main className="journal mx-auto max-w-3xl px-6 py-12">
@@ -192,6 +199,11 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
                 <p className="text-hearth-100">
                   {quest.title}
                   <span className="text-hearth-400">
+                    {/* Whose it was matters more than what it was, for the ones
+                        that belonged to one girl rather than the party. */}
+                    {quest.kind === "PERSONAL" && quest.secretForName
+                      ? ` · ${quest.secretForName}'s own`
+                      : ""}
                     {" · "}
                     {quest.status === "COMPLETE"
                       ? "finished"
@@ -220,6 +232,57 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {/* ---- Where they went ------------------------------------------------ */}
+      {journey.length > 0 ? (
+        <section className="mb-12">
+          <h2 className="font-display mb-1 border-b border-hearth-800/60 pb-2 text-2xl text-hearth-100">
+            Where they went
+          </h2>
+          <p className="mb-5 text-sm text-hearth-400">
+            {places === 1
+              ? "One place, so far."
+              : `${places} places, in the order they found them.`}
+          </p>
+
+          <ol className="space-y-0">
+            {journey.map((stop, index) => (
+              <li key={`${stop.location}-${stop.sceneIndex}`} className="journal-entry flex gap-4">
+                {/* The line itself: a dot per stop, joined by a rule, running
+                    out before the first and after the last so the route reads
+                    as a path rather than a closed list. */}
+                <div className="flex w-3 shrink-0 flex-col items-center" aria-hidden>
+                  <div
+                    className={`w-px flex-1 ${index === 0 ? "bg-transparent" : "bg-hearth-700/60"}`}
+                  />
+                  <div
+                    className={`my-1 h-2 w-2 rounded-full ${
+                      stop.returning ? "border border-hearth-500 bg-transparent" : "bg-hearth-500"
+                    }`}
+                  />
+                  <div
+                    className={`w-px flex-1 ${
+                      index === journey.length - 1 ? "bg-transparent" : "bg-hearth-700/60"
+                    }`}
+                  />
+                </div>
+
+                <div className="min-w-0 flex-1 py-2">
+                  <p className="text-hearth-100">
+                    {stop.location}
+                    {stop.returning ? (
+                      <span className="text-hearth-400"> — back again</span>
+                    ) : null}
+                  </p>
+                  <p className="text-sm text-hearth-200/60">
+                    Chapter {stop.actIndex} · {stop.scenes.join(", ")}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
         </section>
       ) : null}
 

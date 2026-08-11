@@ -47,7 +47,7 @@ export default async function FindsPage({ params }: { params: Promise<{ id: stri
   if (!campaign) notFound();
 
   const [quests, membership] = await Promise.all([
-    questBoard(db, campaign.id),
+    questBoard(db, campaign.id, user.id),
     membershipFor(campaign.id, user.id),
   ]);
 
@@ -106,7 +106,8 @@ export default async function FindsPage({ params }: { params: Promise<{ id: stri
           <p className="mb-4 text-sm text-hearth-400">
             A chapter opens its own quest as you reach it, and the storyteller may add errands along
             the way. The things they ask for are made findable — there is always more than one way
-            to come by them.
+            to come by them. Anything marked <em>just for you</em> is yours alone; nobody else sees
+            it until you have done it.
           </p>
           <QuestList quests={quests} />
         </Card>
