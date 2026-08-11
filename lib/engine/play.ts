@@ -12,13 +12,14 @@ import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/con
 import {
   conversationPrompt,
   openingPrompt,
+  personalQuestsPrompt,
   suggestionPrompt,
   summaryPrompt,
   systemPrompt,
   type ReadingLevelKey,
   type ToneKey,
 } from "@/lib/ai/prompts";
-import { suggestionsSchema, summarySchema, validator } from "@/lib/ai/schemas";
+import { personalQuestsSchema, suggestionsSchema, summarySchema, validator } from "@/lib/ai/schemas";
 import { requestStructured } from "@/lib/ai/json";
 import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
@@ -27,7 +28,12 @@ import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
 import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
 import { memberCampaignFilter } from "@/lib/game/access";
-import { advanceQuests, openMainQuest } from "@/lib/game/quests";
+import {
+  advanceQuests,
+  openMainQuest,
+  openPersonalQuests,
+  type PersonalAim,
+} from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
 import {
   SKILL_XP_PER_USE,
@@ -264,6 +270,7 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     actBeats: act?.beats ?? [],
     actSeeks: act?.seeks ?? [],
     itemsHeld: await heldItemNames(campaign.id),
+    personalAims: await personalAimsFor(campaign.id),
     party: partyContext(campaign),
     bonds: bondContext(campaign),
     location: openScene?.location,
@@ -293,6 +300,30 @@ async function heldItemNames(campaignId: string): Promise<string[]> {
   });
 
   return [...new Set(items.map((item) => item.name))];
+}
+
+/**
+ * Everyone's outstanding personal aim, for the storyteller's eyes only.
+ *
+ * Finished ones are left out: an aim it is still being told to engineer moments
+ * for, after she has already pulled it off, is how a chapter ends up circling
+ * the same beat.
+ */
+async function personalAimsFor(campaignId: string): Promise<{ character: string; aim: string }[]> {
+  const quests = await db.quest.findMany({
+    where: { campaignId, kind: "PERSONAL", status: "ACTIVE" },
+    include: {
+      secretFor: { select: { name: true } },
+      objectives: { orderBy: { position: "asc" }, take: 1 },
+    },
+  });
+
+  return quests
+    .filter((quest) => quest.secretFor !== null)
+    .map((quest) => ({
+      character: quest.secretFor!.name,
+      aim: quest.objectives[0]?.text ?? quest.summary,
+    }));
 }
 
 async function nextOrdinal(sceneId: string): Promise<number> {
@@ -369,6 +400,22 @@ export async function beginCampaign(
     );
   }
 
+  const firstAct = campaign.storyline.acts.find((act) => act.index === 1);
+
+  // Asked for before the transaction opens, because it is a model call.
+  const aims = firstAct
+    ? await fetchPersonalAims(
+        calls,
+        built.text,
+        firstAct,
+        campaign.party.map((member) => ({
+          name: member.character.name,
+          archetype: member.character.archetype,
+          description: member.character.description,
+        })),
+      )
+    : [];
+
   const scene = await db.$transaction(async (tx) => {
     const created = await tx.scene.create({
       data: {
@@ -390,8 +437,20 @@ export async function beginCampaign(
 
     // The first chapter's quest opens with the story. Later ones open as the
     // party reaches them — what a chapter is asking for is a spoiler.
-    const firstAct = campaign.storyline.acts.find((act) => act.index === 1);
-    if (firstAct) await openMainQuest(tx, campaign.id, firstAct, 0);
+    if (firstAct) {
+      await openMainQuest(tx, campaign.id, firstAct, 0);
+      await openPersonalQuests(
+        tx,
+        campaign.id,
+        firstAct.index,
+        aims,
+        campaign.party.map((member) => ({
+          characterId: member.characterId,
+          characterName: member.character.name,
+        })),
+        0,
+      );
+    }
 
     return created;
   });
@@ -399,6 +458,36 @@ export async function beginCampaign(
   await logAiCalls(campaign.id, records, 0);
 
   return { sceneId: scene.id, narration: narration.trim() };
+}
+
+/**
+ * Asks the storyteller for one aim per character for the chapter ahead.
+ *
+ * Runs once when a chapter opens, not once a turn, which keeps it to three or
+ * four calls an adventure. Outside the turn's transaction on purpose — a model
+ * call can take twenty seconds and holding a database transaction open across
+ * it would be a good way to wedge the table.
+ *
+ * Never throws. Personal aims are a bonus thread; losing them costs the evening
+ * some texture but nothing that the story depends on, and failing a whole turn
+ * over one would be a poor trade.
+ */
+async function fetchPersonalAims(
+  calls: ModelCalls,
+  context: string,
+  act: { title: string },
+  party: { name: string; archetype: string; description: string | null }[],
+): Promise<PersonalAim[]> {
+  try {
+    const result = await requestStructured({
+      call: (hint) =>
+        calls.json(personalQuestsPrompt({ context, actTitle: act.title, party }), hint),
+      validate: validator(personalQuestsSchema),
+    });
+    return result.value.aims;
+  } catch {
+    return [];
+  }
 }
 
 export type PlayerAction = { characterId: string; text: string };
@@ -551,6 +640,30 @@ export async function playTurn(
   const turnCounter = campaign.turnCounter + 1;
   /** Set inside the transaction; the caller needs it to show the ending. */
   let campaignComplete = false;
+
+  // Whether the story is about to move on depends only on what the model just
+  // said and on where the campaign already was, so it can be worked out here —
+  // which matters, because the next chapter's personal aims need a model call
+  // and that cannot happen inside the transaction.
+  const movingOn =
+    result.extraction.actComplete &&
+    campaign.currentActIndex < campaign.storyline.acts.length;
+  const nextAct = movingOn
+    ? campaign.storyline.acts.find((act) => act.index === campaign.currentActIndex + 1)
+    : undefined;
+
+  const nextAims = nextAct
+    ? await fetchPersonalAims(
+        calls,
+        built.text,
+        nextAct,
+        campaign.party.map((member) => ({
+          name: member.character.name,
+          archetype: member.character.archetype,
+          description: member.character.description,
+        })),
+      )
+    : [];
 
   await db.$transaction(async (tx) => {
     let ordinal = await nextOrdinal(scene.id);
@@ -758,6 +871,24 @@ export async function playTurn(
           : undefined,
       })),
     );
+
+    // The next chapter's personal aims open only after all that has settled.
+    // Opened any earlier they would be in the list `advanceQuests` just walked,
+    // and an aim for a chapter nobody has played yet could be ticked off — and
+    // finished — by something already in her pocket.
+    if (advancesAct && nextAct) {
+      await openPersonalQuests(
+        tx,
+        campaign.id,
+        nextAct.index,
+        nextAims,
+        campaign.party.map((member) => ({
+          characterId: member.characterId,
+          characterName: member.character.name,
+        })),
+        turnCounter,
+      );
+    }
 
     for (const milestone of milestones) {
       await tx.turnEvent.create({

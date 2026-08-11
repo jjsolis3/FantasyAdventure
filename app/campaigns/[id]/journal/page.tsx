@@ -57,7 +57,7 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
   });
   if (!campaign) notFound();
 
-  const quests = await questBoard(db, campaign.id);
+  const quests = await questBoard(db, campaign.id, user.id);
 
   const names = new Map(campaign.party.map((member) => [member.characterId, member.character.name]));
   const inParty = new Set(campaign.party.map((member) => member.characterId));
@@ -192,6 +192,11 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
                 <p className="text-hearth-100">
                   {quest.title}
                   <span className="text-hearth-400">
+                    {/* Whose it was matters more than what it was, for the ones
+                        that belonged to one girl rather than the party. */}
+                    {quest.kind === "PERSONAL" && quest.secretForName
+                      ? ` · ${quest.secretForName}'s own`
+                      : ""}
                     {" · "}
                     {quest.status === "COMPLETE"
                       ? "finished"

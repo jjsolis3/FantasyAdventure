@@ -133,10 +133,14 @@ try {
   );
   check("and nothing is done yet", quest.objectives.every((objective) => objective.doneAtTurn === null));
 
-  // A later chapter's quest is a spoiler and must not exist yet.
+  // A later chapter's quest is a spoiler and must not exist yet. Counted by
+  // chapter rather than in total, because personal quests legitimately open
+  // alongside this one.
   check(
     "later chapters keep their secrets",
-    (await db.quest.count({ where: { campaignId: campaign.id } })) === 1,
+    (await db.quest.count({
+      where: { campaignId: campaign.id, kind: "MAIN", actIndex: { gt: 1 } },
+    })) === 0,
   );
 
   // ---- Somebody turns up the thing ----------------------------------------

@@ -21,7 +21,7 @@
  * it, so it leaves the pack and becomes a keepsake naming what it bought.
  */
 
-import type { Prisma } from "@/generated/prisma/client.ts";
+import type { Prisma, QuestKind } from "@/generated/prisma/client.ts";
 import { looksLikeTheSameThing } from "@/lib/game/finds";
 import { QUEST_XP, levelFor } from "@/lib/game/rules";
 
@@ -126,23 +126,34 @@ export type SpentItem = { itemName: string; foundByName: string };
  * buried in a transaction.
  */
 export function completionMessages(
-  quest: { title: string; kind: "MAIN" | "SIDE" },
+  quest: { title: string; kind: QuestKind; secretForName?: string | null },
   spent: SpentItem[],
   xp: number,
 ): string[] {
   const messages: string[] = [];
 
+  // A personal quest is announced as a reveal, because until this moment nobody
+  // else knew she was carrying it. That is most of the pleasure of it.
+  const opening =
+    quest.kind === "PERSONAL" && quest.secretForName
+      ? `${quest.secretForName} had something of her own to do: ${quest.title} — done.`
+      : `${quest.title} — done.`;
+
   if (spent.length === 0) {
-    messages.push(`${quest.title} — done.`);
+    messages.push(opening);
   } else {
     // Named individually when different people gave things up, because which
     // child handed over which thing is the part they will remember.
     const byFinder = spent.map((item) => `${item.foundByName} gave up ${item.itemName}`);
-    messages.push(`${quest.title} — done. ${listOf(byFinder)}.`);
+    messages.push(`${opening} ${listOf(byFinder)}.`);
   }
 
   if (xp > 0) {
-    messages.push(`Everyone gains ${xp} experience for finishing it.`);
+    messages.push(
+      quest.kind === "PERSONAL" && quest.secretForName
+        ? `${quest.secretForName} gains ${xp} experience for it.`
+        : `Everyone gains ${xp} experience for finishing it.`,
+    );
   }
 
   return messages;
@@ -174,8 +185,11 @@ export async function openMainQuest(
   act: ActLike,
   turn: number,
 ): Promise<void> {
+  // Scoped to MAIN deliberately. Personal quests carry a chapter of their own,
+  // so an unscoped look would find one of those and decide the chapter already
+  // had its quest.
   const existing = await tx.quest.findFirst({
-    where: { campaignId, actIndex: act.index },
+    where: { campaignId, kind: "MAIN", actIndex: act.index },
     select: { id: true },
   });
   if (existing) return;
@@ -205,6 +219,63 @@ export async function openMainQuest(
       },
     },
   });
+}
+
+export type PersonalAim = {
+  character: string;
+  title: string;
+  summary: string;
+  objective: { kind: "FIND" | "DEED"; text: string };
+};
+
+/**
+ * Gives each character her own aim for the chapter.
+ *
+ * Guarded the same way the chapter's own quest is — looked for before it is
+ * created — so a chapter that opens twice, or a turn that is taken back and
+ * replayed, does not leave her with two.
+ */
+export async function openPersonalQuests(
+  tx: Tx,
+  campaignId: string,
+  actIndex: number,
+  aims: PersonalAim[],
+  party: { characterId: string; characterName: string }[],
+  turn: number,
+): Promise<void> {
+  for (const aim of aims) {
+    const member = party.find(
+      (entry) => entry.characterName.toLocaleLowerCase() === aim.character.trim().toLocaleLowerCase(),
+    );
+    // An aim for somebody who is not travelling belongs to nobody.
+    if (!member) continue;
+
+    const existing = await tx.quest.findFirst({
+      where: {
+        campaignId,
+        kind: "PERSONAL",
+        actIndex,
+        secretForCharacterId: member.characterId,
+      },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    await tx.quest.create({
+      data: {
+        campaignId,
+        kind: "PERSONAL",
+        actIndex,
+        secretForCharacterId: member.characterId,
+        title: aim.title.trim(),
+        summary: aim.summary.trim(),
+        openedAtTurn: turn,
+        objectives: {
+          create: [{ kind: aim.objective.kind, text: aim.objective.text, position: 0 }],
+        },
+      },
+    });
+  }
 }
 
 export type QuestOpening = {
@@ -285,7 +356,13 @@ async function openSideQuests(
  */
 async function completeQuest(
   tx: Tx,
-  quest: { id: string; title: string; kind: "MAIN" | "SIDE"; campaignId: string },
+  quest: {
+    id: string;
+    title: string;
+    kind: QuestKind;
+    campaignId: string;
+    secretForCharacterId: string | null;
+  },
   partyCharacterIds: string[],
   turn: number,
 ): Promise<string[]> {
@@ -345,9 +422,26 @@ async function completeQuest(
   });
 
   const xp = QUEST_XP[quest.kind];
-  const messages = completionMessages(quest, spent, xp);
 
-  for (const characterId of partyCharacterIds) {
+  // A personal quest pays her alone. It was the one thing on the board that was
+  // hers, and splitting it four ways would quietly take that back.
+  const paid =
+    quest.kind === "PERSONAL" && quest.secretForCharacterId
+      ? [quest.secretForCharacterId]
+      : partyCharacterIds;
+
+  const secretForName = quest.secretForCharacterId
+    ? ((
+        await tx.character.findUnique({
+          where: { id: quest.secretForCharacterId },
+          select: { name: true },
+        })
+      )?.name ?? null)
+    : null;
+
+  const messages = completionMessages({ ...quest, secretForName }, spent, xp);
+
+  for (const characterId of paid) {
     const character = await tx.character.findUnique({
       where: { id: characterId },
       select: { name: true, xp: true, level: true },
@@ -451,7 +545,13 @@ export async function advanceQuests(tx: Tx, input: QuestTurnInput): Promise<stri
     messages.push(
       ...(await completeQuest(
         tx,
-        { id: quest.id, title: quest.title, kind: quest.kind, campaignId: input.campaignId },
+        {
+          id: quest.id,
+          title: quest.title,
+          kind: quest.kind,
+          campaignId: input.campaignId,
+          secretForCharacterId: quest.secretForCharacterId,
+        },
         input.party.map((member) => member.characterId),
         input.turn,
       )),
@@ -483,6 +583,7 @@ export async function advanceQuests(tx: Tx, input: QuestTurnInput): Promise<stri
               title: chapterQuest.title,
               kind: chapterQuest.kind,
               campaignId: input.campaignId,
+              secretForCharacterId: chapterQuest.secretForCharacterId,
             },
             input.party.map((member) => member.characterId),
             input.turn,
@@ -505,10 +606,39 @@ export async function advanceQuests(tx: Tx, input: QuestTurnInput): Promise<stri
   return messages;
 }
 
+/**
+ * Whether this account may see a quest on the board.
+ *
+ * Only personal quests are ever hidden, and only while they are unfinished —
+ * the reveal at the end is most of the point of one. Visibility follows who
+ * owns the character rather than who is hosting, which gets both kinds of table
+ * right without a special case: on one shared screen the parent owns every
+ * adventurer and sees everything, which is what running the table needs; on
+ * four phones each girl owns hers and nobody else's aim appears.
+ *
+ * A viewer of `undefined` sees no personal quests at all. That is the safe way
+ * for a caller to be wrong.
+ */
+export function questVisibleTo(
+  quest: {
+    kind: QuestKind;
+    status: "ACTIVE" | "COMPLETE" | "ABANDONED";
+    secretForUserId: string | null;
+  },
+  viewerUserId: string | undefined,
+): boolean {
+  if (quest.kind !== "PERSONAL") return true;
+  if (quest.status !== "ACTIVE") return true;
+  return viewerUserId !== undefined && quest.secretForUserId === viewerUserId;
+}
+
 export type QuestBoardEntry = {
   id: string;
-  kind: "MAIN" | "SIDE";
+  kind: QuestKind;
   status: "ACTIVE" | "COMPLETE" | "ABANDONED";
+  /** Whose aim this is, when it is a personal one. */
+  secretForCharacterId: string | null;
+  secretForName: string | null;
   title: string;
   summary: string;
   actIndex: number | null;
@@ -531,6 +661,19 @@ export type QuestBoardEntry = {
 export async function questBoard(
   db: { quest: Tx["quest"] },
   campaignId: string,
+  /**
+   * The account looking. Personal quests belong to whoever owns the character,
+   * and stay off everybody else's board until they are finished.
+   *
+   * Ownership rather than a host exception, because it gets both tables right
+   * on its own: on one shared screen the parent owns every character and sees
+   * everything, which is what running the table needs; on four phones each girl
+   * owns hers and nobody else's aim shows up.
+   *
+   * Omit it and nothing personal is shown at all — the safe direction to fail
+   * in, since a caller that forgot reveals nothing rather than everything.
+   */
+  viewerUserId?: string,
 ): Promise<QuestBoardEntry[]> {
   const quests = await db.quest.findMany({
     where: { campaignId },
@@ -539,6 +682,7 @@ export async function questBoard(
         orderBy: { position: "asc" },
         include: { foundBy: { select: { name: true } } },
       },
+      secretFor: { select: { name: true, userId: true } },
     },
     orderBy: [{ actIndex: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
   });
@@ -546,6 +690,9 @@ export async function questBoard(
   const rank = { ACTIVE: 0, COMPLETE: 1, ABANDONED: 2 };
 
   return quests
+    .filter((quest) =>
+      questVisibleTo({ ...quest, secretForUserId: quest.secretFor?.userId ?? null }, viewerUserId),
+    )
     .map((quest) => ({
       id: quest.id,
       kind: quest.kind,
@@ -553,6 +700,8 @@ export async function questBoard(
       title: quest.title,
       summary: quest.summary,
       actIndex: quest.actIndex,
+      secretForCharacterId: quest.secretForCharacterId,
+      secretForName: quest.secretFor?.name ?? null,
       objectives: quest.objectives.map((objective) => ({
         id: objective.id,
         kind: objective.kind,

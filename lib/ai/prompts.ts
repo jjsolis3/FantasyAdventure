@@ -260,6 +260,57 @@ Write only the story.`;
 }
 
 /**
+ * One aim per character for the chapter ahead.
+ *
+ * Run once when a chapter opens rather than every turn, which keeps it to a
+ * handful of calls an adventure. Each character is named in the request and
+ * required in the reply, because a storyteller asked to "give everyone
+ * something personal" hands the bold one three threads and the quiet one none —
+ * and the quiet one is exactly who this feature is for.
+ *
+ * The aims lean on the character rather than the plot on purpose. "Find out
+ * what the miller is hiding" is just the main quest again, wearing a hat. "Get
+ * the goat to like you" is hers.
+ */
+export function personalQuestsPrompt(options: {
+  context: string;
+  actTitle: string;
+  party: { name: string; archetype: string; description: string | null }[];
+}): string {
+  const who = options.party
+    .map(
+      (member) =>
+        `- ${member.name}, ${member.archetype}${member.description ? `. ${member.description}` : ""}`,
+    )
+    .join("\n");
+
+  return `${options.context}
+
+The chapter beginning is called "${options.actTitle}".
+
+Give each of these characters ONE small aim of their own for this chapter:
+
+${who}
+
+Reply with ONLY this JSON, no other text:
+{
+  "aims": [{"character": "<name>", "title": "<short name for it>", "summary": "<one line, spoken to them>", "objective": {"kind": "FIND|DEED", "text": "<the one thing that finishes it>"}}]
+}
+
+Rules:
+- One aim for EVERY character listed, no more and no less.
+- It must come from who they are — their calling, what they are like — and not
+  from the plot. If an aim would still make sense handed to a different
+  character, it is the wrong aim.
+- Small enough to finish in one chapter, and possible in the place they are.
+  Something they could do this evening, not a life ambition.
+- Nothing that requires another character to fail, lose something, or be kept in
+  the dark. These run alongside the story, never against each other.
+- Write the summary TO them: "See if you can get the miller's dog to trust you."
+- kind is FIND only if it is finished by carrying an object. Otherwise DEED.`;
+}
+
+/**
  * A turn where the party talks rather than acts.
  *
  * No dice, no consequences, no act progress — the storyteller listens and the

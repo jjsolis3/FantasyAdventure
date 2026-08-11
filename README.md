@@ -61,6 +61,7 @@ carrying it mean anything.
 | ✅ | **M10** Quests — chapters and side quests, tracked, finished and paid for |
 | ✅ | **M10** Spending what a quest took, and keeping it as a keepsake |
 | ✅ | **M10** Handing an item to somebody else in the party |
+| ✅ | **M10** An aim of her own each chapter, private until she finishes it |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -405,6 +406,24 @@ happened, so it can report one but never invent one.
 **The storyteller can open side quests** — a neighbour's missing cat, a promise
 made — capped at two a turn and five open, because a model asked "did you start
 anything?" every turn will happily say yes every turn.
+
+**Everybody gets an aim of their own.** As each chapter opens, the storyteller is
+asked for one small thing per character — grounded in her calling rather than the
+plot, so that an aim which would make just as much sense handed to somebody else
+is the wrong aim. Four players following one quest is one player with four
+mouths; a thread of her own is what makes the same evening different for each of
+them.
+
+These are hers to see. A personal quest stays off everybody else's board until
+she finishes it, and then the whole table is told whose it was. Visibility
+follows who owns the adventurer rather than who is hosting, which gets both kinds
+of table right without a special case: on one shared screen the parent owns every
+character and sees everything, which is what running the table needs; on four
+phones each girl sees only her own. Finishing one pays her alone — it was the one
+thing on the board that was hers, and splitting it four ways would take that back.
+
+The storyteller is the only one who sees all of them at once, and is told to
+leave each character an opening rather than announce anything.
 
 **Finishing spends what it took.** When the last thing a quest was waiting for
 turns up, the quest completes: the table is told which item finished it and who
@@ -1011,6 +1030,7 @@ tests/
   rounds.e2e.mts      Two households, two browsers, one turn between them
   invites.e2e.mts     Asking somebody else's adventurer, and waiting for yes
   quests.e2e.mts      Finishing a quest, spending the item, handing things over
+  personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test

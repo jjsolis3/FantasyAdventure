@@ -5,9 +5,11 @@ import {
   findMessage,
   listOf,
   resolveDeeds,
+  questVisibleTo,
   resolveFinds,
   type ObjectiveLike,
 } from "../lib/game/quests.ts";
+import { QUEST_XP } from "../lib/game/rules.ts";
 
 function find(id: string, text: string, done = false): ObjectiveLike {
   return { id, kind: "FIND", text, position: Number(id.slice(1)), doneAtTurn: done ? 1 : null };
@@ -130,4 +132,83 @@ test("quests: lists read the way somebody would say them", () => {
   assert.equal(listOf(["a"]), "a");
   assert.equal(listOf(["a", "b"]), "a and b");
   assert.equal(listOf(["a", "b", "c"]), "a, b and c");
+});
+
+// ---- Personal quests --------------------------------------------------------
+
+test("quests: a personal quest is announced with her name on it", () => {
+  // Nobody else knew she was carrying this, so the announcement is a reveal.
+  const messages = completionMessages(
+    { title: "Make friends with the dog", kind: "PERSONAL", secretForName: "Wren" },
+    [],
+    6,
+  );
+
+  assert.equal(
+    messages[0],
+    "Wren had something of her own to do: Make friends with the dog — done.",
+  );
+  assert.equal(messages[1], "Wren gains 6 experience for it.");
+});
+
+test("quests: a personal quest pays her, not the party", () => {
+  const messages = completionMessages(
+    { title: "Make friends with the dog", kind: "PERSONAL", secretForName: "Wren" },
+    [],
+    6,
+  );
+  assert.ok(!messages.some((message) => message.includes("Everyone gains")));
+});
+
+test("quests: a personal quest that cost her something still says so", () => {
+  const messages = completionMessages(
+    { title: "Pay the toll", kind: "PERSONAL", secretForName: "Wren" },
+    [{ itemName: "the copper coin", foundByName: "Wren" }],
+    6,
+  );
+
+  assert.equal(
+    messages[0],
+    "Wren had something of her own to do: Pay the toll — done. Wren gave up the copper coin.",
+  );
+});
+
+test("quests: a party quest is never attributed to one girl", () => {
+  const messages = completionMessages({ title: "The Locked Mill", kind: "MAIN" }, [], 8);
+  assert.equal(messages[0], "The Locked Mill — done.");
+  assert.equal(messages[1], "Everyone gains 8 experience for finishing it.");
+});
+
+test("quests: personal rewards sit between a side quest and a chapter", () => {
+  // Worth chasing, without being the fastest way to level.
+  assert.ok(QUEST_XP.SIDE < QUEST_XP.PERSONAL);
+  assert.ok(QUEST_XP.PERSONAL < QUEST_XP.MAIN);
+});
+
+test("quests: a girl sees her own aim and nobody else's", () => {
+  const hers = { kind: "PERSONAL" as const, status: "ACTIVE" as const, secretForUserId: "wren-account" };
+
+  assert.equal(questVisibleTo(hers, "wren-account"), true);
+  assert.equal(questVisibleTo(hers, "mira-account"), false);
+});
+
+test("quests: finishing it tells everybody", () => {
+  // The reveal is most of the point; a finished aim is public.
+  const done = { kind: "PERSONAL" as const, status: "COMPLETE" as const, secretForUserId: "wren-account" };
+  assert.equal(questVisibleTo(done, "mira-account"), true);
+  assert.equal(questVisibleTo(done, undefined), true);
+});
+
+test("quests: a caller that forgets who is looking reveals nothing", () => {
+  // The safe direction to be wrong in.
+  const hers = { kind: "PERSONAL" as const, status: "ACTIVE" as const, secretForUserId: "wren-account" };
+  assert.equal(questVisibleTo(hers, undefined), false);
+});
+
+test("quests: party quests are never hidden from anyone", () => {
+  for (const kind of ["MAIN", "SIDE"] as const) {
+    const quest = { kind, status: "ACTIVE" as const, secretForUserId: null };
+    assert.equal(questVisibleTo(quest, undefined), true, kind);
+    assert.equal(questVisibleTo(quest, "anybody"), true, kind);
+  }
 });
