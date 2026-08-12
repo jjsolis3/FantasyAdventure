@@ -281,6 +281,14 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 </Link>
                 {campaign.status === "SETUP" ? null : (
                   <Link
+                    href={`/campaigns/${campaign.id}/summary`}
+                    className="inline-block rounded-lg border border-hearth-700 px-5 py-2.5 text-hearth-200 transition-colors hover:bg-hearth-800/50"
+                  >
+                    {campaign.status === "COMPLETE" ? "How it went" : "How it is going"}
+                  </Link>
+                )}
+                {campaign.status === "SETUP" ? null : (
+                  <Link
                     href={`/campaigns/${campaign.id}/journal`}
                     className="inline-block rounded-lg border border-hearth-700 px-5 py-2.5 font-medium text-hearth-200 transition-colors hover:bg-hearth-800/50"
                   >

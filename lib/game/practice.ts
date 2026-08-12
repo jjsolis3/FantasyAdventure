@@ -132,6 +132,82 @@ export function skillNameFrom(label: string): string {
   return titleCase(label.trim()).slice(0, 40);
 }
 
+// ---- What a rank lets you do ------------------------------------------------
+
+/**
+ * The abilities a skill unlocks as it improves.
+ *
+ * A rank used to do exactly one thing: add itself to a roll. So "Climbing rank
+ * 3" was a number that made a die slightly friendlier, and a child who had
+ * worked her way up to it had nothing she could point at and *do*.
+ *
+ * These are written to fit any skill, including ones learned in play — the
+ * catalogue could not name an ability for "Humming" because nobody knew
+ * Humming would exist. So the ability is the shape and the skill is the
+ * subject: Steady Hand works the same whether it is Climbing or Humming, and
+ * reads naturally either way.
+ *
+ * Three of them, one per rank past the first, escalating from "sometimes I do
+ * not have to roll" to "this never goes badly for me".
+ */
+export const RANK_ABILITIES = [
+  {
+    rank: 2,
+    name: "Steady Hand",
+    blurb: (skill: string) =>
+      `Once a chapter, do something with ${skill} without rolling for it. It simply works.`,
+    hint: (skill: string) =>
+      `Once a chapter this character may use ${skill} without a roll. When they say they are ` +
+      `doing it, narrate it working — no dice, no complication.`,
+  },
+  {
+    rank: 3,
+    name: "Show Someone How",
+    blurb: (skill: string) =>
+      `Talk somebody else through it. Their next try at ${skill} goes as well as yours would.`,
+    hint: (skill: string) =>
+      `This character can talk another through ${skill}. When they do, that character's next ` +
+      `attempt at it goes markedly better than it would have, and you should say so plainly.`,
+  },
+  {
+    rank: 4,
+    name: "Second Nature",
+    blurb: (skill: string) => `${skill} never goes badly wrong for you any more. It just does not.`,
+    hint: (skill: string) =>
+      `${skill} never fails outright for this character. A bad roll is an awkward, slower or ` +
+      `less tidy success — never a plain failure.`,
+  },
+] as const;
+
+export type RankAbility = {
+  rank: number;
+  name: string;
+  blurb: string;
+  hint: string;
+};
+
+/** What this skill, at this rank, lets her do. */
+export function abilitiesFor(skill: SkillRow): RankAbility[] {
+  return RANK_ABILITIES.filter((ability) => skill.rank >= ability.rank).map((ability) => ({
+    rank: ability.rank,
+    name: ability.name,
+    blurb: ability.blurb(skill.name),
+    hint: ability.hint(skill.name),
+  }));
+}
+
+/** The one a rank just unlocked, if it unlocked one. */
+export function abilityUnlockedAt(skill: SkillRow): RankAbility | undefined {
+  return abilitiesFor(skill).find((ability) => ability.rank === skill.rank);
+}
+
+/** Everything the storyteller has to honour, across a character's skills. */
+export function abilityHints(skills: SkillRow[]): string[] {
+  return skills.flatMap((skill) =>
+    abilitiesFor(skill).map((ability) => `${ability.name} (${skill.name}): ${ability.hint}`),
+  );
+}
+
 /** Whether a rank is as far as this skill goes. */
 export function atSkillCap(rank: number): boolean {
   return rank >= MAX_SKILL_RANK;

@@ -13,7 +13,8 @@ import { Growth } from "@/components/character/growth";
 import { KnackOffer, KnacksHeld } from "@/components/character/knacks";
 import { knacksUnspent, offerFor } from "@/lib/game/knacks";
 import { signatureFor } from "@/lib/game/character-options";
-import { hasRequirement, lockedFor } from "@/lib/game/practice";
+import { abilitiesFor, hasRequirement, lockedFor } from "@/lib/game/practice";
+import { capitalise, pronounsOf, toBe, toHave } from "@/lib/game/pronouns";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,10 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
   };
   const unspent = statPointsUnspent(stats, character.xp);
   const signature = signatureFor(character.archetype);
+
+  // Pronouns have always been stored and always been handed to the storyteller,
+  // which is why the story got them right and these headings did not.
+  const them = pronounsOf(character.pronouns);
 
   // What levelling up has bought her, and what is still waiting to be spent.
   // The offer is a pure function of her own state, so it is the same three on
@@ -159,14 +164,16 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             is the reason she opened her own page. */}
         <Card>
           <h2 className="font-display mb-1 text-xl text-hearth-100">
-            {unspent > 0 ? "She has grown" : "What she is like"}
+            {unspent > 0
+              ? `${capitalise(them.subject)} ${toHave(them.subject)} grown`
+              : `What ${them.subject} ${toBe(them.subject)} like`}
           </h2>
           <Growth characterId={character.id} stats={stats} xp={character.xp} yours />
 
           {takenKnacks.length > 0 ? (
             <>
               <h3 className="mt-6 mb-2 text-sm font-medium tracking-wide text-hearth-400 uppercase">
-                What she has picked up
+                What {them.subject} {toHave(them.subject)} picked up
               </h3>
               <KnacksHeld held={character.knacks} />
             </>
@@ -195,13 +202,32 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             ) : null}
 
             {character.skills.length > 0 ? (
-              <ul className="space-y-1">
-                {character.skills.map((skill) => (
-                  <li key={skill.id} className="text-sm text-hearth-200/80">
-                    {skill.name}
-                    <span className="ml-2 text-hearth-400">rank {skill.rank}</span>
-                  </li>
-                ))}
+              <ul className="space-y-2">
+                {character.skills.map((skill) => {
+                  // A rank used to be a number that made a die friendlier. What
+                  // it actually buys her is listed underneath, so improving a
+                  // skill is something she can see the shape of before she
+                  // gets there.
+                  const abilities = abilitiesFor({ name: skill.name, rank: skill.rank });
+
+                  return (
+                    <li key={skill.id} className="text-sm text-hearth-200/80">
+                      {skill.name}
+                      <span className="ml-2 text-hearth-400">rank {skill.rank}</span>
+
+                      {abilities.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 pl-4">
+                          {abilities.map((ability) => (
+                            <li key={ability.name} className="text-sm text-hearth-200/60">
+                              <span className="text-hearth-300">{ability.name}</span> —{" "}
+                              {ability.blurb}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
 
@@ -246,7 +272,9 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             they are still out there, and they remember her. */}
         {character.acquaintances.length > 0 ? (
           <Card>
-            <h2 className="font-display mb-1 text-xl text-hearth-100">People she knows</h2>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">
+              People {them.subject} {toHave(them.subject)=== "has" ? "knows" : "know"}
+            </h2>
             <p className="mb-4 text-sm text-hearth-400">
               Everyone {character.name} has met and might run into again.
             </p>
@@ -323,7 +351,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             with who she is rather than with a delete button. */}
         <details className="rounded-xl border border-hearth-800/60 bg-hearth-900/20">
           <summary className="cursor-pointer px-5 py-4 text-sm text-hearth-300 hover:text-hearth-200">
-            Change her details, portrait, or who plays her
+            Change {them.possessive} details, portrait, or who plays {them.object}
           </summary>
           <div className="space-y-6 p-5 pt-0">
         <Card>

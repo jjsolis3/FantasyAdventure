@@ -17,6 +17,7 @@ import { STAT_INFO, STATS, RELATIONSHIP_LABELS, type RelationshipKind } from "@/
 import { signatureFor } from "@/lib/game/character-options";
 import { narrativeHints } from "@/lib/game/knacks";
 import { renderKnownPeople, type KnownPerson } from "@/lib/game/acquaintances";
+import { abilityHints } from "@/lib/game/practice";
 
 /** Rough token estimate. Four characters per token is close enough for
  *  budgeting and costs nothing; being exact would need a tokenizer per model. */
@@ -36,6 +37,14 @@ export type PartyMemberContext = {
   skills: { name: string; rank: number }[];
   /** Knack keys, for the ones the story itself has to honour. */
   knacks?: string[];
+  /**
+   * Things she is carrying and cannot use yet, with what she would need.
+   *
+   * Without this the lock was a label on a sheet and nothing else: the
+   * storyteller had no idea the flute was beyond her, so it would cheerfully
+   * let her play it next turn and the requirement would mean nothing.
+   */
+  lockedItems?: { name: string; needs: string }[];
 };
 
 export type BondContext = {
@@ -123,12 +132,22 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
     // Knacks the story has to behave differently because of. The ones that are
     // only a number are left out — the dice have already applied those, and
     // repeating them here would just crowd the prompt.
-    const hints = narrativeHints(member.knacks ?? []);
+    const hints = [...narrativeHints(member.knacks ?? []), ...abilityHints(member.skills)];
     const earned = hints.length > 0 ? `\n  ${hints.join("\n  ")}` : "";
+
+    // What she is carrying but has not grown into. Stated as a prohibition
+    // because it is one, and because a requirement nobody enforces is worse
+    // than no requirement — it promises a goal and then quietly gives it away.
+    const locked =
+      (member.lockedItems ?? []).length > 0
+        ? `\n  Carries but CANNOT use yet: ${(member.lockedItems ?? [])
+            .map((item) => `${item.name} (needs ${item.needs})`)
+            .join("; ")}. Do not let them use these, and if they try, say plainly what is missing.`
+        : "";
 
     return (
       `- ${member.name} (${member.pronouns}), ${member.ageBand.toLowerCase()} ${member.race} ` +
-      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${own}${earned}`
+      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${own}${earned}${locked}`
     );
   });
 

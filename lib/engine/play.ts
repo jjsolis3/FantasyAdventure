@@ -35,7 +35,16 @@ import {
   type PersonalAim,
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
-import { MAX_SKILLS, learnedMessage, practiceKey, readyToLearn, skillNameFrom } from "@/lib/game/practice";
+import {
+  MAX_SKILLS,
+  abilityUnlockedAt,
+  hasRequirement,
+  learnedMessage,
+  lockedFor,
+  practiceKey,
+  readyToLearn,
+  skillNameFrom,
+} from "@/lib/game/practice";
 import { extraSkillRoom } from "@/lib/game/knacks";
 import {
   acquaintanceKey,
@@ -191,6 +200,7 @@ async function loadCampaign(campaignId: string, userId: string) {
             include: {
               skills: true,
               knacks: { select: { key: true } },
+              inventory: true,
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
             },
@@ -222,6 +232,22 @@ function partyContext(campaign: LoadedCampaign) {
     } as Record<StatKey, number>,
     skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
     knacks: member.character.knacks.map((knack) => knack.key),
+    // Worked out here rather than in the context builder, which has no business
+    // knowing what a skill rank means.
+    lockedItems: member.character.inventory
+      .filter((item) => hasRequirement(item))
+      .map((item) => ({
+        item,
+        lock: lockedFor(item, {
+          level: member.character.level,
+          skills: member.character.skills,
+        }),
+      }))
+      .filter((entry) => entry.lock.locked)
+      .map((entry) => ({
+        name: entry.item.name,
+        needs: entry.lock.locked ? entry.lock.needs : "",
+      })),
   }));
 }
 
@@ -830,6 +856,13 @@ export async function playTurn(
 
       if (rank > skill.rank) {
         milestones.push(`${check.characterName} is getting really good at ${skill.name} — rank ${rank}.`);
+
+        // A rank used to be a number that made a die slightly friendlier. Now
+        // it hands her something she can do, so it is worth saying out loud.
+        const unlocked = abilityUnlockedAt({ name: skill.name, rank });
+        if (unlocked) {
+          milestones.push(`${check.characterName} can now ${unlocked.name} — ${unlocked.blurb}`);
+        }
       }
     }
 

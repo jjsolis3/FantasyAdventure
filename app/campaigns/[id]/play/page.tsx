@@ -203,6 +203,17 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
             : "one shared screen"}
           {" · "}
           <QuestSummaryLink campaignId={campaign.id} quests={quests} />
+          {campaign.status === "COMPLETE" ? (
+            <>
+              {" · "}
+              <Link
+                href={`/campaigns/${campaign.id}/summary`}
+                className="underline hover:text-hearth-300"
+              >
+                how it went
+              </Link>
+            </>
+          ) : null}
         </p>
       </header>
 

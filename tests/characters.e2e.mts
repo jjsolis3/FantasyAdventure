@@ -172,7 +172,7 @@ try {
   await page.goto(`${BASE}/characters/${mira!.id}`);
   // Editing lives behind a disclosure now, so the sheet ends with who she is
   // rather than with a delete button.
-  await page.click('summary:has-text("Change her details")');
+  await page.click('summary:has-text("Change")');
   await page.fill('input[name="name"]', "Mira T.");
   await submitAndSettle(page, 'button:has-text("Save changes")');
 
@@ -226,7 +226,7 @@ try {
     await page.goto(`${BASE}/characters/${mira!.id}`);
     // Housekeeping is folded away so the sheet ends with who she is rather than
     // with a delete button.
-    await page.click('summary:has-text("Change her details")');
+    await page.click('summary:has-text("Change")');
 
     // The builder's controls are gone once she exists; there is one editor for
     // her stats and one place her skills come from, and they are not this form.
@@ -262,7 +262,7 @@ try {
     const before = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
 
     await page.goto(`${BASE}/characters/${mira!.id}`);
-    await page.click('summary:has-text("Change her details")');
+    await page.click('summary:has-text("Change")');
     await page.evaluate(() => {
       const form = document.querySelector<HTMLInputElement>('input[name="characterId"]')?.closest("form");
       if (!form) throw new Error("The edit form was not found.");
@@ -288,6 +288,9 @@ try {
 
   // ---- Deleting takes asking for, and then meaning it ----------------------
   await page.goto(`${BASE}/characters/${pip!.id}`);
+  // Removing lives with the rest of the housekeeping, behind a disclosure — the
+  // page should not end on a delete button.
+  await page.click('summary:has-text("Change")');
 
   // Nothing on the page deletes anything until it is asked for.
   check(

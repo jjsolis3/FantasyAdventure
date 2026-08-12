@@ -71,6 +71,8 @@ carrying it mean anything.
 | ✅ | **M10** Things found that she has not grown into yet |
 | ✅ | **M10** Knacks — what reaching a level finally buys |
 | ✅ | **M10** People the family already knows, who turn up again |
+| ✅ | **M10** How it went — what each of them got when the story ended |
+| ✅ | **M10** A skill rank is something you can do, not just a number |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -467,6 +469,45 @@ what is carried is deliberately forgiving, because the storyline says "the brass
 key" and the storyteller writes "a small brass key, green at the teeth". The
 storyteller is also told what the party already has, which is what stops it
 offering the same key every chapter.
+
+### How it went
+
+Finishing an adventure used to write one line and stop. Everything the evening
+had produced was real, recorded and scattered — quests on one page, keepsakes on
+another, experience folded silently into a number, and the private aim nobody
+else had seen revealed in a transcript that had already scrolled past.
+
+`/campaigns/[id]/summary` gathers it: what the party did between them, then each
+girl in turn. What the dice earned her and what finishing things earned her, said
+separately. Her private aim, revealed whether or not she managed it — hiding a
+failed one would make the reveal a reward rather than a story. What she gave up,
+what she came home with, who will remember her, and whether there is a point or a
+knack waiting on her sheet.
+
+Every figure is derived rather than stored. Her experience is cumulative across
+every story she has been in, so what she earned *here* is reconstructed from the
+rolls still sitting in the transcript with their outcomes on them. Nothing to
+write at the ending, nothing to drift, and it stays true if a turn is taken back
+afterwards.
+
+### What a rank lets you do
+
+A skill rank used to do exactly one thing: add itself to a roll. So "Climbing
+rank 3" was a number that made a die slightly friendlier, and a girl who had
+worked her way up to it had nothing she could point at and *do*.
+
+Each rank past the first now unlocks a named ability — **Steady Hand** at 2 (once
+a chapter, do it without rolling), **Show Someone How** at 3 (talk another
+through it, and their next try goes as well as yours would), **Second Nature** at
+4 (it never goes badly wrong for you any more). Written to fit any skill,
+including ones learned in play: the catalogue could not name an ability for
+"Humming" because nobody knew Humming would exist, so the ability is the shape
+and the skill is the subject.
+
+And a thing she cannot use yet is now a rule rather than a label. The storyteller
+is told what she is carrying and cannot use, and told not to let her — a
+requirement nobody enforces is worse than no requirement, because it promises a
+goal and then quietly gives it away.
 
 ### People the family already knows
 
@@ -1188,6 +1229,8 @@ lib/
     practice.ts     Getting good at what you keep doing, and what you cannot use yet
     knacks.ts       What a level buys, and how the three offered are chosen
     acquaintances.ts  Who comes home from an adventure, and how they are offered back
+    summary.ts      Reading an evening back: what it earned, and what was finished
+    pronouns.ts     Talking about a character the way their player asked us to
     storyline-actions.ts  Writing adventures, and keeping the seed off them
     party-actions.ts     Joining, leaving, and re-issuing a join code
     handover-actions.ts  Moving an adventurer to another account, intact

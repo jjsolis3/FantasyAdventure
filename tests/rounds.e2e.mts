@@ -378,7 +378,7 @@ try {
   await host.goto(`${BASE}/characters/${mira.id}`);
   // Handing an adventurer over lives with the rest of the housekeeping, behind
   // a disclosure, so the sheet ends with who she is rather than a delete button.
-  await host.click('summary:has-text("Change her details")');
+  await host.click('summary:has-text("Change")');
   await submitAndSettle(host, 'button:has-text("Hand Mira to another player")');
 
   const offered = await waitFor(
