@@ -110,10 +110,31 @@ export function resolveDeeds(objectives: ObjectiveLike[], reported: string[]): s
   return [...done];
 }
 
-/** "the brass key", "the brass key and the lantern", "a, b and c". */
+/**
+ * "the brass key", "the brass key and the lantern", "a, b and c".
+ *
+ * Switches to semicolons when any of the things has a comma inside it, because
+ * commas are how the good names are written — "the bell-rope, long enough for
+ * two pairs of hands" says what it is and why it matters in one breath. Joined
+ * with commas as well, that sentence reads as four things rather than two, and
+ * the join lands in the middle of a phrase:
+ *
+ *   ✗ the bell-rope, long enough for two pairs of hands and the list of
+ *     names, read all the way to the end
+ *   ✓ the bell-rope, long enough for two pairs of hands; and the list of
+ *     names, read all the way to the end
+ *
+ * Families write their own adventures in the app, and will use commas without
+ * being told not to, so this is fixed here rather than by writing flatter names.
+ */
 export function listOf(names: string[]): string {
   if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+
+  const crowded = names.some((name) => name.includes(","));
+  const separator = crowded ? "; " : ", ";
+  const final = crowded ? "; and " : " and ";
+
+  return `${names.slice(0, -1).join(separator)}${final}${names[names.length - 1]}`;
 }
 
 export type SpentItem = { itemName: string; foundByName: string };

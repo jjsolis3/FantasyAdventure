@@ -70,6 +70,29 @@ export function canRaise(stats: StatBlock, xp: number, stat: StatKey): boolean {
 
 export const SKILLS_PER_CHARACTER = 2;
 
+/**
+ * How many skills a character has room for, by level.
+ *
+ * The one thing still worth earning once the stat sheet is full. Stats stop at
+ * a ceiling and knacks run out at the end of the catalogue, but there is no
+ * natural limit on the number of things a person turns out to be good at — and
+ * skills are the reward the girls actually notice, because each one is named
+ * after something they *did*. "Humming" is on the sheet because she hummed at a
+ * frightened creature four times.
+ *
+ * Two extra slots, at levels 6 and 11, which is slow on purpose: room to learn
+ * is only worth having if learning something is still an event.
+ *
+ * Additive with Fast Learner rather than instead of it — the knack is somebody's
+ * choice, and a choice that stops mattering once you level up is not a choice.
+ */
+export function skillRoomForLevel(level: number): number {
+  let room = 0;
+  if (level >= 6) room += 1;
+  if (level >= 11) room += 1;
+  return room;
+}
+
 export type StatBlock = Record<StatKey, number>;
 
 export function totalSpent(stats: StatBlock): number {
@@ -223,8 +246,28 @@ export function bondProgress(bondXp: number): { level: number; into: number; nee
 
 // ---- Levels ----------------------------------------------------------------
 
-/** Character XP needed for each level. Index 0 is unused; levels start at 1. */
-const LEVEL_THRESHOLDS = [0, 0, 10, 25, 45, 70, 100, 140, 190, 250];
+/**
+ * Character XP needed for each level. Index 0 is unused; levels start at 1.
+ *
+ * The ladder used to stop at level 9, at 250 xp, and that turned out to be the
+ * wrong place for it in two separate ways.
+ *
+ * Filling the stat sheet takes 360 xp — four stats from the build cap of 5 to
+ * the growth ceiling of 12, at ten xp a point. So there was a stretch of 110 xp
+ * where levelling had finished and stat growth had not, and every roll in it
+ * bought a point with nothing to announce. And past 360, xp bought *nothing* —
+ * rolls kept paying 1 to 3 forever into a number that could no longer move.
+ *
+ * The other way it was wrong: a character earns `level - 1` knacks, so a cap of
+ * 9 meant 8 knacks, out of a catalogue of 12. Four of them could never be had by
+ * anybody. Ending at 13 makes the whole catalogue reachable and keeps something
+ * arriving after the stats are full, which is the point — the girls should
+ * always be a session away from something new.
+ *
+ * The four new steps are a first guess at pacing and are meant to be tuned after
+ * a few real evenings, not argued about in advance.
+ */
+const LEVEL_THRESHOLDS = [0, 0, 10, 25, 45, 70, 100, 140, 190, 250, 320, 400, 490, 590];
 
 export const MAX_LEVEL = LEVEL_THRESHOLDS.length - 1;
 
@@ -249,6 +292,12 @@ export function levelFor(xp: number): number {
     if (xp >= LEVEL_THRESHOLDS[index]) level = index;
   }
   return level;
+}
+
+/** What a level costs, from nothing. Clamped, so the cap is a flat line. */
+export function xpForLevel(level: number): number {
+  const index = Math.min(Math.max(level, 1), MAX_LEVEL);
+  return LEVEL_THRESHOLDS[index];
 }
 
 // ---- Skill growth ----------------------------------------------------------

@@ -73,6 +73,9 @@ carrying it mean anything.
 | ✅ | **M10** People the family already knows, who turn up again |
 | ✅ | **M10** How it went — what each of them got when the story ended |
 | ✅ | **M10** A skill rank is something you can do, not just a number |
+| ✅ | **M10** The television: `/screen`, paired with a code, no sign-in on the TV |
+| ✅ | **M10** Art prompts for every chapter, sharing the app's own style |
+| ✅ | **M10** Something to find in all thirty chapters, keepsake included |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -997,6 +1000,34 @@ character stats become decoration and it stops being a game.
 **Narration and structured state are separate AI calls.** Asking one response
 to be both good prose and valid JSON is where local models fall apart.
 
+### The television
+
+The story can be put on a screen in the room, at `/screen`. The television has
+no account and never gets one — it shows a six-character code, and somebody
+already holding the adventure on their phone types that code in.
+
+Signing a TV into the household was the obvious alternative and is the worse
+one: it would put a session that can delete adventures on the least supervised
+device in the house, kept alive by a browser nobody signs out of, and it would
+have to be typed with a remote control. Pairing moves the typing to the device
+that has a keyboard and the credential to the device that cannot be reached from
+the sofa.
+
+Three limits define what a paired screen is, and all three live in
+`lib/game/screen.ts`:
+
+- **It can only read.** The token travels in an `Authorization` header rather
+  than a cookie, so it is only ever attached where the display attaches it — no
+  write route can receive one even by accident.
+- **It reads one adventure.** The campaign is set once, by an account that could
+  already see it, and changes only by unpairing.
+- **It sees less than a player does.** Personal aims are filtered out, and the
+  party's join code is never sent. A television in a room full of people is the
+  least private surface in the house.
+
+Unpairing takes effect on the next poll, a few seconds later, and deleting an
+adventure releases every screen showing it.
+
 ### A note on exposing your AI
 
 Do **not** port-forward Ollama to the internet, and do not leave it listening on
@@ -1183,6 +1214,7 @@ app/
   campaigns/join/   Joining somebody else's adventure with a code
   campaigns/[id]/journal/  The whole story, laid out to be read back or printed
   campaigns/[id]/finds/    The quest board: what they set out to do, and carry
+  screen/           The television: one adventure, read-only, no sign-in
   settings/         Administrator hub: storyteller, adventures, usage, invites
   settings/adventures/     Writing and editing storylines in the app
   settings/usage/          What every call used, and what it cost
@@ -1190,6 +1222,9 @@ app/
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
   api/scenes/[id]/image/     A chapter's picture, behind the same sign-in
+  api/screen/register/       A television asks for a code (the one open route)
+  api/screen/state/          What a paired television should be showing
+  api/campaigns/[id]/screens/  Pairing and unpairing, from the host's phone
   page.tsx          Landing page; lists seeded storylines
 lib/
   db.ts             Prisma singleton (adapter-based, connects on first use)

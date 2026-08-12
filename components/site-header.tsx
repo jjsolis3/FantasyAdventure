@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AccountMenu } from "@/components/account-menu";
 import { NavLinks } from "@/components/nav-links";
@@ -16,6 +17,12 @@ import { NavLinks } from "@/components/nav-links";
  * button rather than a link because it is the one thing to do on the page.
  */
 export async function SiteHeader() {
+  // The television wears nothing. It is not being navigated — nobody is going
+  // to reach for a remote control to visit their profile — and a bar across the
+  // top of a display seen from a sofa is six feet of wasted wall.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  if (pathname.startsWith("/screen")) return null;
+
   const user = await getCurrentUser();
 
   return (
