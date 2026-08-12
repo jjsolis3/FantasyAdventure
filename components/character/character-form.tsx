@@ -264,10 +264,19 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
         </label>
       </div>
 
+      {/* Stats and skills are set here only while the character is being made.
+          Once she has been played they belong to the sheet above, which knows
+          about the points she has earned and the things she has learned. Two
+          editors for the same numbers is confusing; two editors where one of
+          them still thinks the rule is "exactly twelve points and two skills"
+          is worse than confusing, because saving it would undo her. */}
+      {mode === "create" ? (
       <div className="border-t border-hearth-800/50 pt-6">
         <StatAllocator stats={stats} onChange={setStats} affinity={affinity} />
       </div>
+      ) : null}
 
+      {mode === "create" ? (
       <div className="border-t border-hearth-800/50 pt-6">
         <div className="mb-3 flex items-baseline justify-between">
           <span className="text-sm font-medium text-hearth-200">
@@ -311,6 +320,7 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
           <input key={skill} type="hidden" name="skills" value={skill} />
         ))}
       </div>
+      ) : null}
 
       <SubmitButton pendingLabel="Saving…">
         {mode === "create" ? "Create adventurer" : "Save changes"}

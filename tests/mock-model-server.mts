@@ -11,6 +11,18 @@ import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 11499);
 
+/**
+ * How a test asks for the story to end.
+ *
+ * A player types END_MARKER, which reaches the narration prompt; the mock then
+ * writes a passage containing FINALE, which reaches the extraction prompt and
+ * makes it report actComplete. That round trip is deliberate — it drives the
+ * real ending path through the real pipeline rather than reaching into the
+ * database to fake a finished adventure.
+ */
+const END_MARKER = "bring the story to its end";
+const FINALE = "And that was the end of it.";
+
 /** Set MOCK_UNSAFE=1 to make the first narration trip the safety guard. */
 const unsafeFirst = process.env.MOCK_UNSAFE === "1";
 let narrationCount = 0;
@@ -109,8 +121,16 @@ const server = createServer((request, response) => {
         '"intent":"Speak with Animals to hum to the frightened creature","practice":"humming"}],' +
         '"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
     } else if (prompt.includes("extract what should be remembered")) {
-      // Trailing comma, and a bond moment naming someone real.
-      content =
+      // A story can be ended on purpose. Nothing else makes the mock report
+      // actComplete, and the completion path — the ending, and the people who
+      // come home from it — is worth an end-to-end test rather than a
+      // hand-replayed one.
+      const ending = prompt.includes(FINALE);
+
+      content = ending
+        ? '{"sceneTitle":"The Last of It","location":"the barley field","memories":[],' +
+          '"bondMoments":[],"itemsGained":[],"actComplete":true,"sceneComplete":true}'
+        :
         '{"sceneTitle":"The Barley Field","location":"the barley field","memories":' +
         '[{"kind":"NPC","key":"the creature","content":"It settles when someone hums.","importance":4}],' +
         '"bondMoments":[{"from":"Rowan","to":"Mira","why":"stood between her and the noise"}],' +
@@ -143,6 +163,12 @@ const server = createServer((request, response) => {
         "The barley is flattened in a wide circle, and something in the middle of it is breathing " +
         "very fast. Mira, you can see one bright eye watching you through the stalks. Rowan, the " +
         "gate behind you swings gently, as though someone came through in a hurry.";
+    } else if (prompt.includes(END_MARKER)) {
+      // The table asked for an ending, so the passage reads like one — and
+      // carries the phrase the extraction step keys on.
+      content =
+        `${FINALE} The barley settles, the light goes down kindly, and everybody ` +
+        "walks home together knowing it is finished.";
     } else {
       narrationCount += 1;
       content =

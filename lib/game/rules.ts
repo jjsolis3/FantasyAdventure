@@ -115,44 +115,6 @@ export function validateStats(stats: StatBlock): StatValidation {
 }
 
 /**
- * Enforced when an existing adventurer is saved, rather than built.
- *
- * The build rule — exactly twelve points, none above five — is right for making
- * a character and wrong for one who has been playing. She has earned points
- * since, and spent them, so her sheet legitimately adds up to more than twelve
- * and may hold a six. Validating an edit against the build budget would tell a
- * girl her own grown adventurer is illegal and refuse to save her.
- *
- * So this checks what she is actually allowed: nothing above the ceiling, and
- * no more spent in total than she has earned.
- */
-export function validateGrownStats(stats: StatBlock, xp: number): StatValidation {
-  for (const stat of STATS) {
-    const value = stats[stat];
-    if (!Number.isInteger(value)) {
-      return { ok: false, reason: `${STAT_INFO[stat].label} must be a whole number.` };
-    }
-    if (value < STAT_MIN || value > STAT_CEILING) {
-      return {
-        ok: false,
-        reason: `${STAT_INFO[stat].label} must be between ${STAT_MIN} and ${STAT_CEILING}.`,
-      };
-    }
-  }
-
-  const allowed = STAT_BUDGET + statPointsEarned(xp);
-  const spent = totalSpent(stats);
-  if (spent > allowed) {
-    return {
-      ok: false,
-      reason: `That spends ${spent} points, which is ${spent - allowed} too many.`,
-    };
-  }
-
-  return { ok: true };
-}
-
-/**
  * The modifier a stat contributes to a d20 check.
  *
  * Straight up to 5, then flattening: above that, two points buy one. The

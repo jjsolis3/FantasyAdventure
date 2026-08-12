@@ -9,7 +9,6 @@ import {
   statModifier,
   statPointsEarned,
   statPointsUnspent,
-  validateGrownStats,
   validateStats,
   type StatBlock,
 } from "../lib/game/rules.ts";
@@ -251,29 +250,12 @@ test("signature: found however it was capitalised", () => {
 
 // ---- Saving a grown adventurer ----------------------------------------------
 
-test("growth: a grown sheet is legal to save", () => {
-  // She earned three points and spent them. Checking this against the build
-  // budget would tell a girl her own adventurer is illegal.
+test("growth: a grown sheet is not something the builder's rule can describe", () => {
+  // She earned three points and spent them, so her sheet legitimately adds up
+  // to more than the build budget. The editor no longer writes stats at all,
+  // which is why this can be true and safe at the same time.
   const grown: StatBlock = { might: 5, wits: 4, heart: 3, spark: 3 };
 
   assert.equal(validateStats(grown).ok, false, "the build rule rejects it, correctly");
-  assert.equal(validateGrownStats(grown, 30).ok, true, "the growth rule allows it");
-});
-
-test("growth: spending more than she has earned is still refused", () => {
-  const grown: StatBlock = { might: 5, wits: 4, heart: 3, spark: 3 };
-  const result = validateGrownStats(grown, 10);
-
-  assert.equal(result.ok, false);
-  assert.match(result.ok === false ? result.reason : "", /2 too many/);
-});
-
-test("growth: nothing may exceed the ceiling however much she has earned", () => {
-  const impossible: StatBlock = { might: STAT_CEILING + 1, wits: 3, heart: 3, spark: 3 };
-  assert.equal(validateGrownStats(impossible, 10_000).ok, false);
-});
-
-test("growth: a freshly built sheet passes both rules", () => {
-  assert.equal(validateStats(built).ok, true);
-  assert.equal(validateGrownStats(built, 0).ok, true);
+  assert.equal(statPointsUnspent(grown, 30), 0, "and she has spent exactly what she earned");
 });

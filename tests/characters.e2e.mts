@@ -170,6 +170,9 @@ try {
   });
 
   await page.goto(`${BASE}/characters/${mira!.id}`);
+  // Editing lives behind a disclosure now, so the sheet ends with who she is
+  // rather than with a delete button.
+  await page.click('summary:has-text("Change her details")');
   await page.fill('input[name="name"]', "Mira T.");
   await submitAndSettle(page, 'button:has-text("Save changes")');
 
@@ -210,38 +213,77 @@ try {
     check("the character was not modified by the stranger", untouched.name === "Mira T.");
   }
 
-  // ---- Illegal stat spreads are refused server-side -----------------------
+  // ---- Editing a sheet never costs her what she earned --------------------
   {
-    // The UI cannot produce this, so drive the action the way a crafted post
-    // would. The stat fields are React-controlled hidden inputs, so assigning
-    // .value is not enough — a re-render before submit puts the legal value
-    // back, which made this flaky depending on what else was on the page. So
-    // the managed inputs are stripped of their names, plain ones are appended
-    // in their place, and the form is submitted in the same tick.
-    const before = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
+    // Skills are learned in play now — four goes at climbing becomes Climbing.
+    // The edit form used to replace the whole skill set from its own list, so
+    // opening a sheet to fix a typo silently deleted everything she had earned.
+    await db.characterSkill.create({
+      data: { characterId: mira!.id, name: "Humming", rank: 2, xp: 9 },
+    });
+    const beforeEdit = await db.characterSkill.count({ where: { characterId: mira!.id } });
+
     await page.goto(`${BASE}/characters/${mira!.id}`);
+    // Housekeeping is folded away so the sheet ends with who she is rather than
+    // with a delete button.
+    await page.click('summary:has-text("Change her details")');
+
+    // The builder's controls are gone once she exists; there is one editor for
+    // her stats and one place her skills come from, and they are not this form.
+    const sheet = (await page.textContent("main")) ?? "";
+    check("editing does not offer to re-pick her skills", !sheet.includes("especially good at"));
+    check("nor to re-spread her points", !sheet.includes("Spread the points"));
+
+    await page.fill('textarea[name="description"]', "A little taller than last year.");
+    await submitAndSettle(page, 'button:has-text("Save changes")');
+
+    const afterEdit = await db.characterSkill.findMany({ where: { characterId: mira!.id } });
+    check(
+      "saving a sheet keeps every skill she has",
+      afterEdit.length === beforeEdit,
+      `${beforeEdit} -> ${afterEdit.length}`,
+    );
+
+    const humming = afterEdit.find((skill) => skill.name === "Humming");
+    check("including one learned in play", humming !== undefined);
+    check("with its rank intact", humming?.rank === 2, String(humming?.rank));
+    check("and its progress intact", humming?.xp === 9, String(humming?.xp));
+
+    const edited = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
+    check("and the edit itself still went through", edited.description?.includes("taller") === true);
+  }
+
+  // ---- The edit form cannot change what play grants -----------------------
+  {
+    // Stats used to be editable here, and the rule "exactly twelve points" was
+    // enforced on save. Both are gone: the form no longer submits stats at all,
+    // so a crafted post cannot set them either. The rule that matters now is
+    // enforced where points are actually spent, one at a time, on the sheet.
+    const before = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
+
+    await page.goto(`${BASE}/characters/${mira!.id}`);
+    await page.click('summary:has-text("Change her details")');
     await page.evaluate(() => {
       const form = document.querySelector<HTMLInputElement>('input[name="characterId"]')?.closest("form");
       if (!form) throw new Error("The edit form was not found.");
 
       for (const stat of ["might", "wits", "heart", "spark"]) {
-        for (const managed of form.querySelectorAll<HTMLInputElement>(`input[name="${stat}"]`)) {
-          managed.removeAttribute("name");
-        }
         const crafted = document.createElement("input");
         crafted.type = "hidden";
         crafted.name = stat;
-        crafted.value = "5";
+        crafted.value = "12";
         form.appendChild(crafted);
       }
-
       form.requestSubmit();
     });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    check("an over-budget spread is rejected", /too many/i.test(await alertText(page)), await alertText(page));
     const after = await db.character.findUniqueOrThrow({ where: { id: mira!.id } });
-    check("the rejected spread was not saved", after.might === before.might, `might=${after.might}`);
+    check(
+      "a crafted post cannot raise her stats",
+      after.might === before.might && after.spark === before.spark,
+      `might ${before.might} -> ${after.might}`,
+    );
   }
 
   // ---- Deleting takes asking for, and then meaning it ----------------------

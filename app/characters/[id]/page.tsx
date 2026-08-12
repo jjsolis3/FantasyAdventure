@@ -40,6 +40,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         include: { campaign: { select: { id: true, title: true } } },
       },
       knacks: { orderBy: { createdAt: "asc" } },
+      acquaintances: { orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }] },
       practices: { select: { key: true, attempts: true } },
     },
   });
@@ -240,6 +241,36 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
           </Card>
         ) : null}
 
+        {/* Who she knows. Empty until a family has finished an adventure, and
+            then the quiet proof that being kind to somebody was worth it —
+            they are still out there, and they remember her. */}
+        {character.acquaintances.length > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">People she knows</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Everyone {character.name} has met and might run into again.
+            </p>
+            <ul className="space-y-2">
+              {character.acquaintances.map((person) => (
+                <li key={person.id} className="rounded-lg border border-hearth-800/50 p-3">
+                  <p className="text-sm text-hearth-100">
+                    {person.name}
+                    {person.timesMet > 1 ? (
+                      <span className="ml-2 text-xs tracking-wide text-hearth-400 uppercase">
+                        {person.timesMet} adventures
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="text-sm text-hearth-200/70">{person.about}</p>
+                  <p className="mt-0.5 text-sm text-hearth-500">
+                    Met on {person.metInCampaignTitle}.
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
+
         {/* The shelf: everything this adventurer has ever given up, across
             every story she has been in. Its own card rather than a footnote
             under what she can do, because this is the one part of the sheet
@@ -286,69 +317,81 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
           />
         </Card>
 
+        {/* Everything below is housekeeping rather than the character, and it
+            was making a sheet somebody opens to look at their adventurer three
+            screens long. Folded away: still one click, but the page now ends
+            with who she is rather than with a delete button. */}
+        <details className="rounded-xl border border-hearth-800/60 bg-hearth-900/20">
+          <summary className="cursor-pointer px-5 py-4 text-sm text-hearth-300 hover:text-hearth-200">
+            Change her details, portrait, or who plays her
+          </summary>
+          <div className="space-y-6 p-5 pt-0">
         <Card>
-          <h2 className="font-display mb-5 text-xl text-hearth-100">Edit</h2>
-          <CharacterForm
-            mode="edit"
-            initial={{
-              id: character.id,
-              name: character.name,
-              race: character.race,
-              archetype: character.archetype,
-              gender: character.gender ?? "",
-              pronouns: character.pronouns,
-              ageBand: character.ageBand,
-              description: character.description ?? "",
-              stats: {
-                might: character.might,
-                wits: character.wits,
-                heart: character.heart,
-                spark: character.spark,
-              },
-              skills: character.skills.map((skill) => skill.name),
-            }}
-          />
-        </Card>
+            <h2 className="font-display mb-5 text-xl text-hearth-100">Edit</h2>
+            <CharacterForm
+              mode="edit"
+              initial={{
+                id: character.id,
+                name: character.name,
+                race: character.race,
+                archetype: character.archetype,
+                gender: character.gender ?? "",
+                pronouns: character.pronouns,
+                ageBand: character.ageBand,
+                description: character.description ?? "",
+                stats: {
+                  might: character.might,
+                  wits: character.wits,
+                  heart: character.heart,
+                  spark: character.spark,
+                },
+                skills: character.skills.map((skill) => skill.name),
+              }}
+            />
+          </Card>
 
-        <Card>
-          <h2 className="font-display mb-3 text-xl text-hearth-100">Portrait</h2>
-          <PortraitUpload
-            characterId={character.id}
-            characterName={character.name}
-            version={character.portrait?.version ?? null}
-          />
-        </Card>
+          <Card>
+            <h2 className="font-display mb-3 text-xl text-hearth-100">Portrait</h2>
+            <PortraitUpload
+              characterId={character.id}
+              characterName={character.name}
+              version={character.portrait?.version ?? null}
+            />
+          </Card>
 
-        <Card>
-          <h2 id="hand-over" className="font-display mb-3 scroll-mt-6 text-xl text-hearth-100">
-            Hand over
-          </h2>
-          <Handover
-            characterId={character.id}
-            characterName={character.name}
-            code={character.handoverCode}
-          />
-        </Card>
+          <Card>
+            <h2 id="hand-over" className="font-display mb-3 scroll-mt-6 text-xl text-hearth-100">
+              Hand over
+            </h2>
+            <Handover
+              characterId={character.id}
+              characterName={character.name}
+              code={character.handoverCode}
+            />
+          </Card>
 
-        <Card className="border-red-900/40">
-          <h2 className="font-display mb-2 text-xl text-hearth-100">Remove</h2>
-          <DeleteCharacter
-            characterId={character.id}
-            characterName={character.name}
-            loss={{
-              level: character.level,
-              xp: character.xp,
-              skills: character.skills.length,
-              items: character.inventory.length,
-              ties: relations.length,
-              adventures: character.partyMemberships.map((member) => ({
-                id: member.campaign.id,
-                title: member.campaign.title,
-                finished: member.campaign.status === "COMPLETE",
-              })),
-            }}
-          />
-        </Card>
+          <Card className="border-red-900/40">
+            <h2 className="font-display mb-2 text-xl text-hearth-100">Remove</h2>
+            <DeleteCharacter
+              characterId={character.id}
+              characterName={character.name}
+              loss={{
+                level: character.level,
+                xp: character.xp,
+                skills: character.skills.length,
+                items: character.inventory.length,
+                ties: relations.length,
+                adventures: character.partyMemberships.map((member) => ({
+                  id: member.campaign.id,
+                  title: member.campaign.title,
+                  finished: member.campaign.status === "COMPLETE",
+                })),
+              }}
+            />
+          </Card>
+          </div>
+        </details>
+
       </div>
     </main>
   );
