@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MAX_LEVEL,
   STAT_BUDGET,
+  STAT_CEILING,
+  STAT_MAX,
+  XP_PER_STAT_POINT,
   bondLevelFor,
   bondProgress,
   canonicalPair,
@@ -12,12 +16,16 @@ import {
   movesUnlockedBetween,
   skillProgress,
   skillRankFor,
+  skillRoomForLevel,
+  xpForLevel,
   pointsRemaining,
   reciprocalOf,
   statModifier,
   validateStats,
   type StatBlock,
 } from "../lib/game/rules.ts";
+import { KNACKS, extraSkillRoom, knacksEarned } from "../lib/game/knacks.ts";
+import { MAX_SKILLS } from "../lib/game/practice.ts";
 
 const balanced: StatBlock = { might: 3, wits: 3, heart: 3, spark: 3 };
 
@@ -141,12 +149,12 @@ test("level progress reports position within the current level", () => {
 
 test("level progress reports no further to go at the cap", () => {
   const capped = levelProgress(10_000);
-  assert.equal(capped.level, 9);
+  assert.equal(capped.level, MAX_LEVEL);
   assert.equal(capped.needed, null, "a capped character must not show a bar that never moves");
 });
 
 test("progress never exceeds the level it belongs to", () => {
-  for (let xp = 0; xp <= 300; xp += 1) {
+  for (let xp = 0; xp <= 700; xp += 1) {
     const { level, into, needed } = levelProgress(xp);
     assert.equal(level, levelFor(xp), `level disagreed at xp=${xp}`);
     if (needed !== null) {
@@ -155,12 +163,55 @@ test("progress never exceeds the level it belongs to", () => {
   }
 });
 
+test("the ladder reaches every knack in the catalogue", () => {
+  // A character earns level - 1 knacks. When the ladder stopped at 9 that was
+  // 8, out of a catalogue of 12 — four nobody could ever be offered.
+  assert.equal(MAX_LEVEL - 1, KNACKS.length, "the ladder and the catalogue must end together");
+  assert.equal(knacksEarned(MAX_LEVEL), KNACKS.length);
+});
+
+test("the ladder outlasts filling the stat sheet", () => {
+  // Four stats from the build cap to the ceiling, at ten xp a point. Levelling
+  // must not finish first, or there is a stretch where xp buys a stat point
+  // with nothing to announce, and then a cliff where it buys nothing at all.
+  const toFillTheSheet = 4 * (STAT_CEILING - STAT_MAX) * XP_PER_STAT_POINT;
+  assert.ok(
+    levelFor(toFillTheSheet) < MAX_LEVEL,
+    `levelling ended at ${toFillTheSheet} xp, before the stats did`,
+  );
+});
+
+test("levels always cost more than the one before", () => {
+  let previous = 0;
+  for (let level = 2; level <= MAX_LEVEL; level += 1) {
+    const step = xpForLevel(level) - xpForLevel(level - 1);
+    assert.ok(step > previous, `level ${level} cost ${step}, no more than the ${previous} before it`);
+    previous = step;
+  }
+});
+
+test("room to learn opens twice on the way up, and stacks with Fast Learner", () => {
+  assert.equal(skillRoomForLevel(1), 0);
+  assert.equal(skillRoomForLevel(5), 0);
+  assert.equal(skillRoomForLevel(6), 1);
+  assert.equal(skillRoomForLevel(10), 1);
+  assert.equal(skillRoomForLevel(11), 2);
+  assert.equal(skillRoomForLevel(MAX_LEVEL), 2);
+
+  // The knack has to stay worth choosing after the level that would have given
+  // the same slot anyway, so the two add up rather than overlapping.
+  assert.equal(
+    MAX_SKILLS + skillRoomForLevel(11) + extraSkillRoom(["fast_learner"]),
+    MAX_SKILLS + 2 + 2,
+  );
+});
+
 test("character levels rise with experience", () => {
   assert.equal(levelFor(0), 1);
   assert.equal(levelFor(9), 1);
   assert.equal(levelFor(10), 2);
   assert.equal(levelFor(25), 3);
-  assert.equal(levelFor(10_000), 9);
+  assert.equal(levelFor(10_000), MAX_LEVEL);
 });
 
 // ---- Skill growth ----------------------------------------------------------

@@ -52,7 +52,8 @@ import {
   readyToLearn,
   skillNameFrom,
 } from "@/lib/game/practice";
-import { extraSkillRoom } from "@/lib/game/knacks";
+import { extraSkillRoom, knacksUnspent } from "@/lib/game/knacks";
+import { pronounsOf } from "@/lib/game/pronouns";
 import {
   acquaintanceKey,
   metMessage,
@@ -67,6 +68,7 @@ import {
   levelFor,
   movesUnlockedBetween,
   skillRankFor,
+  skillRoomForLevel,
   type StatKey,
 } from "@/lib/game/rules";
 
@@ -892,8 +894,19 @@ export async function playTurn(
       if (level > character.level) {
         // Said with what it buys, because "reached level 3" on its own was
         // exactly the announcement that used to mean nothing.
+        //
+        // But only when there is something to collect. This used to promise a
+        // knack on every level, including the ones past the end of the
+        // catalogue — and an announcement that turns out to be untrue is worse
+        // than the bare number it replaced.
+        const taken = await tx.characterKnack.count({ where: { characterId } });
+        const waiting = knacksUnspent(level, taken);
+        const them = pronounsOf(character.pronouns);
+
         milestones.push(
-          `${character.name} reached level ${level}! There is something new waiting on her sheet.`,
+          waiting > 0
+            ? `${character.name} reached level ${level}! There is something new waiting on ${them.possessive} sheet.`
+            : `${character.name} reached level ${level}!`,
         );
       }
     }
@@ -952,10 +965,17 @@ export async function playTurn(
         select: { name: true, rank: true },
       });
 
-      // A Fast Learner has room for more than everybody else, which is the
-      // whole of what that knack buys.
+      // Room comes from three places, and they add up: everybody's baseline,
+      // two more that open with level, and one for whoever chose Fast Learner.
+      // The knack has to stay worth choosing after the level that would have
+      // given the same slot anyway.
+      const learner = await tx.character.findUniqueOrThrow({
+        where: { id: check.characterId },
+        select: { level: true },
+      });
       const room =
         MAX_SKILLS +
+        skillRoomForLevel(learner.level) +
         extraSkillRoom(
           (
             await tx.characterKnack.findMany({
