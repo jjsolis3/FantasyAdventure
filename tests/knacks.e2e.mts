@@ -175,7 +175,9 @@ try {
   await page.goto(`${BASE}/characters/${rowan.id}`);
   const afterTaking = (await page.textContent("main")) ?? "";
   check("the offer is gone once it is spent", !afterTaking.includes("Something new"));
-  check("and it is on the sheet", afterTaking.includes("What she has picked up"));
+  // The heading follows the character's own pronouns now, so match on the part
+  // of it that is not one.
+  check("and it is on the sheet", /What (she|he|they) (has|have) picked up/.test(afterTaking));
   check("saying when it arrived", afterTaking.includes("since level 2"));
 
   // ---- Something she was never offered cannot be taken -----------------------

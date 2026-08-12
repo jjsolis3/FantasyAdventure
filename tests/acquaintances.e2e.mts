@@ -98,7 +98,7 @@ try {
   // ---- A first adventure, and nobody known yet ------------------------------
   await page.goto(`${BASE}/characters/${mira.id}`);
   const before = (await page.textContent("main")) ?? "";
-  check("a new adventurer knows nobody yet", !before.includes("People she knows"));
+  check("a new adventurer knows nobody yet", !/People (she|he|they) know/.test(before));
 
   const dragon = await db.storyline.findUniqueOrThrow({
     where: { slug: "the-dragon-who-lost-her-name" },
@@ -201,10 +201,36 @@ try {
   check("and where they were met", beekeeper?.metInCampaignTitle === first.title, beekeeper?.metInCampaignTitle);
   check("met once, so far", beekeeper?.timesMet === 1, String(beekeeper?.timesMet));
 
+  // ---- How it went ----------------------------------------------------------
+  // The ending used to be one line in a transcript that had already scrolled
+  // past. Everything the evening produced was real, recorded, and scattered.
+  await page.goto(`${BASE}/campaigns/${first.id}/summary`);
+  const summary = (await page.textContent("main")) ?? "";
+
+  check("a finished adventure has a summary", summary.includes("How it went"));
+  check("with what the party did between them", summary.includes("Between you"));
+  check("and every girl on it", summary.includes("Mira") && summary.includes("Rowan"));
+  check(
+    "saying what the dice earned her",
+    /\d+ experience on this adventure/.test(summary),
+    summary.match(/\d+ experience on this adventure/)?.[0] ?? "(not found)",
+  );
+  check("and where it came from", summary.includes("from the dice"));
+  check("the places they saw are counted", summary.includes("Places seen"));
+  check("and the board is laid out in full", summary.includes("Everything you set out to do"));
+
+  // Her private aim is public now. The story is over; the reveal is the point.
+  const hers = await db.quest.findFirst({
+    where: { campaignId: first.id, kind: "PERSONAL", secretForCharacterId: mira.id },
+  });
+  if (hers) {
+    check("her own aim is revealed at the end", summary.includes(hers.title), hers.title);
+  }
+
   // ---- Her sheet says who she knows -----------------------------------------
   await page.goto(`${BASE}/characters/${mira.id}`);
   const sheet = (await page.textContent("main")) ?? "";
-  check("her page lists who she knows", sheet.includes("People she knows"));
+  check("her page lists who she knows", /People (she|he|they) know/.test(sheet));
   check("by name", sheet.includes("the beekeeper"));
   check("and says where they met", sheet.includes(first.title));
 

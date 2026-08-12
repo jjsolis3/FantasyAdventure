@@ -112,6 +112,30 @@ try {
     orderBy: { createdAt: "asc" },
   });
 
+  // ---- The sheet talks about her the way her player asked ------------------
+  // Pronouns were always stored and always reached the storyteller, so the
+  // story got them right while the headings said "she" regardless.
+  await db.character.update({
+    where: { id: rowan.id },
+    data: { pronouns: "he/him", gender: "Male" },
+  });
+
+  await page.goto(`${BASE}/characters/${rowan.id}`);
+  const his = (await page.textContent("main")) ?? "";
+  check("a he/him character is not called she", !his.includes("What she is like"), "What she is like");
+  check("and is described correctly", his.includes("What he is like"));
+  check("including the housekeeping", his.includes("Change his details"));
+
+  await db.character.update({
+    where: { id: rowan.id },
+    data: { pronouns: "they/them" },
+  });
+  await page.goto(`${BASE}/characters/${rowan.id}`);
+  const theirs = (await page.textContent("main")) ?? "";
+  check("they/them reads as a plural, not as broken English", theirs.includes("What they are like"));
+
+  await db.character.update({ where: { id: rowan.id }, data: { pronouns: "he/him" } });
+
   // ---- The sheet says what she is like --------------------------------------
   await page.goto(`${BASE}/characters/${mira.id}`);
   const fresh = (await page.textContent("main")) ?? "";
@@ -267,6 +291,27 @@ try {
   check("a thing beyond her still sits in the pack", withFlute.includes("a silver flute"));
   check("and says it cannot be used yet", withFlute.includes("cannot use this yet"));
   check("and says exactly what would change that", withFlute.includes("Small Wonders rank 2"));
+
+  // ---- A rank is something she can do ---------------------------------------
+  await db.characterSkill.updateMany({
+    where: { characterId: rowan.id },
+    data: { rank: 2 },
+  });
+  await db.characterSkill.upsert({
+    where: { characterId_name: { characterId: rowan.id, name: "Hold Fast" } },
+    create: { characterId: rowan.id, name: "Hold Fast", rank: 3, xp: 20 },
+    update: { rank: 3 },
+  });
+
+  await page.goto(`${BASE}/characters/${rowan.id}`);
+  const withRanks = (await page.textContent("main")) ?? "";
+  check("a rank past the first buys something she can do", withRanks.includes("Steady Hand"));
+  check("and the next one buys another", withRanks.includes("Show Someone How"));
+  check(
+    "named for the skill it belongs to",
+    withRanks.includes("Hold Fast without rolling") || withRanks.includes("with Hold Fast"),
+    "the ability reads as being about that skill",
+  );
 } finally {
   await browser.close();
   await db.$disconnect();
