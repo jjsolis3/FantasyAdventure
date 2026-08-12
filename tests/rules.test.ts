@@ -144,11 +144,22 @@ test("progress never exceeds the level it belongs to", () => {
   }
 });
 
-test("the ladder reaches every knack in the catalogue", () => {
-  // A character earns level - 1 knacks. When the ladder stopped at 9 that was
-  // 8, out of a catalogue of 12 — four nobody could ever be offered.
-  assert.equal(MAX_LEVEL - 1, KNACKS.length, "the ladder and the catalogue must end together");
-  assert.equal(knacksEarned(MAX_LEVEL), KNACKS.length);
+test("the catalogue keeps the last level-ups honest", () => {
+  // Two failure modes, one on each side.
+  //
+  // Catalogue much bigger than the ladder: most of it is decoration nobody can
+  // ever hold. Catalogue equal to the ladder — the old rule here — is subtler
+  // and worse: by the last few levels she takes whatever is left, so the picks
+  // that should feel most earned are the only ones that are not choices at all.
+  //
+  // So the catalogue runs a little past the ladder. A full-career character
+  // holds twelve of fifteen, and even her final pick is three-from-a-shortlist.
+  const earned = knacksEarned(MAX_LEVEL);
+  assert.ok(KNACKS.length > earned, "the last pick is not a choice");
+  assert.ok(
+    KNACKS.length - earned <= 4,
+    `${KNACKS.length - earned} knacks can never all be held — that is a shelf, not a margin`,
+  );
 });
 
 test("the ladder outlasts filling the stat sheet", () => {

@@ -42,12 +42,12 @@ export function ResetAdventurer({
       <input type="hidden" name="characterId" value={characterId} />
 
       <div className="rounded-xl border border-hearth-700/60 bg-hearth-900/40 p-4">
-        <h3 className="font-display mb-3 text-lg text-hearth-100">Her four numbers</h3>
+        <h3 className="font-display mb-3 text-lg text-hearth-100">Her numbers</h3>
         <p className="mb-4 text-sm text-hearth-300/80">
           These are set when an adventurer is built and only ever go up afterwards, so the game
           knows how many points {name} earned but not which numbers they went into. Below is a
-          best guess — if you remember how she was built, put it right. Twelve points, none
-          below {STAT_MIN} or above {STAT_MAX}.
+          best guess — if you remember how she was built, put it right. {STAT_BUDGET} points,
+          none below {STAT_MIN} or above {STAT_MAX}.
         </p>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -76,7 +76,7 @@ export function ResetAdventurer({
           }`}
         >
           {left === 0
-            ? "Twelve points, exactly right."
+            ? `${STAT_BUDGET} points, exactly right.`
             : left > 0
               ? `${left} point${left === 1 ? "" : "s"} still to spend.`
               : `${-left} point${left === -1 ? "" : "s"} too many.`}

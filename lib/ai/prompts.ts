@@ -7,7 +7,7 @@
  * and bottom of a system prompt far more reliably than the middle.
  */
 
-import { STAT_INFO, STATS } from "@/lib/game/rules";
+import { STAT_INFO, STATS, type StatKey } from "@/lib/game/rules";
 
 export type ToneKey = "COZY" | "ADVENTUROUS" | "SPOOKY";
 export type ReadingLevelKey = "EARLY_READER" | "MIDDLE_GRADE" | "TEEN" | "FAMILY_MIXED";
@@ -32,9 +32,14 @@ const TONE_GUIDANCE: Record<ToneKey, string> = {
   COZY:
     "Keep the stakes small and warm. Setbacks are inconveniences — a dropped basket, a " +
     "sulking goat — never threats. Nothing lurks.",
+  // Sharpened for game-night energy: the families who pick this tone are
+  // sitting around a table wanting laughter and cliffhangers, not a wind-down.
+  // A ten-year-old who plays survival games does not need the evening padded.
   ADVENTUROUS:
-    "Real tension is welcome. Things can be eerie, urgent, and genuinely uncertain. " +
-    "Something can be behind the door. It is never something that wants to hurt them.",
+    "Real tension is welcome. Things can be eerie, urgent, and genuinely uncertain, and a " +
+    "clock can be ticking. Something can be behind the door. End scenes on the discovery, " +
+    "the complication, or the door swinging open — never on things settling down. It is " +
+    "never something that wants to hurt them.",
   // Written to be genuinely frightening, because a table that asked for
   // frightening and got "slightly odd" will stop asking. The fear is built out
   // of wrongness, being watched and not being believed — the Goosebumps and
@@ -71,7 +76,10 @@ HOW TO WRITE:
 - Address characters by name. Give every character something to do or notice.
 - End by describing the situation, never by asking "what do you do?" — the game asks that.
 - Show, do not explain. No summarising what just happened.
-- Never write dialogue or decisions for the players' characters. They speak for themselves.`;
+- Never write dialogue or decisions for the players' characters. They speak for themselves.
+- Give every named character a want and a voice. Let them be funny, stubborn, dramatic, suspicious — never furniture.
+- A failed roll never stops the story. It complicates it: the ladder holds but the chickens scream, the lie works on the wrong person.
+- End every turn on something moving — a discovery, a complication, a choice with teeth.`;
 
 export function systemPrompt(options: {
   tone: ToneKey;
@@ -101,7 +109,7 @@ export function systemPrompt(options: {
  * and the least obvious. Luck especially: it is the only one that is not about
  * what the character does well, but about whether the world happens to oblige.
  */
-const PICK_WHEN: Record<string, string> = {
+const PICK_WHEN: Record<StatKey, string> = {
   might: "shifting, lifting, forcing or breaking something",
   wits: "working something out, spotting it, or remembering it",
   heart: "reaching another person or creature — comforting, persuading, standing up for them",

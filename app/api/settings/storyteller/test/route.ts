@@ -6,7 +6,7 @@ import { modelCalls } from "@/lib/engine/play";
 import { runTurn } from "@/lib/engine/gm";
 import { buildContext } from "@/lib/ai/context";
 import { sseResponse } from "@/lib/http/sse";
-import type { StatKey } from "@/lib/game/rules";
+import { statBlock } from "@/lib/game/rules";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -123,13 +123,16 @@ export async function POST(request: Request) {
           {
             id: "mira",
             name: "Mira",
-            stats: { might: 1, wits: 3, heart: 5, spark: 3 } as Record<StatKey, number>,
+            // statBlock fills the stats not named here at the neutral value. The
+            // previous `as` cast quietly left the newer stats undefined, so the
+            // practice turn rolled NaN dice whenever the model picked one.
+            stats: statBlock({ might: 1, wits: 3, heart: 5 }),
             skills: [{ name: "Speak with Animals", rank: 1 }],
           },
           {
             id: "rowan",
             name: "Rowan",
-            stats: { might: 5, wits: 3, heart: 3, spark: 1 } as Record<StatKey, number>,
+            stats: statBlock({ might: 5, spark: 1 }),
             skills: [],
           },
         ];

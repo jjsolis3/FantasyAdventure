@@ -82,6 +82,27 @@ export const KNACKS: Knack[] = [
     effect: { kind: "BONUS", stat: "heart", amount: 1 },
   },
   {
+    key: "cats_balance",
+    name: "Cat's Balance",
+    blurb: "You land on your feet, even when the roof disagrees. Grace comes easier to you now.",
+    drawnFrom: { stat: "grace", practice: ["sneak", "climb", "dodge", "balanc", "catch"] },
+    effect: { kind: "BONUS", stat: "grace", amount: 1 },
+  },
+  {
+    key: "lucky_pocket",
+    name: "Lucky Pocket",
+    blurb: "The thing you need has a way of being the thing you find. Luck comes easier to you now.",
+    drawnFrom: { stat: "luck", practice: ["search", "rummag", "guess", "find", "gambl"] },
+    effect: { kind: "BONUS", stat: "luck", amount: 1 },
+  },
+  {
+    key: "iron_grip",
+    name: "Iron Grip",
+    blurb: "What you hold, stays held. Grit comes easier to you now.",
+    drawnFrom: { stat: "grit", practice: ["hold", "endur", "wait", "stand", "carry"] },
+    effect: { kind: "BONUS", stat: "grit", amount: 1 },
+  },
+  {
     key: "brighter_spark",
     name: "A Brighter Spark",
     blurb: "Odd things listen when you talk to them. Spark comes easier to you now.",
