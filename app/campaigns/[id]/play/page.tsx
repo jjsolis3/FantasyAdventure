@@ -60,8 +60,14 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const round = campaign.inputMode === "OWN_DEVICE" ? await currentRound(campaign.id) : null;
 
   const openScene = campaign.scenes.find((scene) => scene.status === "OPEN");
+  // A drawing counts. Without this the page would see no generated picture,
+  // ask the drawing service for one, and quietly paint over the one a child
+  // made — which is the exact opposite of the point.
   const hasPicture = openScene
-    ? (await db.sceneImage.count({ where: { sceneId: openScene.id } })) > 0
+    ? (await db.sceneImage.count({ where: { sceneId: openScene.id } })) > 0 ||
+      (await db.campaignImage.count({
+        where: { campaignId: campaign.id, kind: "SCENE", key: openScene.id },
+      })) > 0
     : false;
 
   // Only the current scene is replayed in full. Earlier scenes are summarised

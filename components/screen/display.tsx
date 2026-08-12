@@ -51,6 +51,8 @@ type View = {
     hasImage: boolean;
   } | null;
   party: Party[];
+  /** People the family drew who are in this scene. */
+  faces: { pictureId: string; label: string; version: number }[];
   quests: { id: string; title: string; status: string }[];
   version: string;
 };
@@ -243,6 +245,35 @@ function Portrait({ member, token }: { member: Party; token: string | null }) {
   return <img src={url} alt="" className="h-full w-full object-cover" />;
 }
 
+/**
+ * A face somebody at this table drew, of somebody the party met.
+ *
+ * The nicest thing on this screen, and the reason the gallery exists: a
+ * ten-year-old's felt-tip beekeeper, on the television, the same evening she
+ * drew him.
+ */
+function Face({
+  face,
+  token,
+}: {
+  face: { pictureId: string; label: string; version: number };
+  token: string | null;
+}) {
+  const url = useScreenImage(`/api/screen/face/${face.pictureId}?v=${face.version}`, token);
+  if (!url) return null;
+
+  return (
+    <div className="flex w-28 flex-col items-center gap-2 lg:w-32">
+      <div className="h-20 w-20 overflow-hidden rounded-lg border-2 border-hearth-700 lg:h-24 lg:w-24">
+        {/* eslint-disable-next-line @next/next/no-img-element -- an object URL
+            for bytes already in memory. */}
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      </div>
+      <p className="text-center text-sm text-hearth-300 lg:text-base">{face.label}</p>
+    </div>
+  );
+}
+
 /** The picture of the chapter. */
 function SceneArt({ version, token }: { version: string; token: string | null }) {
   const url = useScreenImage(`/api/screen/scene-image?v=${encodeURIComponent(version)}`, token);
@@ -340,6 +371,16 @@ function Paired({ view, token }: { view: View; token: string | null }) {
       </div>
 
       <footer className="mt-10 border-t border-hearth-800 pt-8">
+        {/* Whoever is in the scene, above the party — they are the thing that
+            changed, and the party is always there. */}
+        {view.faces.length > 0 ? (
+          <div className="mb-8 flex flex-wrap items-start justify-center gap-6">
+            {view.faces.map((face) => (
+              <Face key={face.pictureId} face={face} token={token} />
+            ))}
+          </div>
+        ) : null}
+
         <PartyStrip party={view.party} token={token} />
       </footer>
     </main>

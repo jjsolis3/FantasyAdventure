@@ -238,6 +238,9 @@ export type ScreenView = {
     narration: { id: string; text: string }[];
     hasImage: boolean;
     imageSceneId: string | null;
+    /** Set when the family drew this chapter themselves. Preferred over the generated one. */
+    drawnPictureId: string | null;
+    drawnVersion: number | null;
   } | null;
   party: {
     characterId: string;
@@ -248,6 +251,15 @@ export type ScreenView = {
     /** Whether this adventurer still owes the round an answer. */
     waitingOn: boolean;
   }[];
+  /**
+   * Faces of people the family drew who are in this scene.
+   *
+   * Matched by name against the narration, which is rough and right: an exact
+   * approach would need the storyteller to tag who is present, and it does not.
+   * A false positive shows a friendly face a beat early; a false negative shows
+   * nothing, which is where the game was yesterday. Neither is worth a schema.
+   */
+  faces: { pictureId: string; label: string; version: number }[];
   quests: { id: string; title: string; status: string }[];
   /** Changes whenever anything above would look different. */
   version: string;
@@ -314,6 +326,26 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
   });
 
   // Shared quests only — see the note above about what a television is for.
+  // A picture the family drew beats one a machine made, everywhere. It is the
+  // whole reason the gallery exists — a felt-tip beekeeper on the television is
+  // a memento, and a generated one is only content.
+  const pictures = await db.campaignImage.findMany({
+    where: { campaignId },
+    select: { id: true, kind: true, key: true, label: true, version: true },
+  });
+
+  const drawnScene = scene
+    ? pictures.find((picture) => picture.kind === "SCENE" && picture.key === scene.id)
+    : undefined;
+
+  const narrationText = (scene?.turns ?? []).map((turn) => turn.content).join(" ").toLocaleLowerCase();
+  const faces = pictures
+    .filter((picture) => picture.kind === "PERSON" && narrationText.includes(picture.key))
+    // Three at most. A row of faces along the bottom of a television is a nice
+    // thing; nine of them is a contact sheet.
+    .slice(0, 3)
+    .map((picture) => ({ pictureId: picture.id, label: picture.label, version: picture.version }));
+
   const quests = await db.quest.findMany({
     where: { campaignId, secretForCharacterId: null },
     orderBy: { createdAt: "asc" },
@@ -349,11 +381,14 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
             .slice()
             .reverse()
             .map((turn) => ({ id: turn.id, text: turn.content })),
-          hasImage: scene.image !== null,
+          hasImage: drawnScene !== undefined || scene.image !== null,
           imageSceneId: scene.image ? scene.id : null,
+          drawnPictureId: drawnScene?.id ?? null,
+          drawnVersion: drawnScene?.version ?? null,
         }
       : null,
     party,
+    faces,
     quests,
     // Same trick the play page's poll uses: one string that changes whenever
     // the display would look different, so the television refetches on change
@@ -365,6 +400,8 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       scene?.id ?? "-",
       scene?.turns[0]?.id ?? "-",
       scene?.image ? "img" : "-",
+      drawnScene ? `${drawnScene.id}:${drawnScene.version}` : "-",
+      faces.map((face) => `${face.pictureId}:${face.version}`).join(","),
       quests.map((quest) => `${quest.id}${quest.status}`).join(","),
       party.filter((member) => member.waitingOn).length,
     ].join(":"),

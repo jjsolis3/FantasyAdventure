@@ -23,13 +23,24 @@ export async function GET(request: Request) {
   const scene = await db.scene.findFirst({
     where: { campaignId: screen.campaignId, status: "OPEN" },
     orderBy: { index: "desc" },
-    select: { image: { select: { data: true, mimeType: true, createdAt: true } } },
+    select: { id: true, image: { select: { data: true, mimeType: true } } },
   });
-  if (!scene?.image) return new Response("No picture yet.", { status: 404 });
+  // A drawing the family made wins over one the machine made. Looked up here
+  // as well as in the payload because this route serves the bytes and the
+  // payload only says whether there are any — and the two must not disagree.
+  const drawn = scene
+    ? await db.campaignImage.findFirst({
+        where: { campaignId: screen.campaignId, kind: "SCENE", key: scene.id },
+        select: { data: true, mimeType: true },
+      })
+    : null;
 
-  return new Response(Buffer.from(scene.image.data), {
+  const picture = drawn ?? scene?.image;
+  if (!picture) return new Response("No picture yet.", { status: 404 });
+
+  return new Response(Buffer.from(picture.data), {
     headers: {
-      "Content-Type": scene.image.mimeType,
+      "Content-Type": picture.mimeType,
       // A drawn scene never changes, but which scene is current does, so the
       // display asks again on every version change and this only saves the
       // repeat fetches within one scene.

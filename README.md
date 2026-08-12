@@ -1041,6 +1041,36 @@ Confirmation is the character's name typed in full. Not an "are you sure?" —
 those get clicked through — but the one confirmation that cannot be given by
 accident, and that makes resetting the wrong adventurer of two very hard to do.
 
+### Pictures the family made
+
+Scene art has always been *generated* — asked for from whatever drawing model
+the household configured, which most have not, and which in any case produces
+one interpretation of a chapter rather than the family's own.
+
+`/campaigns/<id>/pictures` is the other half. Everybody the storyteller has
+bothered to remember gets a frame with their name under it — people met, places
+been, chapters played — and anyone at the table can put a drawing in one. A
+ten-year-old draws the beekeeper in felt-tip on a Tuesday and he is on the
+television that evening, with his own face, for the rest of the adventure.
+
+Four decisions worth knowing:
+
+- **Any player, not just the host.** The person most likely to have drawn the
+  beekeeper is the child who met him, and making her ask a grown-up to upload
+  her own drawing would take the best thing about this and file it under admin.
+- **A drawing beats a generated picture everywhere.** The preference lives in
+  the routes that serve bytes, so it holds at the table, on the television, and
+  anywhere a chapter picture is added later.
+- **Faces appear when their person is in the scene**, matched by name against
+  the narration. Rough on purpose: an exact answer would need the storyteller to
+  tag who is present, and it does not. A false positive shows a friendly face a
+  beat early; a false negative shows what the game showed yesterday.
+- **Shrunk in the browser**, faces squared and places cropped wide, so a
+  four-megabyte photograph of a kitchen table never leaves the phone.
+
+One picture per thing — redrawing replaces rather than piling up, and the
+version rises so every device that cached the old one asks again.
+
 ### Seven stats, and a skill every level
 
 Four stats and two skills made a builder you could finish in thirty seconds, and

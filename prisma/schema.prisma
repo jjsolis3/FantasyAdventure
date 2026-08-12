@@ -64,6 +64,7 @@ model User {
   sessions       AuthSession[]
   characters     Character[]
   campaigns      Campaign[]
+  uploadedImages CampaignImage[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
   roundAnswers   RoundAnswer[]
@@ -622,6 +623,7 @@ model Campaign {
   rounds   TurnRound[]
   screens  ScreenPairing[]
   abilityUses AbilityUse[]
+  images      CampaignImage[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)
@@ -1279,4 +1281,62 @@ enum AbilityKind {
   KNACK
   /// Earned by practising one skill to rank 2 — Steady Hand. Once a chapter.
   RANK
+}
+
+
+/// What a picture the family made is a picture *of*.
+enum CampaignImageKind {
+  /// A chapter or a moment. Keyed by scene id.
+  SCENE
+  /// Somebody they met. Keyed by a normalised version of the name.
+  PERSON
+  /// Somewhere they have been, and might go back to.
+  PLACE
+}
+
+/// A picture somebody at this table drew, photographed and uploaded.
+///
+/// Scene art has always been available and always been *generated* — asked for
+/// from whatever drawing model the household configured, which most households
+/// have not configured, and which in any case produces one interpretation of a
+/// chapter rather than the family's own.
+///
+/// This is the other half, and the better one. A ten-year-old draws the
+/// beekeeper in felt-tip on a Tuesday and he is on the television that evening,
+/// with his own face, for the rest of the adventure. A generated picture is
+/// content; a drawn one is a memento, and the whole game is built around
+/// mementos.
+///
+/// One table for all three kinds rather than three tables, because the question
+/// asked of it is always the same: is there a picture of this thing, and which
+/// bytes are it. `kind` plus `key` is the address.
+model CampaignImage {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  kind CampaignImageKind
+  /// A scene id for SCENE, a normalised name for PERSON and PLACE.
+  key  String
+  /// What to write underneath: "The beekeeper", "The drowned schoolhouse".
+  label String
+
+  data     Bytes
+  mimeType String
+
+  /// Bumped on every replacement, so a picture cached on one child's phone is
+  /// never the one that has since been redrawn.
+  version Int @default(1)
+
+  /// Who added it. Kept so the gallery can say whose drawing it is, and set to
+  /// null rather than cascading if that account ever goes — the picture belongs
+  /// to the adventure now.
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, kind, key])
+  @@index([campaignId])
 }
