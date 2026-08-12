@@ -11,6 +11,7 @@ import type { Prisma } from "@/generated/prisma/client.ts";
 import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/context";
 import {
   conversationPrompt,
+  nudgePrompt,
   openingPrompt,
   personalQuestsPrompt,
   suggestionPrompt,
@@ -19,7 +20,13 @@ import {
   type ReadingLevelKey,
   type ToneKey,
 } from "@/lib/ai/prompts";
-import { personalQuestsSchema, suggestionsSchema, summarySchema, validator } from "@/lib/ai/schemas";
+import {
+  nudgeSchema,
+  personalQuestsSchema,
+  suggestionsSchema,
+  summarySchema,
+  validator,
+} from "@/lib/ai/schemas";
 import { requestStructured } from "@/lib/ai/json";
 import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
@@ -485,7 +492,7 @@ export async function beginCampaign(
 
   const firstAct = campaign.storyline.acts.find((act) => act.index === 1);
 
-  // Asked for before the transaction opens, because it is a model call.
+  // Both asked for before the transaction opens, because they are model calls.
   const aims = firstAct
     ? await fetchPersonalAims(
         calls,
@@ -499,6 +506,12 @@ export async function beginCampaign(
       )
     : [];
 
+  const whatNow = await fetchWhatNow(
+    calls,
+    narration,
+    campaign.party.map((member) => member.character.name),
+  );
+
   const scene = await db.$transaction(async (tx) => {
     const created = await tx.scene.create({
       data: {
@@ -510,7 +523,13 @@ export async function beginCampaign(
     });
 
     await tx.turnEvent.create({
-      data: { sceneId: created.id, ordinal: 1, type: "NARRATION", content: narration.trim() },
+      data: {
+        sceneId: created.id,
+        ordinal: 1,
+        type: "NARRATION",
+        content: narration.trim(),
+        ...(whatNow ? { metadata: { whatNow } } : {}),
+      },
     });
 
     await tx.campaign.update({
@@ -570,6 +589,33 @@ async function fetchPersonalAims(
     return result.value.aims;
   } catch {
     return [];
+  }
+}
+
+/**
+ * The question the opening passage leaves the table with.
+ *
+ * Every other turn gets this out of extraction for free. The opening has no
+ * extraction to get it from, so it is asked for on its own — once per
+ * adventure, which is a price worth paying at the exact moment nobody yet knows
+ * how this thing works.
+ *
+ * Silent on failure like the aims above. A missing question costs the table a
+ * sentence; a failed opening costs them the evening.
+ */
+async function fetchWhatNow(
+  calls: ModelCalls,
+  narration: string,
+  partyNames: string[],
+): Promise<string | null> {
+  try {
+    const result = await requestStructured({
+      call: (hint) => calls.json(nudgePrompt({ narration, partyNames }), hint),
+      validate: validator(nudgeSchema),
+    });
+    return result.value.whatNow.trim() || null;
+  } catch {
+    return null;
   }
 }
 
@@ -814,7 +860,18 @@ export async function playTurn(
     }
 
     await tx.turnEvent.create({
-      data: { sceneId: scene.id, ordinal: ordinal++, type: "NARRATION", content: result.narration.trim() },
+      data: {
+        sceneId: scene.id,
+        ordinal: ordinal++,
+        type: "NARRATION",
+        content: result.narration.trim(),
+        // The question the passage leaves the table with, kept beside the
+        // passage that raised it so a page opened tomorrow still knows what
+        // everybody was in the middle of.
+        ...(result.extraction.whatNow?.trim()
+          ? { metadata: { whatNow: result.extraction.whatNow.trim() } }
+          : {}),
+      },
     });
 
     // Growth is announced, not just recorded. A number quietly ticking up in a

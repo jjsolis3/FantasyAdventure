@@ -9,6 +9,14 @@ export type Packer = {
   tone: string;
   /** Names of supplies already in the pack, for this adventure. */
   packed: string[];
+  /**
+   * Things she owns already, carried home from an earlier story.
+   *
+   * Inventory survives an adventure, so by the second one she really does have
+   * a lantern — and offering her another is both untrue and a wasted choice.
+   * These come with her either way and cost her nothing.
+   */
+  carried: string[];
   /** Two, or more for somebody whose knacks say so. */
   allowance: number;
   /** False for somebody else's adventurer, whose pack is shown but not touched. */
@@ -56,6 +64,23 @@ export function Packing({ campaignId, packers }: { campaignId: string; packers: 
                 {offered.map((supply) => {
                   const taken = packer.packed.includes(supply.name);
                   const full = room <= 0;
+                  const owned = packer.carried.includes(supply.name);
+
+                  // Already hers. Shown in its place in the list rather than
+                  // dropped out of it, so the list does not silently change
+                  // shape between one adventure and the next.
+                  if (owned) {
+                    return (
+                      <li key={supply.name}>
+                        <div className="w-full rounded-lg border border-moss-800/50 bg-moss-900/10 p-3 text-left">
+                          <span className="block text-sm text-hearth-100">{supply.name}</span>
+                          <span className="block text-sm text-moss-400">
+                            Already yours — it comes with you.
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  }
 
                   return (
                     <li key={supply.name}>

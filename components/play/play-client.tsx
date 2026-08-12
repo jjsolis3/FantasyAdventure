@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
@@ -9,6 +10,7 @@ import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-
 import { IdeaHints } from "./idea-hints";
 import { NarratorControls } from "./narrator-controls";
 import { RoundBoard } from "./round-board";
+import { usePlayTab } from "./play-layout";
 import { TellMeToggle, useTurnAlerts } from "./turn-alerts";
 import { useNarrator } from "./use-narrator";
 import { UndoTurn } from "./undo-turn";
@@ -93,6 +95,7 @@ export function PlayClient({
   inputMode,
   yourCharacterIds,
   initialRound,
+  whatNow,
 }: {
   campaignId: string;
   campaignTitle: string;
@@ -108,6 +111,14 @@ export function PlayClient({
   yourCharacterIds: string[];
   /** The round being collected, when the party is apart. */
   initialRound: RoundView | null;
+  /**
+   * The question the last passage left the table with.
+   *
+   * The single most-missed thing on this screen: a passage ended, two buttons
+   * appeared, and nothing in between said the story was now waiting on a
+   * person. Grown-ups hesitated and children waited to be told.
+   */
+  whatNow: string | null;
 }) {
   const router = useRouter();
   const apart = inputMode === "OWN_DEVICE";
@@ -375,6 +386,45 @@ export function PlayClient({
     .map((character) => ({ characterId: character.id, text: (drafts[character.id] ?? "").trim() }))
     .filter((action) => action.text.length > 0);
 
+  // ---- Bringing the right thing into view ----------------------------------
+
+  /**
+   * Where the answering happens, and where a new passage lands.
+   *
+   * Both are below a wall of text that grows every turn, and neither used to
+   * move the page: a passage arrived and the reader was left looking at the top
+   * of the previous one, a round opened and nothing said so. Scrolling only
+   * happens on a *transition* — a new passage, a new round — so it never fights
+   * somebody who has deliberately scrolled back to reread something.
+   */
+  const actionRef = useRef<HTMLDivElement>(null);
+  const narrationRef = useRef<HTMLDivElement>(null);
+  const { setTab } = usePlayTab();
+
+  function reveal(target: HTMLElement | null) {
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const narrating = phase.kind === "narrating";
+  useEffect(() => {
+    if (narrating) reveal(narrationRef.current);
+  }, [narrating]);
+
+  const openRoundId = round && round.status === "COLLECTING" ? round.id : null;
+  const revealedRound = useRef<string | null>(openRoundId);
+  useEffect(() => {
+    if (!openRoundId || revealedRound.current === openRoundId) return;
+    revealedRound.current = openRoundId;
+    reveal(actionRef.current);
+  }, [openRoundId]);
+
+  /** Bring somebody back to the story, from whichever tab they are on. */
+  const goToAction = useCallback(() => {
+    setTab("story");
+    // After the panel has been shown; scrolling to a hidden element does nothing.
+    setTimeout(() => reveal(actionRef.current), 50);
+  }, [setTab]);
+
   // ---- Rendering -----------------------------------------------------------
 
   const outstandingNames = yoursOutstanding
@@ -402,7 +452,7 @@ export function PlayClient({
       <Transcript entries={entries} onSpeak={narrator.supported ? narrator.say : undefined} />
 
       {phase.kind === "narrating" ? (
-        <div>
+        <div ref={narrationRef} className="scroll-mt-32">
           {phase.dice.length > 0 ? (
             <div className="mb-5 space-y-2">
               {phase.dice.map((dice, index) => (
@@ -416,7 +466,15 @@ export function PlayClient({
         </div>
       ) : null}
 
-      <div className="border-t border-hearth-800/50 pt-6">
+      <div ref={actionRef} className="scroll-mt-32 border-t border-hearth-800/50 pt-6">
+        {/* The bridge from the passage to the people reading it. Only while the
+            table is idle: mid-turn this is last turn's question, and answering
+            a question the story has moved past is worse than being asked
+            nothing at all. */}
+        {whatNow && phase.kind === "idle" && hasBegun && !finished && status !== "PAUSED" ? (
+          <p className="font-display mb-5 text-lg text-hearth-100">{whatNow}</p>
+        ) : null}
+
         {phase.kind === "running" ? (
           <div className="space-y-4">
             <p className="flex items-center gap-3 text-hearth-300">
@@ -598,27 +656,36 @@ export function PlayClient({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setTalking(false);
-                startAsking();
-              }}
-              className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
-            >
-              What do you do?
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTalking(true);
-                startAsking();
-              }}
-              className="rounded-lg border border-hearth-700 px-5 py-2.5 text-hearth-200 hover:bg-hearth-800/50"
-            >
-              Talk to each other
-            </button>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setTalking(false);
+                  startAsking();
+                }}
+                className="rounded-lg bg-hearth-600 px-5 py-2.5 font-medium text-hearth-50 hover:bg-hearth-500"
+              >
+                What do you do?
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTalking(true);
+                  startAsking();
+                }}
+                className="rounded-lg border border-hearth-700 px-5 py-2.5 text-hearth-200 hover:bg-hearth-800/50"
+              >
+                Talk to each other
+              </button>
+            </div>
+            <p className="text-sm text-hearth-500">
+              <strong className="font-medium text-hearth-400">What do you do?</strong> is for trying
+              something — it may need a dice roll.{" "}
+              <strong className="font-medium text-hearth-400">Talk to each other</strong> is just
+              talking: nothing is rolled and the story stays where it is. Everybody gets asked in
+              turn.
+            </p>
           </div>
         )}
       </div>
@@ -654,7 +721,104 @@ export function PlayClient({
           onStop={alerts.stopBeingTold}
         />
       ) : null}
+
+      {hasBegun && !finished && status !== "PAUSED" ? (
+        <ActionBar
+          telling={telling}
+          waitingOnYou={waitingOnYou}
+          outstandingNames={outstandingNames}
+          round={round}
+          apart={apart}
+          onGo={goToAction}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * What is happening, and the way back to doing something about it.
+ *
+ * Pinned to the bottom of the window on a phone, and nowhere at all on a
+ * laptop, where the story and the controls are on screen together anyway.
+ *
+ * It deliberately holds no controls of its own beyond the one that scrolls you
+ * to them. A second "what do you do?" button would mean two places to press for
+ * the same thing and two states to keep in step; what was actually missing was
+ * never a button, it was knowing whether the story was waiting on *you* without
+ * having to scroll past a passage to find out.
+ *
+ * Portalled to the body because this component lives inside the story panel —
+ * which is the one that gets hidden when somebody switches to Party or Quests.
+ * `position: fixed` does not save an element whose ancestor is `display: none`,
+ * and a status bar that vanishes on the two tabs where you cannot see the
+ * story is exactly backwards.
+ *
+ * The spacer stays behind in the flow, where it is needed: without it the bar
+ * sits on top of the last few lines of the page, which on the one screen where
+ * the last few lines are the controls would be a fine joke and a bad idea.
+ */
+function ActionBar({
+  telling,
+  waitingOnYou,
+  outstandingNames,
+  round,
+  apart,
+  onGo,
+}: {
+  telling: boolean;
+  waitingOnYou: boolean;
+  outstandingNames: string[];
+  round: RoundView | null;
+  apart: boolean;
+  onGo: () => void;
+}) {
+  const { tag, message } = (() => {
+    if (telling) return { tag: "…", message: "The storyteller is writing." };
+    if (waitingOnYou) {
+      return {
+        tag: "You",
+        message: `${outstandingNames.join(" and ")} ${outstandingNames.length === 1 ? "has" : "have"} not answered.`,
+      };
+    }
+    if (apart && round && round.status === "COLLECTING") {
+      return round.everyoneIn
+        ? { tag: "Ready", message: "Everybody is in." }
+        : {
+            tag: "Round",
+            message: `Waiting for ${round.waitingFor.length} of ${round.partyIds.length}.`,
+          };
+    }
+    return { tag: "Turn", message: "It is the party's move." };
+  })();
+
+  // Portals need a document, which the server render does not have.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const bar = (
+    <div className="print-hide fixed inset-x-0 bottom-0 z-40 border-t border-hearth-800/70 bg-hearth-950/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="mx-auto flex max-w-3xl items-center gap-3">
+        <p className="min-w-0 flex-1 text-sm" aria-live="polite">
+          <span className="text-hearth-400">{tag}</span>{" "}
+          <span className="text-hearth-100">{message}</span>
+        </p>
+        <button
+          type="button"
+          onClick={onGo}
+          className="shrink-0 rounded-lg bg-hearth-600 px-4 py-2 text-sm font-medium text-hearth-50 hover:bg-hearth-500"
+        >
+          {waitingOnYou ? "Answer" : "Go to the story"}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="h-20 lg:hidden" aria-hidden />
+      {mounted ? createPortal(bar, document.body) : null}
+    </>
   );
 }
 

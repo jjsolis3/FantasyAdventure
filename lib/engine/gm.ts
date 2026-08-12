@@ -253,6 +253,7 @@ export async function runTurn(
     itemsGained: [],
     deedsDone: [],
     questsOpened: [],
+    whatNow: null,
     actComplete: false,
     sceneComplete: false,
   };
