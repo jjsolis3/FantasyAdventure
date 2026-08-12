@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { pictureKey, sniffImage, MAX_PICTURE_BYTES } from "../lib/game/pictures.ts";
+import { shippedChapterArt } from "../lib/game/scene-picture.ts";
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 
@@ -64,4 +65,29 @@ test("pictures: a name that is only punctuation gives nothing to key on", () => 
 test("pictures: names with numbers and accents survive", () => {
   assert.equal(pictureKey("Room 12"), "room 12");
   assert.equal(pictureKey("Père Guillaume"), "père guillaume");
+});
+
+// ---- Where a chapter's picture comes from ----------------------------------
+
+test("pictures: a chapter with no file shipped for it says so", () => {
+  // The negative case is the one that matters at runtime: it is what tells the
+  // ladder to fall through to a generated picture, and getting it wrong would
+  // either hide real art or ask a drawing service for something that exists.
+  assert.equal(shippedChapterArt("an-adventure-nobody-wrote", 1), null);
+  assert.equal(shippedChapterArt("the-star-thief", 99), null);
+});
+
+test("pictures: looking twice gives the same answer", () => {
+  // Cached after the first look, which is exact rather than merely fast: the
+  // filesystem cannot change without a redeploy, and a redeploy restarts the
+  // process.
+  const first = shippedChapterArt("the-star-thief", 1);
+  assert.equal(shippedChapterArt("the-star-thief", 1), first);
+});
+
+test("pictures: a slug cannot climb out of the art folder", () => {
+  // The slug reaches this from the database rather than from a request, so this
+  // is defence in depth — but a path built by joining strings deserves it.
+  assert.equal(shippedChapterArt("../../etc", 1), null);
+  assert.equal(shippedChapterArt("..", 1), null);
 });

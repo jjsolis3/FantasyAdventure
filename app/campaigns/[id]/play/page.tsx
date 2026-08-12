@@ -16,6 +16,7 @@ import { resolveImageConfig } from "@/lib/ai/settings";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
+import { scenePicture } from "@/lib/game/scene-picture";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 
@@ -60,15 +61,18 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const round = campaign.inputMode === "OWN_DEVICE" ? await currentRound(campaign.id) : null;
 
   const openScene = campaign.scenes.find((scene) => scene.status === "OPEN");
-  // A drawing counts. Without this the page would see no generated picture,
-  // ask the drawing service for one, and quietly paint over the one a child
-  // made — which is the exact opposite of the point.
-  const hasPicture = openScene
-    ? (await db.sceneImage.count({ where: { sceneId: openScene.id } })) > 0 ||
-      (await db.campaignImage.count({
-        where: { campaignId: campaign.id, kind: "SCENE", key: openScene.id },
-      })) > 0
-    : false;
+  // Asked of the ladder rather than counted here, so the table and the
+  // television can never disagree about which picture this chapter has — and
+  // so a chapter that already has one is never sent to a drawing service.
+  const picture = openScene
+    ? await scenePicture({
+        campaignId: campaign.id,
+        sceneId: openScene.id,
+        actIndex: openScene.actIndex,
+        storylineSlug: campaign.storyline.slug,
+      })
+    : ({ source: "NONE" } as const);
+  const hasPicture = picture.source !== "NONE";
 
   // Only the current scene is replayed in full. Earlier scenes are summarised
   // and shown as a recap, which is also exactly how the Game Master sees them.
@@ -318,6 +322,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                   sceneId={openScene.id}
                   sceneTitle={openScene.title}
                   hasImage={hasPicture}
+                  pictureUrl={picture.source === "NONE" ? null : picture.url}
                   enabled={picturesOn}
                 />
               </div>

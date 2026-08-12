@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/session";
 import { Alert, Card, PageTitle } from "@/components/ui";
+import { ChapterArt } from "@/components/settings/chapter-art";
+import { shippedChapterArt } from "@/lib/game/scene-picture";
 import { StorylineForm } from "@/components/settings/storyline-form";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,18 @@ export default async function EditAdventurePage({ params }: { params: Promise<{ 
     },
   });
   if (!storyline) notFound();
+
+  // Keyed by slug and act number rather than act id: the seed deletes and
+  // recreates every act row on container start, so anything hung off an id
+  // would vanish on the next redeploy.
+  const chapterVersions = new Map(
+    (
+      await db.chapterImage.findMany({
+        where: { storylineSlug: storyline.slug },
+        select: { actIndex: true, version: true },
+      })
+    ).map((row) => [row.actIndex, row.version]),
+  );
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -56,6 +70,26 @@ export default async function EditAdventurePage({ params }: { params: Promise<{ 
           </Alert>
         </div>
       ) : null}
+
+      <Card className="mb-6">
+        <h2 className="font-display mb-1 text-xl text-hearth-100">Chapter pictures</h2>
+        <p className="mb-4 text-sm text-hearth-400">
+          A picture here is used by every family who plays this adventure, and it means the
+          storyteller never has to draw one — no waiting, no drawing service, no cost.{" "}
+          <span className="text-hearth-300">npm run art:prompts</span> writes a ready-made prompt
+          for each chapter below. A family can still draw their own on top, from the adventure&rsquo;s
+          own picture page.
+        </p>
+        <ChapterArt
+          slug={storyline.slug}
+          chapters={storyline.acts.map((act) => ({
+            actIndex: act.index,
+            title: act.title,
+            version: chapterVersions.get(act.index) ?? null,
+            shippedUrl: shippedChapterArt(storyline.slug, act.index),
+          }))}
+        />
+      </Card>
 
       <Card>
         <StorylineForm

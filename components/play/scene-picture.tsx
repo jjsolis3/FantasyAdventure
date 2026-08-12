@@ -19,13 +19,23 @@ export function ScenePicture({
   sceneId,
   sceneTitle,
   hasImage,
+  pictureUrl,
   enabled,
 }: {
   campaignId: string;
   sceneId: string;
   sceneTitle: string;
-  /** True when the chapter has already been drawn. */
+  /** True when this chapter already has a picture, from any source. */
   hasImage: boolean;
+  /**
+   * Where to fetch it, decided on the server by the precedence ladder in
+   * `lib/game/scene-picture.ts` — a drawing this family made, the adventure's
+   * own chapter art, a file shipped with the game, or a generated one.
+   *
+   * Passed in rather than built here, because deciding it in two places is how
+   * the table ends up showing a different picture from the television.
+   */
+  pictureUrl: string | null;
   /** False when the table has not switched pictures on. */
   enabled: boolean;
 }) {
@@ -86,7 +96,7 @@ export function ScenePicture({
           picture that is already exactly the size it is shown at. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`/api/scenes/${sceneId}/image`}
+        src={pictureUrl ?? `/api/scenes/${sceneId}/image`}
         alt={`An illustration of ${sceneTitle}`}
         className="block w-full"
         loading="lazy"

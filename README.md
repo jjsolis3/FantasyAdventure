@@ -1041,6 +1041,30 @@ Confirmation is the character's name typed in full. Not an "are you sure?" —
 those get clicked through — but the one confirmation that cannot be given by
 accident, and that makes resetting the wrong adventurer of two very hard to do.
 
+### What picture a chapter gets
+
+Four possible answers, in a strict order, decided in one place
+(`lib/game/scene-picture.ts`) because four callers need the same one — the table,
+the route that serves the bytes, the television, and the code that decides
+whether to ask a drawing service at all.
+
+1. **A drawing this family made**, from the adventure's own picture page.
+2. **Chapter art uploaded here**, in Settings → Adventures. Every family who
+   plays that adventure sees it.
+3. **A file shipped with the game**, at
+   `public/adventures/<slug>/act-<n>.webp` — see the README in that folder.
+4. **A generated picture**, from the drawing service.
+5. Nothing, which is the only case where a drawing service is asked at all.
+
+That last point is the one that matters: a chapter with art never reaches a
+model, so there is no wait, no cost, and no chance of a machine's guess landing
+on top of a child's felt-tip.
+
+Chapter art is keyed by **storyline slug and chapter number**, not by act id.
+The seed deletes and recreates every act row on container start, so art hung off
+an id would be destroyed by the next redeploy — which is exactly when somebody
+would have just finished adding it.
+
 ### Pictures the family made
 
 Scene art has always been *generated* — asked for from whatever drawing model

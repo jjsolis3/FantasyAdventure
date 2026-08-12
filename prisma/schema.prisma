@@ -65,6 +65,7 @@ model User {
   characters     Character[]
   campaigns      Campaign[]
   uploadedImages CampaignImage[]
+  chapterImages  ChapterImage[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
   roundAnswers   RoundAnswer[]
@@ -1339,4 +1340,41 @@ model CampaignImage {
 
   @@unique([campaignId, kind, key])
   @@index([campaignId])
+}
+
+
+/// A picture of one chapter of one adventure, used by every family who plays it.
+///
+/// Keyed by the storyline's **slug and act number**, deliberately, rather than
+/// by the act's id. The seed deletes and recreates every act row on container
+/// start — see `prisma/seed.ts` — so art hung off an act id would be destroyed
+/// by the next redeploy, which is exactly when somebody would have just added
+/// it. Slug and number survive that, and they are also what the art-prompt
+/// sheet names its files after.
+///
+/// Distinct from `CampaignImage` on purpose. That is one family's drawing of
+/// their own chapter; this is the picture the adventure ships with, and every
+/// table that plays it sees the same one. When both exist the family's own wins
+/// — see `lib/game/scene-picture.ts`.
+model ChapterImage {
+  id String @id @default(cuid())
+
+  storylineSlug String
+  /// 1-based, matching StorylineAct.index.
+  actIndex      Int
+
+  data     Bytes
+  mimeType String
+
+  /// Bumped on replacement, so a redrawn chapter is not the old one on every
+  /// device that has already seen it.
+  version Int @default(1)
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storylineSlug, actIndex])
 }

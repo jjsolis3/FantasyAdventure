@@ -21,6 +21,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { generateScreenCode } from "@/lib/auth/invite-code";
+import { scenePicture } from "@/lib/game/scene-picture";
 
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * MINUTE_MS;
@@ -290,7 +291,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       status: true,
       currentActIndex: true,
       turnCounter: true,
-      storyline: { select: { title: true } },
+      storyline: { select: { title: true, slug: true } },
       party: {
         select: {
           characterId: true,
@@ -315,6 +316,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       id: true,
       title: true,
       location: true,
+      actIndex: true,
       image: { select: { id: true } },
       turns: {
         where: { type: "NARRATION" },
@@ -337,6 +339,20 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
   const drawnScene = scene
     ? pictures.find((picture) => picture.kind === "SCENE" && picture.key === scene.id)
     : undefined;
+
+  // Whether *any* rung of the ladder answered, so the television knows to ask
+  // for bytes at all. The route works out which one; this only has to know
+  // there is something to fetch.
+  const anyPicture = scene
+    ? (
+        await scenePicture({
+          campaignId,
+          sceneId: scene.id,
+          actIndex: scene.actIndex,
+          storylineSlug: campaign.storyline.slug,
+        })
+      ).source !== "NONE"
+    : false;
 
   const narrationText = (scene?.turns ?? []).map((turn) => turn.content).join(" ").toLocaleLowerCase();
   const faces = pictures
@@ -381,7 +397,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
             .slice()
             .reverse()
             .map((turn) => ({ id: turn.id, text: turn.content })),
-          hasImage: drawnScene !== undefined || scene.image !== null,
+          hasImage: anyPicture,
           imageSceneId: scene.image ? scene.id : null,
           drawnPictureId: drawnScene?.id ?? null,
           drawnVersion: drawnScene?.version ?? null,
