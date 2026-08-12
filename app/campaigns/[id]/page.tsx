@@ -304,6 +304,17 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                     Read the journal
                   </Link>
                 )}
+                {/* The quest board had no door from here at all: it was reachable
+                    from the table and from the journal, and not from the page
+                    that is otherwise the front of an adventure. */}
+                {campaign.status === "SETUP" ? null : (
+                  <Link
+                    href={`/campaigns/${campaign.id}/finds`}
+                    className="inline-block rounded-lg border border-hearth-700 px-5 py-2.5 font-medium text-hearth-200 transition-colors hover:bg-hearth-800/50"
+                  >
+                    The quest board
+                  </Link>
+                )}
               </div>
             </>
           )}

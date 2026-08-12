@@ -13,6 +13,7 @@
 
 import { randomInt } from "node:crypto";
 import { STAT_INFO, statModifier, type StatKey } from "@/lib/game/rules";
+import type { SignatureEffect } from "@/lib/game/character-options";
 
 export const DIFFICULTIES = {
   EASY: 8,
@@ -72,6 +73,20 @@ export type MoveEffect = {
   helperName: string;
 };
 
+/**
+ * A once-a-scene or once-a-chapter ability spent on this turn.
+ *
+ * `own` is what this character spent herself; `boost` is what somebody else
+ * spent that happens to help her. They are separate because the two arrive from
+ * opposite directions — one is on her own answer, the other is on a sibling's —
+ * and because an ability that boosts *others* must never boost its owner, which
+ * is far easier to guarantee when her own spend cannot be mistaken for a boost.
+ */
+export type AbilitySpend = {
+  own?: { name: string; effect: SignatureEffect } | null;
+  boost?: { amount: number; fromName: string } | null;
+};
+
 export type CheckResult = CheckRequest & {
   roll: number;
   modifier: number;
@@ -81,6 +96,8 @@ export type CheckResult = CheckRequest & {
   outcome: CheckOutcome;
   /** Set when a Family Move altered this check. */
   move?: MoveEffect & { note: string };
+  /** Set when a spent ability altered this check. */
+  ability?: { name: string; note: string };
 };
 
 /** Rolls a fair d20 using a cryptographic source, not Math.random. */
@@ -113,13 +130,19 @@ export function resolveCheck(
   stats: Record<StatKey, number>,
   roller: () => number = rollD20,
   move?: MoveEffect,
+  spend?: AbilitySpend,
 ): CheckResult {
   const modifier = statModifier(stats[request.stat]) + (request.knackBonus ?? 0);
   const skillBonus = request.skillRank ?? 0;
   const target = DIFFICULTIES[request.difficulty];
 
+  // Somebody else's "everyone but me does better" lands here, before anything
+  // is rolled, so it is part of every path through the Family Move switch below
+  // rather than a correction bolted on after one of them.
+  const lent = spend?.boost?.amount ?? 0;
+
   const settle = (roll: number, bonus = 0) => {
-    const total = roll + modifier + skillBonus + bonus;
+    const total = roll + modifier + skillBonus + bonus + lent;
     return { roll, total, outcome: resolveOutcome(roll, total, target) };
   };
 
@@ -168,6 +191,22 @@ export function resolveCheck(
       break;
   }
 
+  // Applied after the Family Move, deliberately. Both can land on one check —
+  // a sister lends a hand on the same roll a girl spends Steady Hand — and when
+  // they do, "it simply works" has to be the last word, or the move could talk
+  // her out of her own certainty.
+  const abilityNotes: string[] = [];
+  if (spend?.boost) {
+    abilityNotes.push(`${spend.boost.fromName} carries them: +${spend.boost.amount}`);
+  }
+  if (spend?.own?.effect.kind === "AUTO_SUCCEED" && attempt.outcome !== "CRITICAL") {
+    // A natural 20 is left alone. It is already the best thing that can happen,
+    // and taking a critical away from a child because she also spent something
+    // would be the single meanest line in this file.
+    abilityNotes.push(`${spend.own.name}: no roll needed — it simply works`);
+    attempt = { ...attempt, outcome: "SUCCESS" };
+  }
+
   return {
     ...request,
     roll: attempt.roll,
@@ -177,6 +216,9 @@ export function resolveCheck(
     target,
     outcome: attempt.outcome,
     ...(move ? { move: { ...move, note } } : {}),
+    ...(abilityNotes.length > 0
+      ? { ability: { name: spend?.own?.name ?? "Helped", note: abilityNotes.join("; ") } }
+      : {}),
   };
 }
 

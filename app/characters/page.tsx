@@ -5,6 +5,7 @@ import { Card, PageTitle } from "@/components/ui";
 import { STATS, STAT_INFO, kindFromPerspective, RELATIONSHIP_LABELS } from "@/lib/game/rules";
 import { AGE_BANDS } from "@/lib/game/character-options";
 import { LevelBadge } from "@/components/character/level-badge";
+import { waitingPointsFor } from "@/lib/game/waiting-points";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,28 @@ export default async function CharactersPage() {
     where: { userId: user.id },
     include: {
       skills: true,
+      knacks: { select: { id: true } },
       relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
       relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: "asc" },
   });
+
+  // Where each adventurer is wanted, so this list can say so.
+  //
+  // The two things worth interrupting somebody for are a turn nobody has
+  // answered and a point of growth nobody has spent. Both were previously
+  // invisible from here — a girl could be owed a level-up for three weeks and
+  // the only way to find out was to open her sheet and notice.
+  const waiting = await waitingPointsFor(
+    characters.map((character) => ({
+      id: character.id,
+      xp: character.xp,
+      stats: { might: character.might, wits: character.wits, heart: character.heart, spark: character.spark },
+      knackCount: character.knacks.length,
+      level: character.level,
+    })),
+  );
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -75,9 +93,24 @@ export default async function CharactersPage() {
               })),
             ];
 
+            const points = waiting.get(character.id) ?? [];
+
             return (
               <li key={character.id}>
                 <Card className="transition-colors hover:border-hearth-700">
+                  {points.length > 0 ? (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {points.map((point) => (
+                        <Link
+                          key={point.label}
+                          href={point.href}
+                          className="rounded-full border border-amber-700/50 bg-amber-950/30 px-3 py-1 text-xs font-medium text-amber-200 hover:border-amber-600"
+                        >
+                          {point.label}
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
                   {/* The badge sits in its own column so a long name wraps
                       beside it rather than pushing it off the card. */}
                   <div className="flex items-start gap-4">

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui";
 import { DiceCard, Transcript, TypedNarration, type DiceDetail, type TranscriptEntry } from "./transcript";
+import { AbilityPicker, type AvailableAbility } from "@/components/play/ability-picker";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
 import { NarratorControls } from "./narrator-controls";
@@ -27,6 +28,14 @@ export type PlayCharacter = {
   /** The household answering for them. */
   playedBy: string;
   yours: boolean;
+  /**
+   * The once-a-scene and once-a-chapter moves that are hers, spent ones marked.
+   *
+   * Worked out on the server so the table is never offered something it cannot
+   * have. The turn checks again before it commits — this is so the buttons tell
+   * the truth, not so the rule holds.
+   */
+  abilities?: AvailableAbility[];
 };
 
 type Phase =
@@ -126,6 +135,10 @@ export function PlayClient({
   const [entries, setEntries] = useState<TranscriptEntry[]>(initialEntries);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // What each character is spending this turn. Chosen while she is being asked
+  // rather than at review, so the person typing decides per character rather
+  // than once for the table.
+  const [spends, setSpends] = useState<Record<string, string | null>>({});
   const [move, setMove] = useState<MoveChoice | null>(null);
   /** What the table says the last telling got wrong; sent with the retold turn. */
   const [correction, setCorrection] = useState("");
@@ -383,7 +396,11 @@ export function PlayClient({
   }
 
   const filledActions = party
-    .map((character) => ({ characterId: character.id, text: (drafts[character.id] ?? "").trim() }))
+    .map((character) => ({
+      characterId: character.id,
+      text: (drafts[character.id] ?? "").trim(),
+      abilityKey: spends[character.id] ?? null,
+    }))
     .filter((action) => action.text.length > 0);
 
   // ---- Bringing the right thing into view ----------------------------------
@@ -574,9 +591,13 @@ export function PlayClient({
             index={phase.index}
             total={party.length}
             value={drafts[party[phase.index].id] ?? ""}
+            spending={spends[party[phase.index].id] ?? null}
             inputRef={inputRef}
             onChange={(text) =>
               setDrafts((current) => ({ ...current, [party[phase.index].id]: text }))
+            }
+            onSpend={(key) =>
+              setSpends((current) => ({ ...current, [party[phase.index].id]: key }))
             }
             onNext={() => advance(phase.index)}
             onBack={
@@ -860,7 +881,9 @@ function AskCharacter({
   index,
   total,
   value,
+  spending,
   onChange,
+  onSpend,
   onNext,
   onBack,
   inputRef,
@@ -871,7 +894,9 @@ function AskCharacter({
   index: number;
   total: number;
   value: string;
+  spending: string | null;
   onChange: (text: string) => void;
+  onSpend: (key: string | null) => void;
   onNext: () => void;
   onBack?: () => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -912,6 +937,16 @@ function AskCharacter({
         }
         className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
       />
+
+      {/* Not offered while the table is only talking it over: nothing is being
+          attempted, so a once-a-scene move has nothing to land on. */}
+      {talking ? null : (
+        <AbilityPicker
+          abilities={character.abilities ?? []}
+          chosen={spending}
+          onChoose={onSpend}
+        />
+      )}
 
       {talking ? null : (
         <IdeaHints

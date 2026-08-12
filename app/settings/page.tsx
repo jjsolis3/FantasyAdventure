@@ -17,12 +17,13 @@ export const dynamic = "force-dynamic";
 export default async function SettingsHubPage() {
   await requireAdmin();
 
-  const [storylines, custom, campaigns, calls, unusedInvites] = await Promise.all([
+  const [storylines, custom, campaigns, calls, unusedInvites, adventurers] = await Promise.all([
     db.storyline.count(),
     db.storyline.count({ where: { isCustom: true } }),
     db.campaign.count(),
     db.aiCall.count(),
     db.inviteCode.count({ where: { redeemedById: null } }),
+    db.character.count(),
   ]);
 
   const cards = [
@@ -48,6 +49,13 @@ export default async function SettingsHubPage() {
       note: `${calls} ${calls === 1 ? "call" : "calls"} across ${campaigns} ${
         campaigns === 1 ? "adventure" : "adventures"
       }`,
+    },
+    {
+      href: "/settings/adventurers",
+      title: "Adventurers",
+      blurb:
+        "Everyone in the house, and what they have earned. Starting one again — back to level one, skills and knacks cleared — is here rather than on her own sheet, so it is always something two people agreed on.",
+      note: `${adventurers} across every household`,
     },
     {
       href: "/invites",

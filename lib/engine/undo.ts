@@ -93,6 +93,8 @@ export type SnapshotState = {
   /** Memories that existed. Anything newer was learned this turn. */
   memories: { id: string; content: string; importance: number; lastSeenAt: number }[];
   familyMoveUseIds: string[];
+  /** Once-a-scene and once-a-chapter spends that existed before this turn. */
+  abilityUseIds: string[];
 };
 
 /**
@@ -116,6 +118,7 @@ export async function captureSnapshot(
     inventory,
     memories,
     moveUses,
+    abilityUses,
     quests,
     objectives,
     keepsakes,
@@ -138,6 +141,7 @@ export async function captureSnapshot(
       tx.inventoryItem.findMany({ where: { characterId: { in: characterIds } } }),
       tx.memory.findMany({ where: { campaignId } }),
       tx.familyMoveUse.findMany({ where: { campaignId }, select: { id: true } }),
+      tx.abilityUse.findMany({ where: { campaignId }, select: { id: true } }),
       tx.quest.findMany({ where: { campaignId } }),
       tx.questObjective.findMany({ where: { quest: { campaignId } } }),
       tx.keepsake.findMany({
@@ -204,6 +208,7 @@ export async function captureSnapshot(
       lastSeenAt: m.lastSeenAt,
     })),
     familyMoveUseIds: moveUses.map((u) => u.id),
+    abilityUseIds: abilityUses.map((u) => u.id),
   };
 }
 
@@ -405,6 +410,13 @@ export async function undoLastTurn(campaignId: string, userId: string): Promise<
     // A Family Move spent on an undone turn is available again.
     await tx.familyMoveUse.deleteMany({
       where: { campaignId, id: { notIn: state.familyMoveUseIds } },
+    });
+
+    // And so is a signature, a knack, or a Steady Hand. Taking a turn back and
+    // finding the one thing you get this chapter already gone would make undo
+    // something a table learns not to use.
+    await tx.abilityUse.deleteMany({
+      where: { campaignId, id: { notIn: state.abilityUseIds } },
     });
 
     await tx.campaign.update({

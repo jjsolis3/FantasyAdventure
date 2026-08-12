@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/auth/next-path";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -158,7 +159,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   }
 
   await createSession(user.id);
-  redirect("/");
+  redirect(safeNext(String(formData.get("next") ?? "")));
 }
 
 export async function logoutAction(): Promise<void> {

@@ -45,6 +45,15 @@ export type PartyMemberContext = {
    * let her play it next turn and the requirement would mean nothing.
    */
   lockedItems?: { name: string; needs: string }[];
+  /**
+   * Names of once-a-scene and once-a-chapter abilities she has already spent.
+   *
+   * Told to the storyteller so it stops offering something she cannot do. A
+   * limit only the database knows about produces the worst version of this: the
+   * narration invites her to use it, she taps it, and the server quietly drops
+   * the spend as unavailable.
+   */
+  spentAbilities?: string[];
 };
 
 export type BondContext = {
@@ -126,13 +135,30 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
     // The one thing this calling alone can do. Named here so the storyteller
     // leaves room for it — a Trickster's "there is always another way" only
     // means anything if the scene has one.
+    // "Can always" was a straightforward lie, and the most consequential one
+    // in the prompt: signatures have been once-a-scene since they were written,
+    // and this line told the only participant who could have enforced that the
+    // exact opposite. A storyteller reading "can always" has no reason ever to
+    // say no, so the limit could not have held even if somebody had been
+    // counting — and nobody was.
     const signature = signatureFor(member.archetype);
-    const own = signature ? ` Can always: ${signature.name} — ${signature.narrationHint}` : "";
+    const spent = new Set(member.spentAbilities ?? []);
+    const own = signature
+      ? spent.has(signature.name)
+        ? ` Once a scene: ${signature.name} — ALREADY USED this scene; do not offer it again until the next one.`
+        : ` Once a scene: ${signature.name} — ${signature.narrationHint}`
+      : "";
 
     // Knacks the story has to behave differently because of. The ones that are
     // only a number are left out — the dice have already applied those, and
     // repeating them here would just crowd the prompt.
-    const hints = [...narrativeHints(member.knacks ?? []), ...abilityHints(member.skills)];
+    // Anything spent is dropped rather than annotated: these hints are written
+    // as standing instructions to the storyteller ("you must answer honestly"),
+    // and a spent one restated with a caveat is an instruction the model has to
+    // reason its way out of rather than simply not be given.
+    const hints = [...narrativeHints(member.knacks ?? []), ...abilityHints(member.skills)].filter(
+      (hint) => ![...spent].some((name) => hint.includes(name)),
+    );
     const earned = hints.length > 0 ? `\n  ${hints.join("\n  ")}` : "";
 
     // What she is carrying but has not grown into. Stated as a prohibition

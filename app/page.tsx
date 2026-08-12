@@ -2,20 +2,16 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import { Alert, Card, PageTitle } from "@/components/ui";
+import { READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
+import { WhereYouLeftOff } from "@/components/home/where-you-left-off";
+import { whereYouLeftOff } from "@/lib/game/where-you-left-off";
 
 export const dynamic = "force-dynamic";
 
-const READING_LEVEL_LABELS: Record<string, string> = {
-  EARLY_READER: "Early reader",
-  MIDDLE_GRADE: "Middle grade",
-  TEEN: "Teen",
-  FAMILY_MIXED: "Mixed ages",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  COZY: "Cozy",
-  ADVENTUROUS: "Adventurous",
-};
+// The labels come from `components/campaign/options`, which is where the tones
+// and reading levels are actually defined. This page used to keep its own copy,
+// and it was one tone out of date: SPOOKY was added to the game and never here,
+// so three of the ten adventures introduced themselves as "SPOOKY" in capitals.
 
 async function loadStorylines() {
   try {
@@ -33,6 +29,10 @@ async function loadStorylines() {
 export default async function Home() {
   const user = await getCurrentUser().catch(() => null);
   const { storylines, error } = await loadStorylines();
+
+  // Only asked once there is somebody to ask about. Signed out, this page is a
+  // brochure and should not touch the campaign tables at all.
+  const inProgress = user ? await whereYouLeftOff(user.id).catch(() => []) : [];
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -54,6 +54,8 @@ export default async function Home() {
         </Card>
       ) : (
         <>
+          <WhereYouLeftOff adventures={inProgress} />
+
           {user ? (
             <div className="mb-8">
               <Alert tone="info">
@@ -81,7 +83,9 @@ export default async function Home() {
 
           <section>
             <div className="mb-6 flex items-baseline justify-between">
-              <h2 className="font-display text-2xl text-hearth-100">Adventures waiting</h2>
+              <h2 className="font-display text-2xl text-hearth-100">
+                {inProgress.length > 0 ? "Other adventures" : "Adventures waiting"}
+              </h2>
               <span className="text-sm text-hearth-400">{storylines.length} available</span>
             </div>
 
@@ -114,7 +118,6 @@ export default async function Home() {
       )}
 
       <footer className="mt-16 border-t border-hearth-800/50 pt-6 text-sm text-hearth-400">
-        Next up: the Game Master.{" "}
         <a href="/api/health" className="text-hearth-300 underline hover:text-hearth-200">
           Health check
         </a>

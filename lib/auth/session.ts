@@ -120,10 +120,20 @@ export async function destroySession(): Promise<void> {
   cookieStore.delete(COOKIE_NAME);
 }
 
-/** For pages that require a signed-in user. Redirects to /login otherwise. */
+/**
+ * For pages that require a signed-in user. Redirects to /login otherwise.
+ *
+ * Carries where they were going, so a player who taps "it's your turn" from a
+ * phone that has signed itself out lands on the turn rather than on the front
+ * page needing to find the adventure again. The path comes from the middleware
+ * (see `middleware.ts`); when it is missing this behaves exactly as before.
+ */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    const path = (await headers()).get("x-pathname");
+    redirect(path && path !== "/" ? `/login?next=${encodeURIComponent(path)}` : "/login");
+  }
   return user;
 }
 

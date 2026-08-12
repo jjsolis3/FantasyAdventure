@@ -53,6 +53,7 @@ import {
   skillNameFrom,
 } from "@/lib/game/practice";
 import { extraSkillRoom, knacksUnspent } from "@/lib/game/knacks";
+import { abilitiesFor, unspentAbilities, windowKeyFor, type Ability } from "@/lib/game/abilities";
 import { pronounsOf } from "@/lib/game/pronouns";
 import {
   acquaintanceKey,
@@ -224,8 +225,50 @@ async function loadCampaign(campaignId: string, userId: string) {
 
 type LoadedCampaign = NonNullable<Awaited<ReturnType<typeof loadCampaign>>>;
 
-function partyContext(campaign: LoadedCampaign) {
+/**
+ * What each character has already spent, by name.
+ *
+ * Names rather than keys, because the only consumer is the prompt and the
+ * prompt talks about "Step In", not `signature:guardian`.
+ */
+async function spentAbilityNames(
+  campaign: LoadedCampaign,
+  sceneId: string | undefined,
+): Promise<Map<string, string[]>> {
+  const byCharacter = new Map<string, string[]>();
+  if (!sceneId) return byCharacter;
+
+  const used = await db.abilityUse.findMany({
+    where: { campaignId: campaign.id },
+    select: { characterId: true, abilityKey: true, windowKey: true },
+  });
+  if (used.length === 0) return byCharacter;
+
+  for (const member of campaign.party) {
+    const owned = abilitiesFor({
+      archetype: member.character.archetype,
+      knackKeys: member.character.knacks.map((knack) => knack.key),
+      skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
+    });
+    const available = new Set(
+      unspentAbilities(
+        owned,
+        used.filter((entry) => entry.characterId === member.characterId),
+        sceneId,
+        campaign.currentActIndex,
+      ).map((ability) => ability.key),
+    );
+
+    const spent = owned.filter((ability) => !available.has(ability.key)).map((a) => a.name);
+    if (spent.length > 0) byCharacter.set(member.characterId, spent);
+  }
+
+  return byCharacter;
+}
+
+function partyContext(campaign: LoadedCampaign, spent?: Map<string, string[]>) {
   return campaign.party.map((member) => ({
+    spentAbilities: spent?.get(member.characterId) ?? [],
     name: member.character.name,
     race: member.character.race,
     archetype: member.character.archetype,
@@ -317,7 +360,7 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     itemsHeld: await heldItemNames(campaign.id),
     personalAims: await personalAimsFor(campaign.id),
     knownPeople: await knownPeopleFor(campaign),
-    party: partyContext(campaign),
+    party: partyContext(campaign, await spentAbilityNames(campaign, openScene?.id)),
     bonds: bondContext(campaign),
     location: openScene?.location,
     sceneSummary: openScene?.summary,
@@ -621,7 +664,17 @@ async function fetchWhatNow(
   }
 }
 
-export type PlayerAction = { characterId: string; text: string };
+/**
+ * One character's answer, and what she is spending on it.
+ *
+ * The ability rides along with the answer rather than being chosen once at
+ * review the way a Family Move is, and the reason is whose it is. A move
+ * belongs to a pair, so somebody has to pick it on behalf of both. A signature
+ * belongs to one girl — on her own phone she should be the one who decides to
+ * spend it, and on a shared screen the person typing decides per character
+ * rather than once for the table.
+ */
+export type PlayerAction = { characterId: string; text: string; abilityKey?: string | null };
 
 /** A Family Move the table wants to spend this turn. */
 export type FamilyMoveChoice = { key: string; helperId: string; targetId: string };
@@ -670,6 +723,75 @@ async function validateFamilyMove(
   return { relationshipId: relationship.id, moveName: move.name };
 }
 
+/**
+ * Checks the abilities a turn wants to spend are actually hers, and unspent.
+ *
+ * The UI only offers what is available, and the UI is not a security boundary
+ * — the same reason `validateFamilyMove` exists. The failure here would be
+ * quieter and worse than a bad Family Move, though: an unchecked spend makes a
+ * "once a chapter" ability once a *turn*, which is not a small overreach. It is
+ * the difference between a moment and a button.
+ *
+ * Anything that does not check out is dropped rather than refused. A turn is a
+ * slow, shared thing on a local model, and failing the whole table because one
+ * girl double-tapped is the wrong trade — she keeps the ability, and the turn
+ * goes ahead.
+ */
+async function validateAbilitySpends(
+  campaign: LoadedCampaign,
+  sceneId: string,
+  actions: PlayerAction[],
+): Promise<ValidatedSpend[]> {
+  const wanted = actions.filter((action) => action.abilityKey);
+  if (wanted.length === 0) return [];
+
+  const spent = await db.abilityUse.findMany({
+    where: {
+      campaignId: campaign.id,
+      characterId: { in: wanted.map((action) => action.characterId) },
+    },
+    select: { characterId: true, abilityKey: true, windowKey: true },
+  });
+
+  const valid: ValidatedSpend[] = [];
+  for (const action of wanted) {
+    const member = campaign.party.find((entry) => entry.characterId === action.characterId);
+    if (!member) continue;
+
+    const owned = abilitiesFor({
+      archetype: member.character.archetype,
+      knackKeys: member.character.knacks.map((knack) => knack.key),
+      skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
+    });
+
+    const available = unspentAbilities(
+      owned,
+      spent.filter((entry) => entry.characterId === action.characterId),
+      sceneId,
+      campaign.currentActIndex,
+    );
+
+    const ability = available.find((entry) => entry.key === action.abilityKey);
+    if (!ability) continue;
+
+    valid.push({
+      characterId: action.characterId,
+      characterName: member.character.name,
+      ability,
+      windowKey: windowKeyFor(ability.scope, sceneId, campaign.currentActIndex),
+    });
+  }
+
+  return valid;
+}
+
+type ValidatedSpend = {
+  characterId: string;
+  characterName: string;
+  ability: Ability;
+  windowKey: string;
+};
+
 /** Runs one party turn and commits everything it produced. */
 export async function playTurn(
   campaignId: string,
@@ -696,6 +818,7 @@ export async function playTurn(
   const flagged = accepted.some((action) => !checkPlayerInput(action.text).ok);
 
   const validMove = familyMove ? await validateFamilyMove(campaign, familyMove, scene.id) : null;
+  const validSpends = await validateAbilitySpends(campaign, scene.id, accepted);
 
   const config = await resolveAiConfig();
   const records: AiCallRecord[] = [];
@@ -761,6 +884,13 @@ export async function playTurn(
               targetId: familyMove.targetId,
             }
           : null,
+      spentAbilities: validSpends.map((spend) => ({
+        characterId: spend.characterId,
+        characterName: spend.characterName,
+        name: spend.ability.name,
+        effect: spend.ability.effect,
+        narrationHint: spend.ability.narrationHint,
+      })),
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
       openDeeds,
     },
@@ -1059,6 +1189,23 @@ export async function playTurn(
             ? `${item.character} is now carrying: ${item.name} — but cannot use it yet. That will take ${item.requiresSkill}.`
             : `${item.character} is now carrying: ${item.name}`,
       );
+    }
+
+    // Spent only once the turn has committed, exactly like the Family Move
+    // below. A turn that fails halfway — a model that times out, a broken JSON
+    // reply — must not cost a girl the one thing she gets this chapter.
+    for (const spend of validSpends) {
+      await tx.abilityUse.create({
+        data: {
+          campaignId: campaign.id,
+          characterId: spend.characterId,
+          kind: spend.ability.kind,
+          abilityKey: spend.ability.key,
+          windowKey: spend.windowKey,
+          usedAtTurn: turnCounter,
+        },
+      });
+      milestones.push(`${spend.characterName} used ${spend.ability.name}.`);
     }
 
     // Spend the Family Move only once the turn has actually committed.

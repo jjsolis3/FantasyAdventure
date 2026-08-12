@@ -21,6 +21,11 @@ const bodySchema = z.discriminatedUnion("action", [
     characterId: z.string().min(1),
     text: z.string().max(2000),
     waiting: z.boolean().default(false),
+    // Not validated against her sheet here. The turn re-derives what she owns
+    // and what is unspent, and drops anything that does not check out — see
+    // `validateAbilitySpends`. Checking twice would mean two places to keep in
+    // step, and the one that matters is the one holding the transaction.
+    abilityKey: z.string().max(120).nullable().optional(),
   }),
   z.object({ action: z.literal("withdraw"), characterId: z.string().min(1) }),
   z.object({
@@ -109,6 +114,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           userId: user.id,
           text: body.text,
           waiting: body.waiting,
+          abilityKey: body.abilityKey ?? null,
         });
       } else {
         await withdrawAnswer(round.id, body.characterId);
