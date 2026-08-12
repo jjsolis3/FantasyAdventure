@@ -276,3 +276,38 @@ test("a side quest the storyteller opens survives extraction", async () => {
   assert.equal(result.extraction.questsOpened[0].title, "The Missing Cat");
   assert.equal(result.extraction.questsOpened[0].objectives[0].kind, "FIND");
 });
+
+test("the storyteller's question comes back with the turn", async () => {
+  const calls = stub({
+    extraction:
+      '{"memories":[],"whatNow":"The door is open an inch. Do you go in?",' +
+      '"actComplete":false,"sceneComplete":false}',
+  });
+
+  const result = await runTurn(baseInput, calls);
+
+  assert.equal(result.extraction.whatNow, "The door is open an inch. Do you go in?");
+});
+
+test("a storyteller that forgets to ask anything is not an error", async () => {
+  // Every optional field here has to survive being left out — a small model
+  // omits things, and losing the whole turn's bookkeeping over a missing
+  // sentence would be a poor trade.
+  const calls = stub({
+    extraction: '{"memories":[],"actComplete":false,"sceneComplete":false}',
+  });
+
+  const result = await runTurn(baseInput, calls);
+
+  assert.equal(result.extraction.whatNow ?? null, null);
+});
+
+test("the extraction step is asked for the question", async () => {
+  const calls = stub({});
+  await runTurn(baseInput, calls);
+
+  const extraction = calls.jsonPrompts.find((prompt) =>
+    prompt.includes("extract what should be remembered"),
+  );
+  assert.ok(extraction?.includes("whatNow"), "the question was not asked for");
+});

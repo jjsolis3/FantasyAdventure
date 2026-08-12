@@ -151,6 +151,40 @@ try {
   );
   check("and taken out again", putBack);
 
+  // ---- Something she already owns -------------------------------------------
+  // Inventory survives an adventure, so by the second story she really does own
+  // a lantern and the list offers her one anyway. Packing it used to bump the
+  // row's quantity and nothing else, leaving an item the screen did not count
+  // as packed, could not put back, and would take a second copy of every time
+  // it was pressed.
+  await db.inventoryItem.create({
+    data: {
+      characterId: mira.id,
+      name: forMira[0].name,
+      description: forMira[0].description,
+      // Carried home from some earlier story, not this one.
+      foundInCampaignId: null,
+      brought: false,
+    },
+  });
+
+  await page.reload();
+  const setupWithOwned = await page.textContent("body");
+  check(
+    "a thing she already owns is not offered again",
+    setupWithOwned?.includes("Already yours — it comes with you.") === true,
+  );
+
+  // The form is gone, so the only way to press it is to ask the server directly
+  // — which is where the guard has to hold anyway.
+  check(
+    "and there is no button left to press",
+    (await page.locator(`form button:has-text("${forMira[0].name}")`).count()) === 0,
+  );
+
+  await db.inventoryItem.deleteMany({ where: { characterId: mira.id } });
+  await page.reload();
+
   // ---- The cap --------------------------------------------------------------
   await pack(page, forMira[0].name);
   await pack(page, forMira[1].name);

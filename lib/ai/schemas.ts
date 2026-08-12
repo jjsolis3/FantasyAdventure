@@ -137,6 +137,21 @@ export const extractionSchema = z.object({
     .max(2)
     .default([]),
 
+  /**
+   * The question the passage leaves the table with.
+   *
+   * A passage used to end and the screen simply stopped, with two buttons under
+   * it and nothing joining the two. Grown-ups hesitated; children waited to be
+   * told. What was missing was the thing a person running a game says without
+   * thinking — *"the door is open an inch. What do you do?"* — so the storyteller
+   * is now asked for it directly.
+   *
+   * Comes from extraction rather than its own call because extraction has
+   * already read the passage, and a fifth stage would add half a minute to every
+   * turn on a local model for one sentence.
+   */
+  whatNow: z.string().max(160).nullish(),
+
   /** True when the party has clearly finished what this act was about. */
   actComplete: z.coerce.boolean().default(false),
   /** True when the scene has changed place or time enough to close it. */
@@ -144,6 +159,18 @@ export const extractionSchema = z.object({
 });
 
 export type Extraction = z.infer<typeof extractionSchema>;
+
+/**
+ * The same question, asked on its own.
+ *
+ * The opening passage runs no extraction — it is written before there is
+ * anything to extract — so the one moment that most needs a way in is the one
+ * moment the field above cannot cover. This is a small enough call to be worth
+ * making once at the start of an adventure, and never again.
+ */
+export const nudgeSchema = z.object({
+  whatNow: z.string().min(1).max(160),
+});
 
 /**
  * One aim per character for the chapter ahead.

@@ -155,6 +155,60 @@ try {
     .catch(() => false);
   check("the opening is on screen", onScreen);
 
+  // The bridge from the passage to the people reading it. Without this the
+  // screen ended a scene and simply stopped, with two buttons underneath and
+  // nothing joining the two.
+  await page.reload();
+  check(
+    "the storyteller asks what happens next",
+    (await page.textContent("body"))?.includes("Something is moving in the barley") === true,
+  );
+
+  // ---- The narrow layout ---------------------------------------------------
+  // The play screen on a phone: one panel at a time, and a bar that keeps the
+  // state of the turn on screen however far down the story runs.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+
+  check(
+    "a phone gets tabs",
+    (await page.locator('button[role="tab"]:has-text("Quests")').isVisible()) === true,
+  );
+  check(
+    "the story is the tab you land on",
+    (await page.locator('button[role="tab"][aria-selected="true"]').textContent())?.includes(
+      "Story",
+    ) === true,
+  );
+
+  await page.click('button[role="tab"]:has-text("Party")');
+  check(
+    "the party tab shows the sheets",
+    (await page.locator('section:has-text("The party")').isVisible()) === true,
+  );
+
+  await page.click('button[role="tab"]:has-text("Quests")');
+  check(
+    "the quest board is a tap away rather than a page away",
+    (await page.locator('h2:has-text("Quests and pockets")').isVisible()) === true,
+  );
+
+  check(
+    "the way back to the story is pinned to the bottom",
+    (await page.locator('button:has-text("Go to the story")').isVisible()) === true,
+  );
+
+  await page.click('button:has-text("Go to the story")');
+  check(
+    "and it puts you back on the story",
+    (await page.locator('button[role="tab"][aria-selected="true"]').textContent())?.includes(
+      "Story",
+    ) === true,
+  );
+
+  // Back to a desktop-sized window for the rest, where nothing is behind a tab.
+  await page.setViewportSize({ width: 1280, height: 720 });
+
   // ---- Taking a turn ------------------------------------------------------
   await page.reload();
   await page.click('button:has-text("What do you do?")');

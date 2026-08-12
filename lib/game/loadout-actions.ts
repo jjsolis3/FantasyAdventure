@@ -66,6 +66,24 @@ export async function bringSupplyAction(formData: FormData): Promise<void> {
   const supply = wasOffered(character.archetype, campaign.tone, name);
   if (!supply) return;
 
+  // You cannot pack what is already in your pockets.
+  //
+  // Inventory survives an adventure, so by the second story she genuinely owns
+  // a lantern, and the list offers her one anyway. The old code answered that
+  // by bumping the row's quantity and nothing else — which left an item the
+  // packing screen did not count as packed, could not put back (neither flag
+  // said it belonged to this adventure), and would happily "pack" again and
+  // again, a second lantern each time.
+  //
+  // Reusing the row instead is worse, not better: putting it back afterwards
+  // deletes it, and a thing she carried home from an earlier story is not this
+  // adventure's to throw away. So packing an owned thing does nothing at all,
+  // and the screen says she already has it — which is also just true.
+  const existing = await db.inventoryItem.findUnique({
+    where: { characterId_name: { characterId: character.id, name: supply.name } },
+  });
+  if (existing) return;
+
   const packed = await db.inventoryItem.count({
     where: { characterId: character.id, foundInCampaignId: campaign.id, brought: true },
   });
@@ -74,9 +92,8 @@ export async function bringSupplyAction(formData: FormData): Promise<void> {
     SUPPLIES_PER_CHARACTER + extraSupplies(character.knacks.map((knack) => knack.key));
   if (packed >= allowance) return;
 
-  await db.inventoryItem.upsert({
-    where: { characterId_name: { characterId: character.id, name: supply.name } },
-    create: {
+  await db.inventoryItem.create({
+    data: {
       characterId: character.id,
       name: supply.name,
       description: supply.description,
@@ -85,9 +102,6 @@ export async function bringSupplyAction(formData: FormData): Promise<void> {
       foundInCampaignId: campaign.id,
       brought: true,
     },
-    // Already carrying one from a previous story: take a second rather than
-    // failing on the unique key.
-    update: { quantity: { increment: 1 } },
   });
 
   revalidatePath(`/campaigns/${campaign.id}`);

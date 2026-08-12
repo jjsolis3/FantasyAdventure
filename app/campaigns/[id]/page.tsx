@@ -89,6 +89,11 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     packed: member.character.inventory
       .filter((item) => item.brought && item.foundInCampaignId === campaign.id)
       .map((item) => item.name),
+    // Everything else she owns — found or packed on an earlier adventure, and
+    // still in her pockets. She keeps it whatever she chooses here.
+    carried: member.character.inventory
+      .filter((item) => !(item.brought && item.foundInCampaignId === campaign.id))
+      .map((item) => item.name),
     allowance:
       SUPPLIES_PER_CHARACTER + extraSupplies(member.character.knacks.map((knack) => knack.key)),
     yours: isOwner || member.character.userId === user.id,

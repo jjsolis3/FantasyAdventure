@@ -324,6 +324,19 @@ try {
     await row.getByRole("button", { name: /ready/i }).click();
   }
 
+  // A first-time player was given a heading, an empty box, and two buttons
+  // whose difference was not stated anywhere. The board now says what to write
+  // and what each button will do before anybody has to guess.
+  const boardText = await host.textContent("body");
+  check(
+    "the board says what to write in the box",
+    boardText?.includes("Say what your adventurer") === true,
+  );
+  check(
+    "and what the two buttons do",
+    boardText?.includes("sits this one out") === true && boardText?.includes("sends what you wrote") === true,
+  );
+
   await answerOnScreen(host, mira.id, secret);
   await answerOnScreen(host, fen.id, "I keep watch behind us.");
 

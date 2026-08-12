@@ -130,7 +130,11 @@ export function RoundBoard({
           </button>
         </div>
         <p className="text-sm text-hearth-500">
-          Whoever starts the round, everybody answers it. The story only moves once you are all in.
+          Whoever starts the round, everybody answers it, and the story only moves once you are all
+          in. <strong className="font-medium text-hearth-400">What do you do?</strong> is for
+          trying something — it may need a dice roll.{" "}
+          <strong className="font-medium text-hearth-400">Talk to each other</strong> is just
+          talking: nothing is rolled and the story stays where it is.
         </p>
       </div>
     );
@@ -157,6 +161,24 @@ export function RoundBoard({
             : `Waiting for ${round.waitingFor.length} of ${round.partyIds.length}.`}
         </p>
       </div>
+
+      {/* What this round is for, in the words somebody would use at a table.
+          "Talking it over" and an empty box told a first-time player nothing:
+          not what to write, not whether it was safe to write anything, and not
+          what the two buttons underneath would do to them. */}
+      <p className="text-sm text-hearth-400">
+        {talking ? (
+          <>
+            Say something to each other, in your own voice. Nothing is rolled for and the story does
+            not move — this is just talking, and it costs you nothing.
+          </>
+        ) : (
+          <>
+            Say what your adventurer <em>tries</em> to do. It does not have to work, and the ones
+            that go wrong are usually the better story.
+          </>
+        )}
+      </p>
 
       {round.retelling ? (
         <Alert tone="info">
@@ -378,11 +400,22 @@ function YourAnswer({
           type="button"
           disabled={sending}
           onClick={onWait}
-          className="rounded-lg px-4 py-2 text-hearth-400 hover:text-hearth-200 disabled:opacity-50"
+          className="rounded-lg border border-hearth-800 px-4 py-2 text-hearth-400 hover:bg-hearth-800/40 hover:text-hearth-200 disabled:opacity-50"
         >
           {character.name} waits and watches
         </button>
       </div>
+
+      {/* Which of the two does what. "I'm ready" is greyed out until there are
+          words in the box, and a greyed-out button with no explanation reads as
+          broken rather than as waiting for you. */}
+      <p className="text-sm text-hearth-500">
+        <strong className="font-medium text-hearth-400">I&rsquo;m ready</strong> sends what you
+        wrote.{" "}
+        <strong className="font-medium text-hearth-400">Waits and watches</strong> sits this one out
+        — {talking ? "you listen instead" : "no roll, no risk"}. Either way the story waits until
+        everybody has answered.
+      </p>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { questBoard } from "@/lib/game/quests";
 import { QuestList, QuestSummaryLink } from "@/components/campaign/quest-list";
 import { resolveImageConfig } from "@/lib/ai/settings";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
+import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +83,21 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   for (const entry of entries) {
     if (entry.dice && entry.actorName) entry.dice.characterName = entry.actorName;
   }
+
+  // The question the story is currently waiting on. Read back off the passage
+  // that raised it rather than held in campaign state, so a page opened
+  // tomorrow — or on a second phone — asks the same thing as the one that was
+  // there at the time.
+  //
+  // The most recent passage *that asked something*, not simply the most recent
+  // passage: a round spent talking to each other writes a passage of its own
+  // and moves nothing on, so the question from before the conversation is still
+  // the one on the table.
+  const whatNow =
+    [...turns]
+      .reverse()
+      .map((turn) => (turn.metadata as { whatNow?: string } | null)?.whatNow?.trim())
+      .find((question) => Boolean(question)) ?? null;
 
   // Which Family Moves the party can spend right now: unlocked by bond level,
   // between two travellers, and not already used in this scene.
@@ -186,7 +202,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const act = campaign.storyline.acts.find((entry) => entry.index === campaign.currentActIndex);
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
+    <main className="mx-auto max-w-3xl px-6 py-10 lg:max-w-6xl">
       <header className="mb-6">
         <Link href={`/campaigns/${campaign.id}`} className="text-sm text-hearth-300 underline hover:text-hearth-200">
           ← {campaign.title}
@@ -217,16 +233,94 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </p>
       </header>
 
-      {/* The quest board, foldable, at the table rather than a page away. Shut
-          by default so it never competes with the story, and remembered open
-          by the browser for a table that wants it up all evening. */}
-      {openQuests.length > 0 || pockets.length > 0 ? (
-        <details className="print-hide mb-6 rounded-xl border border-hearth-800/60 bg-hearth-900/20">
-          <summary className="cursor-pointer px-4 py-3 text-sm text-hearth-300 hover:text-hearth-200">
-            Quests and pockets
-          </summary>
-          <div className="space-y-5 px-4 pt-1 pb-4">
-            {openQuests.length > 0 ? <QuestList quests={openQuests} compact /> : null}
+      <PlayLayout
+        openQuests={openQuests.length}
+        stats={
+          /* Sticky at the top all evening, so a ten-year-old can always see
+             what their adventurer is good at. That question interrupts every
+             other one, and it is one line to answer. */
+          <ul className="flex flex-wrap gap-x-6 gap-y-1">
+            {campaign.party.map((member) => (
+              <li key={member.id} className="text-sm">
+                <span className="text-hearth-100">{member.character.name}</span>
+                <span className="ml-2 align-middle">
+                  <LevelPip xp={member.character.xp} />
+                </span>
+                <span className="ml-2 text-hearth-400">
+                  {STATS.map(
+                    (stat) => `${STAT_INFO[stat].label[0]}${member.character[stat]}`,
+                  ).join(" ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        }
+        story={
+          <>
+            {openScene ? (
+              <div className="mb-8">
+                <ScenePicture
+                  campaignId={campaign.id}
+                  sceneId={openScene.id}
+                  sceneTitle={openScene.title}
+                  hasImage={hasPicture}
+                  enabled={picturesOn}
+                />
+              </div>
+            ) : null}
+
+            {recap.length > 0 ? (
+              <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
+                <summary className="cursor-pointer text-sm text-hearth-300">
+                  The story so far ({recap.length} {recap.length === 1 ? "chapter" : "chapters"})
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {recap.map((scene) => (
+                    <div key={scene.id}>
+                      <p className="text-sm font-medium text-hearth-300">{scene.title}</p>
+                      <p className="text-sm leading-relaxed text-hearth-200/70">{scene.summary}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+
+            <PlayClient
+              campaignId={campaign.id}
+              campaignTitle={campaign.title}
+              status={campaign.status}
+              party={campaign.party.map((member) => ({
+                id: member.characterId,
+                name: member.character.name,
+                race: member.character.race,
+                archetype: member.character.archetype,
+                level: member.character.level,
+                pronouns: member.character.pronouns,
+                playedBy: member.character.user.displayName,
+                yours: member.character.userId === user.id,
+              }))}
+              initialEntries={entries}
+              availableMoves={availableMoves}
+              canUndo={canUndo}
+              inputMode={campaign.inputMode}
+              yourCharacterIds={membership.controlledCharacterIds}
+              initialRound={round}
+              whatNow={whatNow}
+            />
+          </>
+        }
+        party={<PartySheets sheets={sheets} />}
+        quests={
+          <div className="space-y-5 rounded-xl border border-hearth-800/60 bg-hearth-900/20 p-4">
+            <h2 className="font-display text-lg text-hearth-100">Quests and pockets</h2>
+
+            {openQuests.length > 0 ? (
+              <QuestList quests={openQuests} compact />
+            ) : (
+              <p className="text-sm text-hearth-400">
+                Nothing on the board yet. A chapter opens its own quest as you reach it.
+              </p>
+            )}
 
             {pockets.length > 0 ? (
               <div>
@@ -250,77 +344,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               The whole board, and handing things over →
             </Link>
           </div>
-        </details>
-      ) : null}
-
-      {/* Party status bar — sticky so a ten-year-old can always see their stats,
-          and offset by the height of the site header, which is sticky too. */}
-      <div className="sticky top-16 z-10 -mx-6 mb-8 border-b border-hearth-800/60 bg-hearth-950/90 px-6 py-3 backdrop-blur">
-        <ul className="flex flex-wrap gap-x-6 gap-y-2">
-          {campaign.party.map((member) => (
-            <li key={member.id} className="text-sm">
-              <span className="text-hearth-100">{member.character.name}</span>
-              <span className="ml-2 align-middle">
-                <LevelPip xp={member.character.xp} />
-              </span>
-              <span className="ml-2 text-hearth-400">
-                {STATS.map((stat) => `${STAT_INFO[stat].label[0]}${member.character[stat]}`).join(" ")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {openScene ? (
-        <div className="mb-8">
-          <ScenePicture
-            campaignId={campaign.id}
-            sceneId={openScene.id}
-            sceneTitle={openScene.title}
-            hasImage={hasPicture}
-            enabled={picturesOn}
-          />
-        </div>
-      ) : null}
-
-      <PartySheets sheets={sheets} />
-
-      {recap.length > 0 ? (
-        <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
-          <summary className="cursor-pointer text-sm text-hearth-300">
-            The story so far ({recap.length} {recap.length === 1 ? "chapter" : "chapters"})
-          </summary>
-          <div className="mt-3 space-y-3">
-            {recap.map((scene) => (
-              <div key={scene.id}>
-                <p className="text-sm font-medium text-hearth-300">{scene.title}</p>
-                <p className="text-sm leading-relaxed text-hearth-200/70">{scene.summary}</p>
-              </div>
-            ))}
-          </div>
-        </details>
-      ) : null}
-
-      <PlayClient
-        campaignId={campaign.id}
-        campaignTitle={campaign.title}
-        status={campaign.status}
-        party={campaign.party.map((member) => ({
-          id: member.characterId,
-          name: member.character.name,
-          race: member.character.race,
-          archetype: member.character.archetype,
-          level: member.character.level,
-          pronouns: member.character.pronouns,
-          playedBy: member.character.user.displayName,
-          yours: member.character.userId === user.id,
-        }))}
-        initialEntries={entries}
-        availableMoves={availableMoves}
-        canUndo={canUndo}
-        inputMode={campaign.inputMode}
-        yourCharacterIds={membership.controlledCharacterIds}
-        initialRound={round}
+        }
       />
     </main>
   );

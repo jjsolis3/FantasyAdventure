@@ -135,7 +135,12 @@ const server = createServer((request, response) => {
         '[{"kind":"NPC","key":"the creature","content":"It settles when someone hums.","importance":4}],' +
         '"bondMoments":[{"from":"Rowan","to":"Mira","why":"stood between her and the noise"}],' +
         '"itemsGained":[{"character":"Mira","name":"a smooth grey stone","description":"warm to the touch"}],' +
+        '"whatNow":"The barley is still moving. Do you go in after it?",' +
         '"actComplete":false,"sceneComplete":false,}';
+    } else if (prompt.includes('{"whatNow":')) {
+      // The opening passage's own question. Asked on its own because the
+      // opening runs no extraction to fold it into.
+      content = '{"whatNow":"Something is moving in the barley. What do you do?"}';
     } else if (prompt.includes("aim of their own")) {
       // One per character, echoed back from the names in the request, so the
       // test exercises the real matching rather than a hard-coded party.

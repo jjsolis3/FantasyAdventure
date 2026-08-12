@@ -209,6 +209,7 @@ Reply with ONLY this JSON, no other text:
   "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>", "requiresSkill": null, "requiresRank": null}],
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
+  "whatNow": "<one short question putting the choice back to the players>",
   "actComplete": false,
   "sceneComplete": false
 }
@@ -235,7 +236,37 @@ Rules:
   Only when it is a real, findable thing somebody asked for. Never restate what
   the party is already doing, and never open one just to have something to say:
   most turns start nothing, and [] is the right answer.
+- whatNow is one short question handing the moment back to the players, in the
+  voice of somebody running the game: "The door is open an inch. Do you go in?"
+  Point at something the passage actually put in front of them. Never suggest
+  what they should do, never offer a menu of options, and never ask more than
+  one thing. Under fifteen words.
 - Use [] for empty lists, never null.`;
+}
+
+/**
+ * The opening passage's version of "what now".
+ *
+ * Its own call because the opening runs no extraction — nothing has happened
+ * yet for there to be memories or deeds of. Kept as short as a prompt can be:
+ * this is one sentence, and a small model given room will write a paragraph.
+ */
+export function nudgePrompt(options: { narration: string; partyNames: string[] }): string {
+  return `Read this opening passage from a family adventure.
+
+PASSAGE:
+${options.narration}
+
+The players are: ${options.partyNames.join(", ")}.
+
+Reply with ONLY this JSON, no other text:
+{"whatNow": "<one short question>"}
+
+The question hands the moment back to the players, in the voice of somebody
+running the game: "The door is open an inch. Do you go in?" Point at something
+the passage actually put in front of them. Do not suggest what they should do,
+do not offer a menu of options, and do not ask more than one thing. Under
+fifteen words.`;
 }
 
 /** Produced when a scene closes, so its turns can be dropped from the prompt. */
