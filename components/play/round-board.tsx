@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "@/components/ui";
+import { AbilityPicker } from "@/components/play/ability-picker";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
 import type { PlayCharacter } from "./play-client";
@@ -41,6 +42,9 @@ export function RoundBoard({
   poke: () => void;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // What each girl is spending, alongside what she is typing. Cleared when she
+  // sends, because the answer now carries it.
+  const [spends, setSpends] = useState<Record<string, string | null>>({});
   const [correction, setCorrection] = useState("");
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState("");
@@ -240,14 +244,17 @@ export function RoundBoard({
                   character={character}
                   talking={talking}
                   value={drafts[character.id] ?? ""}
+                  spending={spends[character.id] ?? null}
                   sending={sending}
                   onChange={(text) => setDrafts((current) => ({ ...current, [character.id]: text }))}
+                  onSpend={(key) => setSpends((current) => ({ ...current, [character.id]: key }))}
                   onReady={() =>
                     post({
                       action: "answer",
                       characterId: character.id,
                       text: drafts[character.id] ?? "",
                       waiting: false,
+                      abilityKey: spends[character.id] ?? null,
                     })
                   }
                   onWait={() =>
@@ -349,8 +356,10 @@ function YourAnswer({
   character,
   talking,
   value,
+  spending,
   sending,
   onChange,
+  onSpend,
   onReady,
   onWait,
 }: {
@@ -358,8 +367,10 @@ function YourAnswer({
   character: PlayCharacter;
   talking: boolean;
   value: string;
+  spending: string | null;
   sending: boolean;
   onChange: (text: string) => void;
+  onSpend: (key: string | null) => void;
   onReady: () => void;
   onWait: () => void;
 }) {
@@ -385,6 +396,18 @@ function YourAnswer({
 
       {talking ? null : (
         <IdeaHints campaignId={campaignId} characterId={character.id} onPick={onChange} />
+      )}
+
+      {/* Not offered while the table is only talking it over: nothing is being
+          attempted, so there is nothing for a once-a-scene move to land on, and
+          spending one there would just waste it. */}
+      {talking ? null : (
+        <AbilityPicker
+          abilities={character.abilities ?? []}
+          chosen={spending}
+          onChoose={onSpend}
+          disabled={sending}
+        />
       )}
 
       <div className="flex flex-wrap gap-3">

@@ -20,6 +20,7 @@ import { requestStructured, StructuredOutputError } from "@/lib/ai/json";
 import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
 import { checkNarration, safetyReminder } from "@/lib/ai/safety";
 import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type Difficulty } from "@/lib/engine/dice";
+import type { SignatureEffect } from "@/lib/game/character-options";
 import type { StatKey } from "@/lib/game/rules";
 import { knackBonusFor } from "@/lib/game/knacks";
 
@@ -64,6 +65,20 @@ export type TurnInput = {
     /** Whose check it applies to. */
     targetId: string;
   } | null;
+  /**
+   * The once-a-scene and once-a-chapter abilities being spent this turn.
+   *
+   * Keyed by character, because these belong to a person rather than to a pair
+   * — which is exactly what separates them from a Family Move, and why they
+   * arrive on each girl's own answer rather than being chosen once at review.
+   */
+  spentAbilities?: {
+    characterId: string;
+    characterName: string;
+    name: string;
+    effect: SignatureEffect;
+    narrationHint: string;
+  }[];
   /** Set when player input tripped the safety screen. */
   deflectionNote?: string | null;
 };
@@ -203,7 +218,23 @@ export async function runTurn(
           }
         : undefined;
 
-    checks.push(resolveCheck(request, member.stats, roller, move));
+    // Hers, and everybody else's that helps her. A boost never reaches its own
+    // owner: "everyone else's next roll goes better. Never your own" is written
+    // in the blurb a child reads, so it is enforced here rather than trusted.
+    const own = (input.spentAbilities ?? []).find((spend) => spend.characterId === member.id);
+    const boost = (input.spentAbilities ?? []).find(
+      (spend) => spend.characterId !== member.id && spend.effect.kind === "BOOST_OTHERS",
+    );
+
+    checks.push(
+      resolveCheck(request, member.stats, roller, move, {
+        own: own ? { name: own.name, effect: own.effect } : null,
+        boost:
+          boost && boost.effect.kind === "BOOST_OTHERS"
+            ? { amount: boost.effect.amount, fromName: boost.characterName }
+            : null,
+      }),
+    );
   }
 
   // The dice go out before the narration is written. On a local model that
@@ -212,7 +243,19 @@ export async function runTurn(
 
   // ---- 3. Narrate ----------------------------------------------------------
   onProgress?.({ type: "stage", stage: "narrating" });
+  // Put first, and stated as a thing that has happened rather than a thing
+  // that might. A spent ability is the moment a girl has been saving, and the
+  // narration landing somewhere else is the one outcome that makes spending it
+  // feel worse than not bothering. The dice have already applied whatever was
+  // mechanical; this is so the prose knows it happened at all — the narrative
+  // ones have nothing but this line to go on.
+  const spends = (input.spentAbilities ?? []).map(
+    (spend) =>
+      `${spend.characterName} uses ${spend.name} — this is happening, narrate it: ${spend.narrationHint}`,
+  );
+
   const resolutions = [
+    ...spends,
     ...checks.map(describeResult),
     ...adjudication.automatic.map((entry) => `${entry.character}: ${entry.effect} (happens automatically)`),
   ].join("\n\n");

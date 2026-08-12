@@ -16,6 +16,8 @@ import { resolveImageConfig } from "@/lib/ai/settings";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
+import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
+import type { AvailableAbility } from "@/components/play/ability-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               user: { select: { id: true, displayName: true } },
               portrait: { select: { version: true } },
               skills: { orderBy: { name: "asc" } },
+              knacks: { select: { key: true } },
               inventory: { orderBy: { name: "asc" } },
               relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
               relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
@@ -177,6 +180,50 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     portraitVersion: member.character.portrait?.version ?? null,
   }));
 
+  // What each girl can still spend, worked out once on the server so the table
+  // never has to be told "you cannot do that" after tapping it. The turn checks
+  // again before committing — this is convenience, not the rule.
+  const openSceneId = campaign.scenes.find((scene) => scene.status === "OPEN")?.id;
+  const spentSoFar = openSceneId
+    ? await db.abilityUse.findMany({
+        where: { campaignId: campaign.id },
+        select: { characterId: true, abilityKey: true, windowKey: true },
+      })
+    : [];
+
+  const abilitiesByCharacter = new Map<string, AvailableAbility[]>();
+  if (openSceneId) {
+    for (const member of campaign.party) {
+      const owned = abilitiesFor({
+        archetype: member.character.archetype,
+        knackKeys: member.character.knacks.map((knack) => knack.key),
+        skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
+      });
+      const unspent = new Set(
+        unspentAbilities(
+          owned,
+          spentSoFar.filter((entry) => entry.characterId === member.characterId),
+          openSceneId,
+          campaign.currentActIndex,
+        ).map((ability) => ability.key),
+      );
+
+      // Spent ones are kept and marked rather than dropped. "You already used
+      // Step In this scene" is a useful thing for a nine-year-old to see; a
+      // move that silently vanishes just looks like a bug.
+      abilitiesByCharacter.set(
+        member.characterId,
+        owned.map((ability) => ({
+          key: ability.key,
+          name: ability.name,
+          blurb: ability.blurb,
+          scopeLabel: scopeLabel(ability.scope),
+          spent: !unspent.has(ability.key),
+        })),
+      );
+    }
+  }
+
   const quests = await questBoard(db, campaign.id, user.id);
   const openQuests = quests.filter((quest) => quest.status === "ACTIVE");
 
@@ -298,6 +345,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                 pronouns: member.character.pronouns,
                 playedBy: member.character.user.displayName,
                 yours: member.character.userId === user.id,
+                abilities: abilitiesByCharacter.get(member.characterId) ?? [],
               }))}
               initialEntries={entries}
               availableMoves={availableMoves}

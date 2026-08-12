@@ -51,8 +51,35 @@ export type ArchetypeOption = {
     blurb: string;
     /** Told to the Game Master, so the moment reads as the calling's own. */
     narrationHint: string;
+    /**
+     * What it does to the dice, if anything.
+     *
+     * Most signatures are `NARRATIVE`: the effect is that the story behaves
+     * differently, which is the right shape for "ask the storyteller one true
+     * thing" and could not be a modifier. The two that *are* numbers were
+     * already written as numbers in the blurb a child reads — the Songkeeper's
+     * is literally "+2" — and those had better be the number the engine uses.
+     */
+    effect: SignatureEffect;
   };
 };
+
+/**
+ * What spending a signature does mechanically.
+ *
+ * Three kinds, matching the three kinds of promise the blurbs make. Anything
+ * that cannot be one of these is `NARRATIVE`, which is not a cop-out: a
+ * storyteller told plainly that it must answer is a stronger guarantee than a
+ * modifier, and it is the only shape that fits "something impossible happens,
+ * briefly and on a small scale".
+ */
+export type SignatureEffect =
+  /** Her roll this turn simply works. No dice, no complication. */
+  | { kind: "AUTO_SUCCEED" }
+  /** Everybody else's roll this turn is better by this much. Never her own. */
+  | { kind: "BOOST_OTHERS"; amount: number }
+  /** The storyteller is told, and must honour it. */
+  | { kind: "NARRATIVE" };
 
 export const ARCHETYPES: ArchetypeOption[] = [
   {
@@ -65,6 +92,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Take a roll somebody else just failed, and make it yours instead.",
       narrationHint:
         "The Guardian gets between the danger and whoever it was aimed at, and takes the weight of it themselves.",
+      effect: { kind: "AUTO_SUCCEED" },
     },
   },
   {
@@ -77,6 +105,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Ask the storyteller for a second way in. There is always one.",
       narrationHint:
         "The Trickster spots the thing nobody was looking at — a loose board, an unlatched window, a bored guard.",
+      effect: { kind: "NARRATIVE" },
     },
   },
   {
@@ -89,6 +118,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Undo a complication that just happened to somebody. It turns out to be less bad than it looked.",
       narrationHint:
         "The Healer is there before anyone has finished falling, and what looked ruinous turns out to be mendable.",
+      effect: { kind: "NARRATIVE" },
     },
   },
   {
@@ -101,6 +131,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Ask the storyteller one true thing about anything in the scene. It must answer.",
       narrationHint:
         "The Scholar remembers a page from somewhere and it turns out to be exactly the right page.",
+      effect: { kind: "NARRATIVE" },
     },
   },
   {
@@ -113,6 +144,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Any creature nearby will tell you one thing it has seen.",
       narrationHint:
         "The Beastfriend asks, plainly and politely, and something small and watchful answers.",
+      effect: { kind: "NARRATIVE" },
     },
   },
   {
@@ -125,6 +157,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Make the thing the party needs right now out of what is already in your pockets.",
       narrationHint:
         "The Maker crouches down with string and a bent nail and stands up holding exactly what was needed.",
+      effect: { kind: "AUTO_SUCCEED" },
     },
   },
   {
@@ -137,6 +170,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Everyone else's next roll gets +2. You cannot use it on your own.",
       narrationHint:
         "The Songkeeper starts singing, and everybody stands a little straighter without deciding to.",
+      effect: { kind: "BOOST_OTHERS", amount: 2 },
     },
   },
   {
@@ -149,6 +183,7 @@ export const ARCHETYPES: ArchetypeOption[] = [
       blurb: "Something impossible happens, briefly and on a small scale. You choose what.",
       narrationHint:
         "The Wondersmith does something that should not work, and for a moment it does.",
+      effect: { kind: "NARRATIVE" },
     },
   },
 ];

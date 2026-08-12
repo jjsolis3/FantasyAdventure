@@ -76,6 +76,7 @@ carrying it mean anything.
 | ✅ | **M10** The television: `/screen`, paired with a code, no sign-in on the TV |
 | ✅ | **M10** Art prompts for every chapter, sharing the app's own style |
 | ✅ | **M10** Something to find in all thirty chapters, keepsake included |
+| ✅ | **M11** Once-a-scene and once-a-chapter moves that are actually limited |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -999,6 +1000,42 @@ character stats become decoration and it stops being a game.
 
 **Narration and structured state are separate AI calls.** Asking one response
 to be both good prose and valid JSON is where local models fall apart.
+
+### Once a scene, once a chapter
+
+Three different systems promised a limit and none of them counted.
+
+Archetype signatures said "spendable once a scene" in their own doc comment.
+Steady Hand, earned by practising a skill to rank 2, said "once a chapter" in
+the sentence a child reads. So did two knacks. All four were honour-system rules
+in a game whose first design principle is that **the server rolls the dice** so
+the fiction cannot cheat — and the prompt made it worse, telling the storyteller
+the signature was something the character *"can always"* do. The one participant
+who could still have enforced the rule was told the opposite of it.
+
+`AbilityUse` counts them now, modelled on `FamilyMoveUse` — which was for a long
+time the only limit in the game that a limit actually was. One table for all
+three kinds, because the question asked of it is always the same: has she used
+this one, in this window, yet.
+
+- **Scope** is a single `windowKey` string, `scene:<id>` or `act:<index>`, under
+  one unique constraint. Two nullable columns with a conditional index would
+  leave half the rows uncovered, which is how a "once a chapter" ability quietly
+  becomes unlimited.
+- **Signatures got a machine-readable effect.** Most are `NARRATIVE` — a
+  storyteller told plainly that it must answer is a stronger guarantee than a
+  modifier. The two that are numbers were already written as numbers in the
+  blurb, so those are the numbers the engine uses.
+- **Spending happens on her own answer**, not at the review step where Family
+  Moves live. A move belongs to a pair, so somebody chooses for both; a
+  signature belongs to one girl, and on her own phone she should be the one who
+  decides.
+- **Recorded only once the turn commits**, and returned by undo. A model that
+  times out must not cost her the one thing she gets this chapter.
+
+`lib/game/abilities.ts` is the single catalogue the picker and the prompt both
+read, so the buttons at the table and the rules the storyteller is given cannot
+drift apart.
 
 ### The television
 

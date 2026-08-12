@@ -33,6 +33,8 @@ export type RoundAnswerView = {
   waiting: boolean;
   /** Who typed it, so a screen can say "you". */
   userId: string | null;
+  /** A once-a-scene or once-a-chapter ability she is spending on this answer. */
+  abilityKey: string | null;
   answeredAt: string;
 };
 
@@ -97,6 +99,7 @@ function view(round: RoundRow, partyIds: string[]): RoundView {
     .map((answer) => ({
       characterId: answer.characterId,
       text: answer.text,
+      abilityKey: answer.abilityKey,
       waiting: answer.waiting,
       userId: answer.userId,
       answeredAt: answer.updatedAt.toISOString(),
@@ -202,7 +205,13 @@ export async function openRound(
 /** Records what one adventurer is doing. Replaces an earlier answer. */
 export async function answerRound(
   roundId: string,
-  answer: { characterId: string; userId: string; text: string; waiting: boolean },
+  answer: {
+    characterId: string;
+    userId: string;
+    text: string;
+    waiting: boolean;
+    abilityKey?: string | null;
+  },
 ): Promise<void> {
   const text = answer.waiting ? "" : answer.text.trim();
 
@@ -214,8 +223,16 @@ export async function answerRound(
       userId: answer.userId,
       text,
       waiting: answer.waiting,
+      // Waiting and watching is not the moment to spend the thing you get once
+      // a chapter, so choosing to wait puts it back.
+      abilityKey: answer.waiting ? null : (answer.abilityKey ?? null),
     },
-    update: { userId: answer.userId, text, waiting: answer.waiting },
+    update: {
+      userId: answer.userId,
+      text,
+      waiting: answer.waiting,
+      abilityKey: answer.waiting ? null : (answer.abilityKey ?? null),
+    },
   });
 
   // An answer changing is the table's reply to whatever went wrong last time.
@@ -314,10 +331,16 @@ export async function failRound(roundId: string, message: string): Promise<void>
  * empty strings: the storyteller is told what happened, and "nothing" is not
  * something that happened.
  */
-export function actionsFrom(round: RoundView): { characterId: string; text: string }[] {
+export function actionsFrom(
+  round: RoundView,
+): { characterId: string; text: string; abilityKey: string | null }[] {
   const byCharacter = new Map(round.answers.map((answer) => [answer.characterId, answer]));
 
   return round.partyIds
-    .map((characterId) => ({ characterId, text: byCharacter.get(characterId)?.text.trim() ?? "" }))
+    .map((characterId) => ({
+      characterId,
+      text: byCharacter.get(characterId)?.text.trim() ?? "",
+      abilityKey: byCharacter.get(characterId)?.abilityKey ?? null,
+    }))
     .filter((action) => action.text.length > 0);
 }

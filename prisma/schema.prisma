@@ -181,6 +181,7 @@ model Character {
   partyMemberships PartyMember[]
   partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
+  abilityUses   AbilityUse[]
   portrait      CharacterPortrait?
   /// Relationships where this character is the "A" side, and the "B" side.
   relationshipsA Relationship[]  @relation("RelationshipA")
@@ -606,6 +607,7 @@ model Campaign {
   aiCalls  AiCall[]
   rounds   TurnRound[]
   screens  ScreenPairing[]
+  abilityUses AbilityUse[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)
@@ -788,6 +790,14 @@ model RoundAnswer {
   /// "Waits and watches" — ready, but doing nothing. Distinct from an empty
   /// answer, which means nobody has spoken yet.
   waiting Boolean @default(false)
+
+  /// A once-a-scene or once-a-chapter ability she is spending on this answer.
+  ///
+  /// Held on the answer rather than chosen once at review the way a Family Move
+  /// is, because a signature belongs to one girl. On her own phone she is the
+  /// one who decides to spend it, and it has to survive her changing her answer
+  /// twice before the round resolves.
+  abilityKey String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1204,4 +1214,55 @@ model ScreenPairing {
 
   @@index([campaignId])
   @@index([lastSeenAt])
+}
+
+/// What a character has spent, and in which window.
+///
+/// Modelled on `FamilyMoveUse`, which was for a long time the only limit in the
+/// game that a limit actually was. Signatures said "once a scene" in their own
+/// doc comment, Steady Hand and two knacks said "once a chapter" in the text a
+/// child reads — and nothing anywhere counted. The prompt went further and told
+/// the storyteller the archetype signature was something the character "can
+/// always" do, so the one place the rule could still have been enforced was
+/// actively told the opposite.
+///
+/// One table for all three kinds rather than three tables, because the question
+/// asked of it is always the same: has she used this one, in this window, yet.
+model AbilityUse {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  kind AbilityKind
+  /// The archetype signature name, the knack key, or `rank2:<skill>` — see
+  /// `abilityKeyFor` in lib/game/abilities.ts.
+  abilityKey String
+
+  /// The window the limit is measured in, as `scene:<id>` or `act:<index>`.
+  ///
+  /// A string rather than two nullable columns with a conditional constraint,
+  /// because the two scopes are asked the same question and a partial unique
+  /// index that only covers half the rows is how a "once a chapter" ability
+  /// quietly becomes unlimited. One column, one constraint, no gap.
+  windowKey String
+
+  /// Campaign turn counter at the moment it was spent, for undo and the journal.
+  usedAtTurn Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([characterId, abilityKey, windowKey])
+  @@index([campaignId])
+  @@index([campaignId, characterId])
+}
+
+enum AbilityKind {
+  /// The one thing this calling alone can do. Once a scene.
+  SIGNATURE
+  /// Chosen at a level-up. Only the ones with a limit are recorded here.
+  KNACK
+  /// Earned by practising one skill to rank 2 — Steady Hand. Once a chapter.
+  RANK
 }
