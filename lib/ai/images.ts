@@ -35,15 +35,45 @@ export type SceneArt = {
 /** How much of the narration is worth describing. Beyond this it is plot. */
 const NARRATION_BUDGET = 700;
 
-const STYLE =
+/**
+ * The look of the whole game, in one string.
+ *
+ * Exported because pictures now come from two places — asked for from a drawing
+ * model, or painted by somebody at the table and uploaded — and the two have to
+ * end up looking like one game rather than two. Anything that builds a prompt,
+ * including the sheet a family generates their own art from, starts here.
+ */
+export const STYLE =
   "Soft warm storybook watercolour illustration for a children's picture book. " +
   "Gentle candlelit palette, rounded friendly shapes, painterly texture, no text, " +
   "no words, no lettering, no speech bubbles, no frames or borders.";
 
-const SUBJECT_RULES =
+export const SUBJECT_RULES =
   "Show the place and the moment, as a wide establishing view. Nothing frightening, " +
   "no injuries, no weapons raised, no blood, nobody in danger. If people appear they " +
   "are small in the frame and seen from behind or at a distance.";
+
+/**
+ * What the story's mood asks of a picture.
+ *
+ * Spooky used to fall through to the cosy line, so an adventure written to be
+ * unsettling was illustrated as though it were a warm evening in — the one place
+ * in the game where the art actively argued with the writing. It gets its own
+ * line now, and that line is careful: unsettling is a matter of light and empty
+ * space, never of anything frightening in the frame. The subject rules above
+ * still hold, and they still say nobody is in danger.
+ */
+export function moodFor(tone: string): string {
+  if (tone === "ADVENTUROUS") return "Adventurous and a little wild, but still safe and warm.";
+  if (tone === "SPOOKY") {
+    return (
+      "Hushed and a little eerie: dusk or lamplight, long shadows, mist, one window lit " +
+      "in a dark shape. Quiet and still rather than scary — nothing menacing, nothing " +
+      "monstrous, nobody afraid."
+    );
+  }
+  return "Cosy, kind and unhurried.";
+}
 
 /**
  * Turns a scene into something safe to ask for.
@@ -61,15 +91,10 @@ export function sceneArtPrompt(input: {
 }): string {
   const setting = describable(input.narration ?? "").slice(0, NARRATION_BUDGET);
 
-  const mood =
-    input.tone === "ADVENTUROUS"
-      ? "Adventurous and a little wild, but still safe and warm."
-      : "Cosy, kind and unhurried.";
-
   return [
     STYLE,
     SUBJECT_RULES,
-    mood,
+    moodFor(input.tone),
     `Scene: ${input.sceneTitle}${input.location ? `, at ${input.location}` : ""}.`,
     `From a gentle family fantasy story called ${input.storyline}.`,
     setting ? `What is happening: ${setting}` : "",
