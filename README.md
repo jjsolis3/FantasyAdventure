@@ -75,6 +75,7 @@ carrying it mean anything.
 | ✅ | **M10** A skill rank is something you can do, not just a number |
 | ✅ | **M10** The television: `/screen`, paired with a code, no sign-in on the TV |
 | ✅ | **M10** Art prompts for every chapter, sharing the app's own style |
+| ✅ | **M10** Something to find in all thirty chapters, keepsake included |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.

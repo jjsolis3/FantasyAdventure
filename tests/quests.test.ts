@@ -134,6 +134,23 @@ test("quests: lists read the way somebody would say them", () => {
   assert.equal(listOf(["a", "b", "c"]), "a, b and c");
 });
 
+test("quests: a list of things that contain commas stays readable", () => {
+  // The good names for sought things say what they are and why they matter in
+  // one breath, and that takes a comma. Joined with commas as well, two things
+  // read as four and the join lands mid-phrase.
+  assert.equal(
+    listOf(["the bell-rope, long enough for two", "the list of names, read to the end"]),
+    "the bell-rope, long enough for two; and the list of names, read to the end",
+  );
+
+  // One comma anywhere is enough to switch the whole list over, so the
+  // separators do not change halfway through a sentence.
+  assert.equal(
+    listOf(["the lantern", "a page of the album, given up to make room", "the key"]),
+    "the lantern; a page of the album, given up to make room; and the key",
+  );
+});
+
 // ---- Personal quests --------------------------------------------------------
 
 test("quests: a personal quest is announced with her name on it", () => {

@@ -10,6 +10,28 @@
  * The seed imports it to write rows; the art-prompt sheet imports it to write
  * prompts. Two readers, one source, and no chance of a prompt sheet describing
  * an adventure that no longer exists.
+ *
+ * ## `seeks` — what a chapter asks the family to come away with
+ *
+ * Every act needs at least one, and `tests/storylines.test.ts` enforces it.
+ * They are the hinge the rest of the game hangs off: each becomes a FIND
+ * objective on the chapter's quest, which is what the tracker counts down, what
+ * the packing screen is worth reading before setting out, and what leaves a
+ * keepsake on the shelf afterwards. An act with none still opens a quest, but
+ * it gets a bare "see it through" and the whole loop idles for a chapter.
+ *
+ * Two rules learned from filling in the twenty acts that had none:
+ *
+ *   - **Acts 1 and 2 seek what the chapter needs** — the ladder, the
+ *     spectacles, the burnt page. Things that unlock the next thing.
+ *   - **Act 3 seeks what the family comes away with.** A finale is about doing
+ *     rather than fetching, which is why these were empty; but the stories were
+ *     already ending on an object — the piece the star leaves behind, the note
+ *     in fresh ink, the recipe finally written down — and that object is the
+ *     keepsake. Naming it is what puts the last chapter on the shelf.
+ *
+ * Write them as things a ten-year-old could point at. "The lighthouse keeper's
+ * missing spectacles" is findable; "proof of what happened" is not.
  */
 
 export const storylines = [
@@ -41,6 +63,7 @@ export const storylines = [
           "It copies the first kind sound anyone makes at it",
           "It will not travel unless someone promises out loud to bring it home",
         ],
+        seeks: ["Grandma's preserving jar, with the lid left loose"],
       },
       {
         index: 2,
@@ -50,6 +73,10 @@ export const storylines = [
           "The beekeeper knows which way is up but is afraid of the dark",
           "The bridge troll is lonely rather than fierce and mostly wants someone to eat dinner with",
           "The old lighthouse keeper has the lens they need but has misplaced her glasses",
+        ],
+        seeks: [
+          "the lighthouse keeper's missing spectacles",
+          "the beekeeper's smallest lantern",
         ],
       },
       {
@@ -61,6 +88,7 @@ export const storylines = [
           "The star tries to stay because it has become fond of the family",
           "It leaves a small piece of itself behind as a keepsake",
         ],
+        seeks: ["the piece of itself the star leaves behind"],
       },
     ],
   },
@@ -92,6 +120,7 @@ export const storylines = [
           "A burnt page in the oven gives one ingredient and destroys another",
           "Someone in the family recognises the smell from their own childhood",
         ],
+        seeks: ["the burnt page from the oven, with one ingredient still readable"],
       },
       {
         index: 2,
@@ -101,6 +130,10 @@ export const storylines = [
           "The goatherd's memory is tied to a song only children remember the words to",
           "The river-miller will only talk while his wheel is turning, and it is stuck",
           "One ingredient turns out to be a mistake Pim made forty years ago and never corrected",
+        ],
+        seeks: [
+          "the goatherd's song, written down at last",
+          "the pin that jammed the miller's wheel",
         ],
       },
       {
@@ -112,6 +145,7 @@ export const storylines = [
           "Something goes wrong that only improvisation fixes",
           "Pim tastes it and remembers everything, all at once",
         ],
+        seeks: ["the recipe, written down for the first time in its life"],
       },
     ],
   },
@@ -143,6 +177,7 @@ export const storylines = [
           "Voices carry strangely — the fog moves sound to the wrong place",
           "Someone realises the foxes answer to humming, not calling",
         ],
+        seeks: ["a tuft of fox-fur snagged on the fence, still faintly glowing"],
       },
       {
         index: 2,
@@ -153,6 +188,7 @@ export const storylines = [
           "The mother fox is trapped somewhere that needs a boost and a reach",
           "The fog thickens right when the party is most spread out",
         ],
+        seeks: ["the orchard ladder, half a metre short"],
       },
       {
         index: 3,
@@ -163,6 +199,7 @@ export const storylines = [
           "The full family of foxes lights the road home",
           "The foxes follow the party for a little while before turning back",
         ],
+        seeks: ["a lantern-fox tail-light, given rather than taken"],
       },
     ],
   },
@@ -216,6 +253,7 @@ export const storylines = [
           "The final room only opens to the whole family at once",
           "The house settles into an ordinary shape, and stays warm",
         ],
+        seeks: ["the reply to Bramble's letter, written by the whole family"],
       },
     ],
   },
@@ -271,6 +309,7 @@ export const storylines = [
           "She has to say her name out loud in front of everyone who watched her lose it",
           "She offers to carry the family home, and this time the landing is perfect",
         ],
+        seeks: ["her whole name, written out and carried to the Flight"],
       },
     ],
   },
@@ -302,6 +341,7 @@ export const storylines = [
           "The cat stares at a doorway that is not there in the morning",
           "A cold patch on the stairs turns out to be standing exactly where someone used to wait",
         ],
+        seeks: ["the cat's collar, with a name nobody in the family recognises"],
       },
       {
         index: 2,
@@ -311,6 +351,10 @@ export const storylines = [
           "A cupboard refuses to open for anyone who has not apologised for something that day",
           "A photograph has a person missing from it, and the gap is the shape of the cat",
           "The knocking spells out a word if someone thinks to count it",
+        ],
+        seeks: [
+          "the photograph with the gap in it",
+          "the word the knocking spells, counted out and written down",
         ],
       },
       {
@@ -322,6 +366,7 @@ export const storylines = [
           "The last door needs everyone knocking at once",
           "In the morning the house is quiet, and the note on the table is in fresh ink: 'Thank you.'",
         ],
+        seeks: ["the note left on the table in the morning, in fresh ink"],
       },
     ],
   },
@@ -353,6 +398,7 @@ export const storylines = [
           "Something built badly on purpose turns out to be exactly what is needed later",
           "The staircase grows again overnight, and it is now clearly waiting for something",
         ],
+        seeks: ["the first thing you made, awake now and following you about"],
       },
       {
         index: 2,
@@ -362,6 +408,10 @@ export const storylines = [
           "Each new structure is an attempt at a house, and each attempt is closer",
           "It borrows materials, and always leaves something in exchange",
           "A character who builds something *for* it gets the first real response",
+        ],
+        seeks: [
+          "whatever the builder left behind in exchange for what it borrowed",
+          "the builder's closest attempt at a house, small enough to carry",
         ],
       },
       {
@@ -373,6 +423,7 @@ export const storylines = [
           "Someone has to decide what makes a house a home, out loud",
           "The staircase finally leads somewhere, and it is the front door",
         ],
+        seeks: ["a key to the finished house, cut for a friend"],
       },
     ],
   },
@@ -439,6 +490,10 @@ export const storylines = [
           "The radio will only transmit when more than one of them speaks at once",
           "Whatever they broadcast is heard in both houses, and one of them goes quiet at last",
         ],
+        seeks: [
+          "the end of the broadcast that was interrupted, written out",
+          "the plug that was pulled thirty years ago",
+        ],
       },
     ],
   },
@@ -494,6 +549,10 @@ export const storylines = [
           "The last photograph is one they take on purpose, with it in the middle",
           "Afterwards the pictures are ordinary, and one of them has an extra person in it who belongs",
         ],
+        seeks: [
+          "the photograph you take on purpose, with it in the middle",
+          "a page of your own album, given up to make room",
+        ],
       },
     ],
   },
@@ -548,6 +607,10 @@ export const storylines = [
           "The bell can only be rung on time by two people working together",
           "The names have to be read aloud, and one of them is a name they now know",
           "The lights go out in order, the way a village goes to bed",
+        ],
+        seeks: [
+          "the bell-rope, long enough for two pairs of hands",
+          "the list of names, read all the way to the end",
         ],
       },
     ],
