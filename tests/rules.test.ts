@@ -1,33 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  MAX_LEVEL,
-  STAT_BUDGET,
-  STAT_CEILING,
-  STAT_MAX,
-  XP_PER_STAT_POINT,
-  bondLevelFor,
-  bondProgress,
-  canonicalPair,
-  kindFromPerspective,
-  levelFor,
-  levelProgress,
-  movesUnlockedAt,
-  movesUnlockedBetween,
-  skillProgress,
-  skillRankFor,
-  skillRoomForLevel,
-  xpForLevel,
-  pointsRemaining,
-  reciprocalOf,
-  statModifier,
-  validateStats,
-  type StatBlock,
-} from "../lib/game/rules.ts";
+import { MAX_LEVEL, NEUTRAL_STAT, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
 import { KNACKS, extraSkillRoom, knacksEarned } from "../lib/game/knacks.ts";
 import { MAX_SKILLS } from "../lib/game/practice.ts";
 
-const balanced: StatBlock = { might: 3, wits: 3, heart: 3, spark: 3 };
+const balanced: StatBlock = statBlock({ might: 3, wits: 3, heart: 3, spark: 3 });
 
 test("a balanced spread spends exactly the budget", () => {
   assert.equal(pointsRemaining(balanced), 0);
@@ -35,37 +12,37 @@ test("a balanced spread spends exactly the budget", () => {
 });
 
 test("a specialist spread is legal if it totals the budget", () => {
-  const specialist: StatBlock = { might: 5, wits: 4, heart: 2, spark: 1 };
+  const specialist: StatBlock = statBlock({ might: 5, wits: 4, heart: 2, spark: 1 });
   assert.deepEqual(validateStats(specialist), { ok: true });
 });
 
 test("rejects overspending", () => {
-  const result = validateStats({ might: 5, wits: 5, heart: 5, spark: 5 });
+  const result = validateStats(statBlock({ might: 5, wits: 5, heart: 5, spark: 5 }));
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /too many/);
 });
 
 test("rejects underspending", () => {
-  const result = validateStats({ might: 1, wits: 1, heart: 1, spark: 1 });
+  const result = validateStats(statBlock({ might: 1, wits: 1, heart: 1, spark: 1 }));
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /left to spend/);
 });
 
 test("rejects a stat above the maximum even when the total is right", () => {
   // 6 + 3 + 2 + 1 = 12, the correct total, but 6 exceeds the cap.
-  const result = validateStats({ might: 6, wits: 3, heart: 2, spark: 1 });
+  const result = validateStats(statBlock({ might: 6, wits: 3, heart: 2, spark: 1 }));
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /between/);
 });
 
 test("rejects a stat below the minimum even when the total is right", () => {
-  const result = validateStats({ might: 5, wits: 5, heart: 2, spark: 0 });
+  const result = validateStats(statBlock({ might: 5, wits: 5, heart: 2, spark: 0 }));
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /between/);
 });
 
 test("rejects non-integer stats", () => {
-  const result = validateStats({ might: 3.5, wits: 3.5, heart: 3, spark: 2 });
+  const result = validateStats(statBlock({ might: 3.5, wits: 3.5, heart: 3, spark: 2 }));
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /whole number/);
 });
@@ -77,8 +54,12 @@ test("stat modifiers centre on the average", () => {
 });
 
 test("the budget is reachable with every stat inside its bounds", () => {
-  assert.equal(STAT_BUDGET, 12);
-  assert.deepEqual(validateStats({ might: 5, wits: 5, heart: 1, spark: 1 }), { ok: true });
+  // Asserted as a relationship rather than a number. The budget is three points
+  // per stat because three is what rolls at +0 — pin the literal instead and
+  // adding a stat quietly makes every character worse at everything, which is
+  // the exact failure this whole change was designed around.
+  assert.equal(STAT_BUDGET, STATS.length * NEUTRAL_STAT);
+  assert.deepEqual(validateStats(statBlock({ might: 5, wits: 5, heart: 1, spark: 1 })), { ok: true });
 });
 
 // ---- Relationships ---------------------------------------------------------
@@ -191,19 +172,24 @@ test("levels always cost more than the one before", () => {
 });
 
 test("room to learn opens twice on the way up, and stacks with Fast Learner", () => {
-  assert.equal(skillRoomForLevel(1), 0);
-  assert.equal(skillRoomForLevel(5), 0);
-  assert.equal(skillRoomForLevel(6), 1);
-  assert.equal(skillRoomForLevel(10), 1);
-  assert.equal(skillRoomForLevel(11), 2);
-  assert.equal(skillRoomForLevel(MAX_LEVEL), 2);
+  // What she may have chosen: two at the builder, then one per level from the
+  // third. The middle two are the numbers the girls were promised.
+  assert.equal(chosenSkillsFor(1), 2);
+  assert.equal(chosenSkillsFor(2), 2);
+  assert.equal(chosenSkillsFor(3), 3);
+  assert.equal(chosenSkillsFor(4), 4);
+  assert.equal(chosenSkillsFor(MAX_LEVEL), 2 + MAX_LEVEL - 2);
 
-  // The knack has to stay worth choosing after the level that would have given
-  // the same slot anyway, so the two add up rather than overlapping.
-  assert.equal(
-    MAX_SKILLS + skillRoomForLevel(11) + extraSkillRoom(["fast_learner"]),
-    MAX_SKILLS + 2 + 2,
-  );
+  // And the room always sits above it, so a skill she earned by doing it four
+  // times never has to displace one she chose.
+  for (const level of [1, 3, 4, 6, MAX_LEVEL]) {
+    assert.ok(skillRoom(level) > chosenSkillsFor(level), `no headroom at level ${level}`);
+  }
+  assert.equal(skillRoom(4, 2), skillRoom(4) + 2, "Fast Learner stopped adding");
+
+  // The knack has to stay worth choosing at every level, so the two add up
+  // rather than one quietly absorbing the other.
+  assert.equal(skillRoom(11, extraSkillRoom(["fast_learner"])), skillRoom(11) + 2);
 });
 
 test("character levels rise with experience", () => {

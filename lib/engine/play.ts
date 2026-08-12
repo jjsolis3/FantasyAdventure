@@ -43,7 +43,6 @@ import {
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
 import {
-  MAX_SKILLS,
   abilityUnlockedAt,
   hasRequirement,
   learnedMessage,
@@ -69,7 +68,7 @@ import {
   levelFor,
   movesUnlockedBetween,
   skillRankFor,
-  skillRoomForLevel,
+  skillRoom,
   type StatKey,
 } from "@/lib/game/rules";
 
@@ -247,6 +246,7 @@ async function spentAbilityNames(
   for (const member of campaign.party) {
     const owned = abilitiesFor({
       archetype: member.character.archetype,
+      level: member.character.level,
       knackKeys: member.character.knacks.map((knack) => knack.key),
       skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
     });
@@ -760,6 +760,7 @@ async function validateAbilitySpends(
 
     const owned = abilitiesFor({
       archetype: member.character.archetype,
+      level: member.character.level,
       knackKeys: member.character.knacks.map((knack) => knack.key),
       skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
     });
@@ -1103,9 +1104,8 @@ export async function playTurn(
         where: { id: check.characterId },
         select: { level: true },
       });
-      const room =
-        MAX_SKILLS +
-        skillRoomForLevel(learner.level) +
+      const room = skillRoom(
+        learner.level,
         extraSkillRoom(
           (
             await tx.characterKnack.findMany({
@@ -1113,7 +1113,8 @@ export async function playTurn(
               select: { key: true },
             })
           ).map((knack) => knack.key),
-        );
+        ),
+      );
       if (!readyToLearn(practice, skills, room)) continue;
 
       const name = skillNameFrom(practice.label);

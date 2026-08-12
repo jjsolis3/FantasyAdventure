@@ -1,0 +1,13 @@
+-- Which skills were chosen, and which were earned by doing them.
+--
+-- Both kinds live in this table and always have. What is new is a choice at
+-- every level after the second, which needs "how many picks has she spent" to be
+-- answerable — and it is not, if a skill she practised her way into looks
+-- identical to one she picked.
+--
+-- Null means she earned it. Existing rows are therefore correct as they stand
+-- for practice-learned skills, and slightly generous for the two chosen at the
+-- builder: they read as earned, so a character who already exists is handed her
+-- level-3 pick with the builder's two still on the sheet. That is the kind way
+-- round, and it costs one extra skill on characters that predate this.
+ALTER TABLE "CharacterSkill" ADD COLUMN "chosenAtLevel" INTEGER;

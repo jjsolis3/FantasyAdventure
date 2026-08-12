@@ -14,10 +14,10 @@ import {
   offerFor,
   type OfferInput,
 } from "../lib/game/knacks.ts";
-import { statModifier } from "../lib/game/rules.ts";
+import { statBlock, statModifier } from "../lib/game/rules.ts";
 import { resolveCheck } from "../lib/engine/dice.ts";
 
-const even = { might: 3, wits: 3, heart: 3, spark: 3 };
+const even = statBlock({ might: 3, wits: 3, heart: 3, spark: 3 });
 
 function offer(overrides: Partial<OfferInput> = {}): OfferInput {
   return {
@@ -68,12 +68,12 @@ test("knacks: the same character is offered the same three every time", () => {
 test("knacks: two different girls are offered different things", () => {
   const climber = offer({
     characterId: "a",
-    stats: { might: 8, wits: 3, heart: 3, spark: 3 },
+    stats: statBlock({ might: 8, wits: 3, heart: 3, spark: 3 }),
     practices: [{ key: "climb", attempts: 6 }],
   });
   const talker = offer({
     characterId: "b",
-    stats: { might: 3, wits: 3, heart: 8, spark: 3 },
+    stats: statBlock({ might: 3, wits: 3, heart: 8, spark: 3 }),
     practices: [{ key: "persuad", attempts: 6 }],
   });
 
@@ -89,7 +89,7 @@ test("knacks: what she has been doing counts for more than how she was built", (
   // A high stat says how she was made; four attempts at sneaking says what she
   // has been doing, and the second is the more specific claim.
   const sneaky = offer({
-    stats: { might: 9, wits: 3, heart: 3, spark: 3 },
+    stats: statBlock({ might: 9, wits: 3, heart: 3, spark: 3 }),
     practices: [{ key: "sneak", attempts: 5 }],
   });
 

@@ -79,6 +79,9 @@ carrying it mean anything.
 | ✅ | **M11** Once-a-scene and once-a-chapter moves that are actually limited |
 | ✅ | **M11** A front page that leads with whose turn it is |
 | ✅ | **M11** Starting an adventurer again, administrator-only |
+| ✅ | **M12** Seven stats — Grace, Luck and Grit — on a derived budget |
+| ✅ | **M12** 56 skills, and a new one to choose at every level after the second |
+| ✅ | **M12** A second signature move for every calling, at level 5 |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1037,6 +1040,50 @@ The form asks, pre-filled with a proportional scale-down that keeps her shape
 Confirmation is the character's name typed in full. Not an "are you sure?" —
 those get clicked through — but the one confirmation that cannot be given by
 accident, and that makes resetting the wrong adventurer of two very hard to do.
+
+### Seven stats, and a skill every level
+
+Four stats and two skills made a builder you could finish in thirty seconds, and
+then the sheet was done. For players who spend their afternoons in Roblox and
+Minecraft that is not a character, it is a form.
+
+**Seven stats now**: Might, Wits, Heart, Spark, **Grace**, **Luck**, **Grit**.
+Might was narrowed to pure force — its blurb used to end "holding on, standing
+firm", which is exactly what Grit is for, and two stats the storyteller cannot
+tell apart are worse than one stat too few.
+
+`STAT_BUDGET` is now derived — `STATS.length × NEUTRAL_STAT` — rather than the
+literal 12 it used to be. That is load-bearing. Three is the value that rolls at
++0, so twelve across four stats put an average character at +0; adding three
+stats without moving the budget would have dropped the average to 1.7 and made
+every character in the game quietly worse at everything.
+
+It also made the migration exact. The new columns default to 3, so a character on
+twelve points across four lands on twenty-one across seven — precisely the new
+budget. A part-grown character is equally safe: unspent points are measured as
+`total − budget` and both sides rise by nine.
+
+**A skill at every level after the second.** Level 3 gives a third skill, level 4
+a fourth. Three suggestions drawn from what she has actually been doing, plus the
+whole catalogue — grown from 24 to 56 — behind *show me everything*, because a
+girl who has decided her adventurer talks to animals should not have to wait for
+the game to guess.
+
+Skill room grows with her and keeps two spare slots above what she may pick, so a
+skill she *chose* and a skill she *earned by doing it four times* never compete.
+`CharacterSkill.chosenAtLevel` tells the two apart — null means she practised her
+way into it.
+
+**A second signature at level 5.** A calling used to be finished the moment it was
+picked: a Guardian had Step In and always would, so the most characterful line on
+the sheet was the only one that never changed. Each of the eight now gains a
+second move — Hold the Line, Never Where You Looked, The One About Us — and the
+sheet names it before she has it, because a thing you are working towards is
+worth more than a thing that appears without warning.
+
+The adjudication prompt lists the stats one per line with a *pick this when*
+for each. Seven options is harder for a small local model than four, and Luck
+and Grit are the least obvious of them.
 
 ### Once a scene, once a chapter
 

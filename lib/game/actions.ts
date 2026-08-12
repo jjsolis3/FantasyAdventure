@@ -10,7 +10,10 @@ import { ALL_SKILLS } from "@/lib/game/character-options";
 import {
   RELATIONSHIP_KINDS,
   SKILLS_PER_CHARACTER,
+  STATS,
   canonicalPair,
+  statColumns,
+  statsOf,
   validateStats,
   type RelationshipKind,
   type StatBlock,
@@ -24,10 +27,9 @@ const characterSchema = z.object({
   pronouns: z.string().trim().min(1, "Pronouns help the storyteller describe you.").max(40),
   ageBand: z.enum(["CHILD", "TEEN", "GROWNUP", "ELDER"]),
   description: z.string().trim().max(1000, "Keep it under 1000 characters.").optional(),
-  might: z.coerce.number().int(),
-  wits: z.coerce.number().int(),
-  heart: z.coerce.number().int(),
-  spark: z.coerce.number().int(),
+  // Generated from STATS rather than listed, so a new stat cannot be added to
+  // the game and silently dropped by the one form that creates characters.
+  ...Object.fromEntries(STATS.map((stat) => [stat, z.coerce.number().int()])),
 });
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -48,10 +50,7 @@ function parseCharacterForm(formData: FormData) {
     pronouns: formData.get("pronouns"),
     ageBand: formData.get("ageBand"),
     description: formData.get("description") ?? undefined,
-    might: formData.get("might"),
-    wits: formData.get("wits"),
-    heart: formData.get("heart"),
-    spark: formData.get("spark"),
+    ...Object.fromEntries(STATS.map((stat) => [stat, formData.get(stat)])),
   });
 }
 
@@ -74,8 +73,11 @@ export async function createCharacterAction(_prev: FormState, formData: FormData
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  const { might, wits, heart, spark, gender, description, ...rest } = parsed.data;
-  const stats: StatBlock = { might, wits, heart, spark };
+  // Named rather than rest-spread, because the stats live in the same object and
+  // a `...rest` here would write them twice — once raw, once through
+  // `statColumns` — with the raw copy winning on a bad day.
+  const { name, race, archetype, gender, pronouns, ageBand, description } = parsed.data;
+  const stats: StatBlock = statsOf(parsed.data);
 
   // The builder prevents illegal spreads, but a form post can claim anything.
   const statCheck = validateStats(stats);
@@ -85,12 +87,20 @@ export async function createCharacterAction(_prev: FormState, formData: FormData
 
   const character = await db.character.create({
     data: {
-      ...rest,
-      ...stats,
+      name,
+      race,
+      archetype,
+      pronouns,
+      ageBand,
+      ...statColumns(stats),
       gender: gender || null,
       description: description || null,
       userId: user.id,
-      skills: { create: skills.map((name) => ({ name })) },
+      // Stamped as chosen at level 1, because they were. Left null they would
+      // read as skills she practised her way into, and the level-up entitlement
+      // counts picks rather than skills — so a brand-new character would arrive
+      // owing herself two extra choices she had already made in the builder.
+      skills: { create: skills.map((name) => ({ name, chosenAtLevel: 1 })) },
     },
   });
 
@@ -121,13 +131,23 @@ export async function updateCharacterAction(_prev: FormState, formData: FormData
   // saving a typo fix would have undone every point she had spent and deleted
   // every skill she had earned. Points are raised on the sheet, one at a time,
   // and skills arrive by being practised. Nothing here can take either away.
-  const { might: _might, wits: _wits, heart: _heart, spark: _spark, gender, description, ...rest } =
-    parsed.data;
+  // Stats are deliberately absent from this list — see the note above. Named
+  // rather than rest-spread so adding a stat cannot quietly make it editable
+  // here: a new field has to be written down to be saved.
+  const { name, race, archetype, gender, pronouns, ageBand, description } = parsed.data;
 
   await db.$transaction(async (tx) => {
     await tx.character.update({
       where: { id },
-      data: { ...rest, gender: gender || null, description: description || null },
+      data: {
+        name,
+        race,
+        archetype,
+        pronouns,
+        ageBand,
+        gender: gender || null,
+        description: description || null,
+      },
     });
 
     // Skills are deliberately not touched here.

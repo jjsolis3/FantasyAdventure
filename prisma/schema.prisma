@@ -158,13 +158,19 @@ model Character {
   /// Appearance and manner, in the player's own words. Feeds the GM prompt.
   description String?
 
-  // The four stats. Constrained by a point budget that is enforced in code
+  // The seven stats. Constrained by a point budget that is enforced in code
   // (see lib/game/rules.ts) rather than by the database, so the rule can change
-  // without a migration invalidating characters that were already legal.
+  // without a migration invalidating characters that were already legal — which
+  // is exactly what happened when Grace, Luck and Grit were added: the budget
+  // moved from 12 to 21 and every existing character stayed legal, because the
+  // default below is the same neutral value the budget is built from.
   might Int @default(3)
   wits  Int @default(3)
   heart Int @default(3)
   spark Int @default(3)
+  grace Int @default(3)
+  luck  Int @default(3)
+  grit  Int @default(3)
 
   /// Earned through play. Level is derived from xp, never set directly.
   xp    Int @default(0)
@@ -296,6 +302,14 @@ model CharacterSkill {
   /// Matches a skill key from lib/game/character-options.ts.
   name String
   rank Int    @default(1)
+
+  /// The level whose choice bought this, or null if she earned it by doing it.
+  ///
+  /// Both kinds sit in this table and should: a skill is a skill, and the sheet
+  /// does not sort them into two lists. But "how many of her level-up choices
+  /// has she spent" is unanswerable without knowing which is which, and a girl
+  /// who practised her way to four skills should not lose her picks for it.
+  chosenAtLevel Int?
   /// Progress toward the next rank, awarded when the skill is used well.
   xp   Int    @default(0)
 

@@ -87,7 +87,33 @@ export function systemPrompt(options: {
   ].join("\n");
 }
 
-const STAT_LIST = STATS.map((stat) => `${stat} (${STAT_INFO[stat].blurb})`).join(", ");
+/**
+ * The stats, one per line, with the moment each is *for*.
+ *
+ * Four stats fitted comfortably on one comma-separated line. Seven do not, and
+ * a small local model asked to choose one of seven from a run-on sentence will
+ * reach for whichever it read last. So they are listed, and each carries a
+ * "pick this when" — the blurb says what the stat *is*, which is written for a
+ * child reading her sheet, and the adjudicator needs to know when to reach for
+ * it instead.
+ *
+ * Grace, Luck and Grit get the most attention here because they are the newest
+ * and the least obvious. Luck especially: it is the only one that is not about
+ * what the character does well, but about whether the world happens to oblige.
+ */
+const PICK_WHEN: Record<string, string> = {
+  might: "shifting, lifting, forcing or breaking something",
+  wits: "working something out, spotting it, or remembering it",
+  heart: "reaching another person or creature — comforting, persuading, standing up for them",
+  spark: "anything strange, magical, or addressed to something that should not answer",
+  grace: "staying quiet, keeping your footing, catching it, threading it, slipping past",
+  luck: "the question is whether the thing is there at all — rummaging, guessing which way, hoping the shortcut works",
+  grit: "the difficulty is lasting: holding on, keeping going, refusing to be frightened off",
+};
+
+const STAT_LIST = STATS.map(
+  (stat) => `- ${stat}: ${STAT_INFO[stat].blurb} Pick it when ${PICK_WHEN[stat]}.`,
+).join("\n");
 
 /** Stage 1 — decide which declared actions need a roll. */
 /**
@@ -119,7 +145,9 @@ export function adjudicationPrompt(options: {
 Needs a roll: anything uncertain, risky, or that could fail interestingly.
 Does NOT need a roll: talking, walking, looking around, picking something up, anything certain.
 
-Stats: ${STAT_LIST}
+Choose exactly one stat for each roll:
+${STAT_LIST}
+
 Difficulty: EASY for simple-but-uncertain, NORMAL for genuinely tricky, HARD for a long shot.
 
 THE SCENE:

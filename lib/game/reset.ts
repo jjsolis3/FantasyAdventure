@@ -47,6 +47,8 @@ import {
   STAT_BUDGET,
   STAT_MAX,
   STAT_MIN,
+  statColumns,
+  statsOf,
   validateStats,
   type StatBlock,
 } from "@/lib/game/rules";
@@ -84,10 +86,7 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
       name: true,
       level: true,
       xp: true,
-      might: true,
-      wits: true,
-      heart: true,
-      spark: true,
+      ...Object.fromEntries(STATS.map((stat) => [stat, true])),
       _count: {
         select: {
           skills: true,
@@ -113,12 +112,7 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
     name: character.name,
     level: character.level,
     xp: character.xp,
-    stats: {
-      might: character.might,
-      wits: character.wits,
-      heart: character.heart,
-      spark: character.spark,
-    },
+    stats: statsOf(character),
     skills: character._count.skills,
     practices: character._count.practices,
     knacks: character._count.knacks,
@@ -231,10 +225,7 @@ export async function resetCharacter(characterId: string, build: StatBlock): Pro
       data: {
         xp: 0,
         level: 1,
-        might: build.might,
-        wits: build.wits,
-        heart: build.heart,
-        spark: build.spark,
+        ...statColumns(build),
       },
     });
   });

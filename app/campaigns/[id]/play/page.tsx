@@ -196,6 +196,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     for (const member of campaign.party) {
       const owned = abilitiesFor({
         archetype: member.character.archetype,
+        level: member.character.level,
         knackKeys: member.character.knacks.map((knack) => knack.key),
         skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
       });

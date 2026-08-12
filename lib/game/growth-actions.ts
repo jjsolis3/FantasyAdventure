@@ -3,8 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
-import { STATS, STAT_CEILING, statPointsUnspent, type StatBlock, type StatKey } from "@/lib/game/rules";
+import {
+  STATS,
+  STAT_CEILING,
+  statPointsUnspent,
+  statsOf,
+  type StatBlock,
+  type StatKey,
+} from "@/lib/game/rules";
 import { knacksUnspent, offerFor } from "@/lib/game/knacks";
+import { mayChoose } from "@/lib/game/skill-offer";
 
 /**
  * Spending a point of growth.
@@ -25,12 +33,7 @@ export async function raiseStatAction(formData: FormData): Promise<void> {
   const character = await db.character.findFirst({ where: { id: characterId, userId: user.id } });
   if (!character) return;
 
-  const stats: StatBlock = {
-    might: character.might,
-    wits: character.wits,
-    heart: character.heart,
-    spark: character.spark,
-  };
+  const stats: StatBlock = statsOf(character);
 
   // Both guards matter and they are different: one says she has earned a point,
   // the other says this particular stat has room for it.
@@ -76,12 +79,7 @@ export async function chooseKnackAction(formData: FormData): Promise<void> {
   const offered = offerFor({
     characterId: character.id,
     level: character.level,
-    stats: {
-      might: character.might,
-      wits: character.wits,
-      heart: character.heart,
-      spark: character.spark,
-    },
+    stats: statsOf(character),
     practices: character.practices,
     taken,
   });
@@ -92,4 +90,51 @@ export async function chooseKnackAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/characters/${characterId}`);
+}
+
+/**
+ * Taking a skill at level-up.
+ *
+ * Checked the same way a knack is: the rule is recomputed here from her own
+ * state rather than trusted from the form. The difference is that a skill may
+ * legitimately come from the whole list rather than only the three suggested —
+ * browsing is deliberate — so what is enforced is that she has a pick left, that
+ * it is a real skill, and that she does not already have it.
+ *
+ * `chosenAtLevel` is what makes the pick countable. Without it a girl who
+ * practised her way to four skills would look as though she had spent four
+ * choices, and would silently lose them.
+ */
+export async function chooseSkillAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+
+  const characterId = String(formData.get("characterId") ?? "");
+  const skill = String(formData.get("skill") ?? "").trim();
+  if (!characterId || !skill) return;
+
+  const character = await db.character.findFirst({
+    where: { id: characterId, userId: user.id },
+    include: {
+      skills: { select: { name: true, chosenAtLevel: true } },
+      practices: { select: { key: true, label: true, attempts: true } },
+    },
+  });
+  if (!character) return;
+
+  const input = {
+    archetype: character.archetype,
+    level: character.level,
+    held: character.skills.map((entry) => entry.name),
+    chosen: character.skills.filter((entry) => entry.chosenAtLevel !== null).length,
+    practices: character.practices,
+  };
+
+  if (!mayChoose(skill, input)) return;
+
+  await db.characterSkill.create({
+    data: { characterId, name: skill, chosenAtLevel: character.level },
+  });
+
+  revalidatePath(`/characters/${characterId}`);
+  revalidatePath("/characters");
 }

@@ -5,7 +5,11 @@ import { requireUser } from "@/lib/auth/session";
 import { memberCampaignFilter } from "@/lib/game/access";
 import { questBoard } from "@/lib/game/quests";
 import { journeyFrom, placesVisited } from "@/lib/game/journey";
-import { statPointsUnspent, type StatBlock } from "@/lib/game/rules";
+import {
+  statPointsUnspent,
+  statsOf,
+  type StatBlock,
+} from "@/lib/game/rules";
 import { knacksUnspent } from "@/lib/game/knacks";
 import { tally, totalXp, verdict, xpFromQuests, xpFromRolls } from "@/lib/game/summary";
 import type { CheckOutcome } from "@/lib/engine/dice";
@@ -135,12 +139,7 @@ export default async function SummaryPage({ params }: { params: Promise<{ id: st
         {/* Then each of them, in party order. */}
         {campaign.party.map((member) => {
           const character = member.character;
-          const stats: StatBlock = {
-            might: character.might,
-            wits: character.wits,
-            heart: character.heart,
-            spark: character.spark,
-          };
+          const stats: StatBlock = statsOf(character);
 
           const them = pronounsOf(character.pronouns);
           const earned = totalXp(character.id, fromRolls, fromQuests);

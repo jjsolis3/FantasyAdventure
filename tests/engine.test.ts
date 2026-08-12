@@ -5,15 +5,16 @@ import { extractJsonText, parseLooseJson, requestStructured, StructuredOutputErr
 import { buildContext, estimateTokens, rankMemories } from "../lib/ai/context.ts";
 import { checkNarration } from "../lib/ai/safety.ts";
 import type { StatKey } from "../lib/game/rules.ts";
+import { statBlock } from "../lib/game/rules.ts";
 
 // ---- Dice ------------------------------------------------------------------
 
-const averageStats: Record<StatKey, number> = { might: 3, wits: 3, heart: 3, spark: 3 };
+const averageStats: Record<StatKey, number> = statBlock({ might: 3, wits: 3, heart: 3, spark: 3 });
 
 test("a natural 20 always criticals, however hard the task", () => {
   const result = resolveCheck(
     { characterId: "c", characterName: "Mira", stat: "might", difficulty: "HARD", intent: "lift the gate" },
-    { might: 1, wits: 1, heart: 1, spark: 1 },
+    statBlock({ might: 1, wits: 1, heart: 1, spark: 1 }),
     () => 20,
   );
   assert.equal(result.outcome, "CRITICAL");
@@ -22,7 +23,7 @@ test("a natural 20 always criticals, however hard the task", () => {
 test("a natural 1 always complicates, however easy the task", () => {
   const result = resolveCheck(
     { characterId: "c", characterName: "Mira", stat: "might", difficulty: "EASY", intent: "open a door" },
-    { might: 5, wits: 5, heart: 5, spark: 5 },
+    statBlock({ might: 5, wits: 5, heart: 5, spark: 5 }),
     () => 1,
   );
   assert.equal(result.outcome, "COMPLICATION");
@@ -186,7 +187,7 @@ test("Two as One lifts a near miss to a success", () => {
 test("Hearthlight simply works", () => {
   const result = resolveCheck(
     { ...request, difficulty: "HARD" },
-    { might: 1, wits: 1, heart: 1, spark: 1 },
+    statBlock({ might: 1, wits: 1, heart: 1, spark: 1 }),
     () => 2,
     { key: "hearthlight", moveName: "Hearthlight", helperName: "Rowan" },
   );
@@ -313,7 +314,7 @@ const baseContext = {
       pronouns: "she/her",
       ageBand: "CHILD",
       level: 1,
-      stats: { might: 1, wits: 3, heart: 5, spark: 3 },
+      stats: statBlock({ might: 1, wits: 3, heart: 5, spark: 3 }),
       skills: [{ name: "Speak with Animals", rank: 1 }],
     },
   ],

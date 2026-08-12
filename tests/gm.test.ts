@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runTurn, type ModelCalls, type TurnInput } from "../lib/engine/gm.ts";
+import { statBlock } from "../lib/game/rules.ts";
 
 const party: TurnInput["party"] = [
   {
     id: "mira",
     name: "Mira Thistledown",
-    stats: { might: 1, wits: 3, heart: 5, spark: 3 },
+    stats: statBlock({ might: 1, wits: 3, heart: 5, spark: 3 }),
     skills: [{ name: "Speak with Animals", rank: 2 }],
   },
   {
     id: "rowan",
     name: "Rowan",
-    stats: { might: 5, wits: 3, heart: 3, spark: 1 },
+    stats: statBlock({ might: 5, wits: 3, heart: 3, spark: 1 }),
     skills: [],
   },
 ];
