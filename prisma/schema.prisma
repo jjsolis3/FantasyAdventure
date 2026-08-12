@@ -605,6 +605,7 @@ model Campaign {
   memories Memory[]
   aiCalls  AiCall[]
   rounds   TurnRound[]
+  screens  ScreenPairing[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)
@@ -1153,4 +1154,54 @@ model TurnSnapshot {
   state Json
 
   createdAt DateTime @default(now())
+}
+
+/// A television showing one adventure.
+///
+/// The screen in the living room has no account and never gets one. Signing a
+/// TV into the household would put a session that can delete adventures on the
+/// device with the least supervision in the house, kept alive by a browser
+/// nobody signs out of — and it would have to be typed with a remote control.
+///
+/// So the TV asks to be adopted instead. It opens the display cold, shows a
+/// code, and somebody already holding the adventure on their phone types that
+/// code in. The pairing is done on the device with a keyboard and an account;
+/// the television only ever receives.
+///
+/// What it receives is one adventure, read-only, and less of it than a player
+/// sees — see `lib/game/screen.ts`.
+model ScreenPairing {
+  id String @id @default(cuid())
+
+  /// Shown on the television while it waits to be adopted, and typed into a
+  /// phone to adopt it. Cleared once claimed: it is a doorbell, not a key, and
+  /// leaving it around would let a second household ring the same bell.
+  code       String?   @unique
+  /// When the code stops being typeable. Minutes, not days — the phone is in
+  /// the room, and a code that outlives the moment is only a way for somebody
+  /// else's adventure to arrive on this television.
+  codeExpiresAt DateTime?
+
+  /// sha256 of the token the television keeps. The key, and unlike the code it
+  /// is long, never displayed, and never read aloud.
+  tokenHash String @unique
+
+  /// Null until somebody adopts it. This is the whole of the screen's
+  /// authority: one adventure, set once by an account that could already see
+  /// it, changed only by unpairing.
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// What to call this television on the phone that paired it, so a house with
+  /// two of them can tell which is which.
+  label String?
+
+  createdAt DateTime  @default(now())
+  claimedAt DateTime?
+  /// Bumped as the television polls. A screen that has not asked for anything
+  /// in a fortnight has been turned off, moved on, or sold.
+  lastSeenAt DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([lastSeenAt])
 }

@@ -52,6 +52,31 @@ export function generateHandoverCode(): string {
   return `HAND-${randomGroups()}`;
 }
 
+/**
+ * Generates the code a television shows while it waits to be adopted, shaped
+ * like `K3M-9PQ`.
+ *
+ * The odd one out, and deliberately. The other three are typed by somebody who
+ * was sent them; this one is *read off a screen across a room* by somebody
+ * squinting, then typed on a phone. So it has no word at the front — the
+ * television has plenty of space to say what it is in full sentences — and it
+ * is short enough to hold in your head between looking up and looking down.
+ *
+ * Six characters rather than four. Four is friendlier to read but only about
+ * nine hundred thousand codes, and the failure it allows is a bad one: a second
+ * household waiting on the same code at the same moment would be handed your
+ * adventure on their television. Six makes that vanishingly unlikely, and
+ * costs two characters typed on a device with a real keyboard. The short life
+ * of a code (see `codeExpiresAt`) does the rest of the work.
+ */
+export function generateScreenCode(): string {
+  let code = "";
+  for (let index = 0; index < 6; index += 1) {
+    code += ALPHABET[randomInt(ALPHABET.length)];
+  }
+  return `${code.slice(0, 3)}-${code.slice(3)}`;
+}
+
 /** Normalises user input so spacing and case do not matter. */
 export function normaliseInviteCode(input: string): string {
   return input.trim().toUpperCase().replace(/\s+/g, "");

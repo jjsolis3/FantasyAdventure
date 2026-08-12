@@ -11,6 +11,8 @@ import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
 import { JoinCode } from "@/components/campaign/join-code";
+import { SendToScreen } from "@/components/campaign/send-to-screen";
+import { screensFor } from "@/lib/game/screen";
 import { Packing, type Packer } from "@/components/campaign/packing";
 import { SUPPLIES_PER_CHARACTER } from "@/lib/game/loadout";
 import { extraSupplies } from "@/lib/game/knacks";
@@ -63,6 +65,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   if (!campaign) notFound();
 
   const isOwner = campaign.ownerId === user.id;
+  // Only the owner can pair or unpair, so only the owner is shown the list.
+  const screens = isOwner ? await screensFor(campaign.id) : [];
   const yourMembers = campaign.party.filter((member) => member.character.userId === user.id);
   const households = new Set(campaign.party.map((member) => member.character.userId)).size;
 
@@ -421,6 +425,18 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             <JoinCode campaignId={campaign.id} code={campaign.joinCode} isOwner={isOwner} />
           </Card>
         )}
+
+        {isOwner ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">On the big screen</h2>
+            <p className="mb-4 text-sm text-hearth-400">
+              Put the story on a television so everyone can see the pictures and read the same
+              paragraph at once. The screen only ever shows — nobody can play from it, and each
+              girl&rsquo;s own aim stays on her own phone.
+            </p>
+            <SendToScreen campaignId={campaign.id} initialScreens={screens} />
+          </Card>
+        ) : null}
 
         {isOwner && campaign.party.length > 0 ? (
           <Card>
