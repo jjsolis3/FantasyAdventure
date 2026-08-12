@@ -77,6 +77,8 @@ carrying it mean anything.
 | ✅ | **M10** Art prompts for every chapter, sharing the app's own style |
 | ✅ | **M10** Something to find in all thirty chapters, keepsake included |
 | ✅ | **M11** Once-a-scene and once-a-chapter moves that are actually limited |
+| ✅ | **M11** A front page that leads with whose turn it is |
+| ✅ | **M11** Starting an adventurer again, administrator-only |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1000,6 +1002,41 @@ character stats become decoration and it stops being a game.
 
 **Narration and structured state are separate AI calls.** Asking one response
 to be both good prose and valid JSON is where local models fall apart.
+
+### Starting an adventurer again
+
+Everything on a sheet is earned one point at a time, and growth is deliberately
+one-way — stats never go back down, because refunds turn a character into a
+puzzle to be optimised between chapters. A reset is the single exception, and it
+lives at `/settings/adventurers`, behind the administrator check, rather than on
+the sheet itself. A button that undoes an evening's play does not belong next to
+the buttons a nine-year-old presses; asking a grown-up is the feature, not an
+obstacle.
+
+The line it draws is between what she **earned** and who she **is**:
+
+| Cleared | Kept |
+|---|---|
+| experience, level, skills, practice | name, people, calling, pronouns, age |
+| knacks, pockets, keepsakes | description and portrait |
+| people met, spent once-a-scene moves | the household she belongs to |
+
+Two decisions inside that are worth knowing about.
+
+**Bonds are turned down, not deleted.** A relationship row holds two things —
+that these two are sisters, which somebody chose, and how close they have grown,
+which is earned. The row stays; the level goes back to nothing.
+
+**Her four numbers are given, not guessed.** Stats are built once from twelve
+points and afterwards only rise, and nothing in the game can edit them again. So
+the engine knows exactly how many points growth added and has no record of which
+stats they went into — a wrong guess would be unfixable short of deleting her.
+The form asks, pre-filled with a proportional scale-down that keeps her shape
+(8/5/4/3 suggests 5/3/2/2, not 3/3/3/3), and validated by the builder's own rule.
+
+Confirmation is the character's name typed in full. Not an "are you sure?" —
+those get clicked through — but the one confirmation that cannot be given by
+accident, and that makes resetting the wrong adventurer of two very hard to do.
 
 ### Once a scene, once a chapter
 

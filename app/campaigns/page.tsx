@@ -133,6 +133,19 @@ export default async function CampaignsPage() {
         )}
       </div>
 
+      {campaigns.length === 0 && characterCount > 0 ? (
+        // Reached often enough to be worth writing: everybody's second visit,
+        // after building a family and before starting anything. Rendering
+        // nothing left a heading floating above blank space, which reads as a
+        // page that failed to load rather than one with nothing on it yet.
+        <Card>
+          <p className="text-hearth-200/70">
+            No adventures yet. Starting one takes a minute: pick a story, choose who is coming, and
+            the storyteller does the rest.
+          </p>
+        </Card>
+      ) : null}
+
       {campaigns.length === 0 ? null : (
         <ul className="space-y-4">
           {campaigns.map((campaign) => (

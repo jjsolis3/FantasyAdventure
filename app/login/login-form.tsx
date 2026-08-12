@@ -6,11 +6,15 @@ import { loginAction, type FormState } from "@/lib/auth/actions";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const [state, formAction] = useActionState<FormState, FormData>(loginAction, null);
 
   return (
     <form action={formAction} className="space-y-5">
+      {/* Where they were headed before being asked to sign in. Checked again on
+          the server — see `safeNext` — because a hidden field is only a hint. */}
+      {next ? <input type="hidden" name="next" value={next} /> : null}
+
       {state?.error ? <Alert>{state.error}</Alert> : null}
 
       <Field
