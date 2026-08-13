@@ -1,0 +1,11 @@
+-- How many rounds an encounter has run.
+--
+-- Its own migration rather than an edit to the one before it: that one has
+-- already been applied on the machine this was found on, and a migration that
+-- has run is history rather than a draft.
+--
+-- Added after driving one end to end. With the party gaining about one success
+-- a round and the encounter pressing about as often, the track sat between −1
+-- and +1 for nine rounds and showed no sign of ever stopping. A standoff that
+-- can last forever is not tense, it is a treadmill.
+ALTER TABLE "Encounter" ADD COLUMN "rounds" INTEGER NOT NULL DEFAULT 0;

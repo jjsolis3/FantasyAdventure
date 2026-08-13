@@ -18,6 +18,7 @@ import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
 import { scenePicture } from "@/lib/game/scene-picture";
 import { PressureClock } from "@/components/play/pressure-clock";
+import type { EncounterView } from "@/components/play/encounter-panel";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
 import type { AvailableAbility } from "@/components/play/ability-picker";
@@ -54,6 +55,31 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   if (!campaign) notFound();
 
   const membership = await membershipFor(campaign.id, user.id);
+
+  // What is standing in front of them. One at a time, on purpose: two open
+  // encounters is a corridor of obstacles rather than a story.
+  const standingSceneId = campaign.scenes.find((scene) => scene.status === "OPEN")?.id;
+  const standing = standingSceneId
+    ? await db.encounter.findFirst({
+        where: { campaignId: campaign.id, sceneId: standingSceneId, resolvedAt: null },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
+
+  const encounter: EncounterView | null = standing
+    ? {
+        name: standing.name,
+        want: standing.want,
+        kind: standing.kind,
+        works: standing.works,
+        backfires: standing.backfires,
+        wayOut: standing.wayOut,
+        ground: standing.ground,
+        soloName:
+          campaign.party.find((member) => member.characterId === standing.soloCharacterId)
+            ?.character.name ?? null,
+      }
+    : null;
 
   // Pictures are off unless a table has set up somewhere to draw them, so this
   // asks once per page rather than letting every browser find out by failing.
@@ -392,6 +418,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               inputMode={campaign.inputMode}
               yourCharacterIds={membership.controlledCharacterIds}
               initialRound={round}
+              encounter={encounter}
               whatNow={whatNow}
             />
           </>

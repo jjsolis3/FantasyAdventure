@@ -47,6 +47,16 @@ const stat = process.env.MOCK_STAT ?? "heart";
  * nonsense and hope.
  */
 const idle = process.env.MOCK_IDLE === "1";
+
+/**
+ * Set MOCK_ENCOUNTER=1 to have the first passage put something in front of them.
+ *
+ * Opened once and only once — an encounter is a scene-sized event, and a mock
+ * that opened one every turn would be testing a corridor of obstacles rather
+ * than the thing the game actually does.
+ */
+const encounter = process.env.MOCK_ENCOUNTER === "1";
+let encountersOpened = 0;
 let narrationCount = 0;
 
 /**
@@ -169,6 +179,12 @@ const server = createServer((request, response) => {
         '"bondMoments":[{"from":"Rowan","to":"Mira","why":"stood between her and the noise"}],' +
         '"itemsGained":[{"character":"Mira","name":"a smooth grey stone","description":"warm to the touch"}],' +
         '"whatNow":"The barley is still moving. Do you go in after it?",' +
+        (encounter && encountersOpened++ === 0
+          ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
+            '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +
+            '"backfires":["a clever lie"],' +
+            '"wayOut":"leave, and accept that he tells the baker"},'
+          : "") +
         '"actComplete":false,"sceneComplete":false,}';
     } else if (prompt.includes('{"whatNow":')) {
       // The opening passage's own question. Asked on its own because the

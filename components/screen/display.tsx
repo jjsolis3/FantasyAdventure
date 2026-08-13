@@ -47,6 +47,13 @@ type View = {
   /** The act's clock. `level` is 0 until it has moved, and then nothing draws. */
   pressure: { name: string; level: number; limit: number };
   awaitingRolls: { characterName: string; intent: string }[];
+  encounter: {
+    name: string;
+    want: string;
+    ground: number;
+    reach: number;
+    soloName: string | null;
+  } | null;
   scene: {
     title: string;
     location: string | null;
@@ -407,6 +414,53 @@ function Paired({ view, token }: { view: View; token: string | null }) {
                 ))}
               </ul>
               <p className="mt-5 text-2xl text-moss-400/80">Roll a d20 and tell it what you got.</p>
+            </div>
+          ) : null}
+
+          {/* Under the roll and above the passage. While one of these is open
+              it is the thing the whole room is looking at, and what it *wants*
+              is the clue they are all trying to read. */}
+          {view.encounter ? (
+            <div className="mb-8 rounded-2xl border border-hearth-700/60 bg-hearth-900/40 px-8 py-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-4">
+                <span className="font-display text-3xl text-hearth-50 lg:text-4xl">
+                  {view.encounter.name}
+                </span>
+                <span className="text-xl text-hearth-400 lg:text-2xl">
+                  wants {view.encounter.want}
+                </span>
+              </div>
+
+              <div className="mt-5 flex items-center gap-1.5" aria-hidden>
+                {Array.from({ length: view.encounter.reach * 2 + 1 }, (_, index) => {
+                  const at = index - view.encounter!.reach;
+                  const middle = at === 0;
+                  const filled =
+                    at !== 0 &&
+                    (at > 0 ? view.encounter!.ground >= at : view.encounter!.ground <= at);
+
+                  return (
+                    <span
+                      key={at}
+                      className={`h-3 flex-1 rounded-full ${
+                        middle
+                          ? "max-w-1.5 bg-hearth-600"
+                          : filled
+                            ? at > 0
+                              ? "bg-moss-400"
+                              : "bg-red-400"
+                            : "bg-hearth-800"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+
+              {view.encounter.soloName ? (
+                <p className="mt-4 text-xl text-amber-400 lg:text-2xl">
+                  {view.encounter.soloName} has this one.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
