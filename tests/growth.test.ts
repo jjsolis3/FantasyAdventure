@@ -1,17 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import {
-  STAT_BUDGET,
-  STAT_CEILING,
-  STAT_MAX,
-  XP_PER_STAT_POINT,
-  canRaise,
-  statModifier,
-  statPointsEarned,
-  statPointsUnspent,
-  validateStats,
-  type StatBlock,
-} from "../lib/game/rules.ts";
+import { NEUTRAL_STAT, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, canRaise, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
 import {
   ATTEMPTS_TO_LEARN,
   MAX_SKILLS,
@@ -22,9 +11,9 @@ import {
   readyToLearn,
   skillNameFrom,
 } from "../lib/game/practice.ts";
-import { ARCHETYPES, signatureFor } from "../lib/game/character-options.ts";
+import { ARCHETYPES, signaturesFor } from "../lib/game/character-options.ts";
 
-const built: StatBlock = { might: 3, wits: 3, heart: 3, spark: 3 };
+const built: StatBlock = statBlock({ might: 3, wits: 3, heart: 3, spark: 3 });
 
 // ---- Stats that grow --------------------------------------------------------
 
@@ -73,7 +62,8 @@ test("growth: the sheet fills far past where it was built", () => {
   assert.equal(STAT_MAX * 4, 20);
   assert.equal(STAT_CEILING * 4, 48);
   assert.ok(STAT_CEILING > STAT_MAX);
-  assert.equal(STAT_BUDGET, 12);
+  // A relationship, not a literal — see the note in rules.test.ts.
+  assert.equal(STAT_BUDGET, STATS.length * NEUTRAL_STAT);
 });
 
 // ---- The curve --------------------------------------------------------------
@@ -224,28 +214,40 @@ test("locked: a plain level requirement works too", () => {
 
 // ---- Signature moves --------------------------------------------------------
 
-test("signature: every calling in the builder has one of its own", () => {
+test("signature: every calling has two of its own, and they are all distinct", () => {
   const names = new Set<string>();
 
   for (const archetype of ARCHETYPES) {
-    const signature = signatureFor(archetype.value);
-    assert.ok(signature, `${archetype.value} has no signature`);
-    assert.ok(signature!.blurb.length > 20, archetype.value);
-    assert.ok(signature!.narrationHint.length > 20, archetype.value);
-    names.add(signature!.name);
+    const signatures = signaturesFor(archetype.value);
+    assert.equal(signatures.length, 2, `${archetype.value} has ${signatures.length}`);
+
+    for (const signature of signatures) {
+      assert.ok(signature.blurb.length > 20, `${archetype.value}: ${signature.name}`);
+      assert.ok(signature.narrationHint.length > 20, `${archetype.value}: ${signature.name}`);
+      names.add(signature.name);
+    }
   }
 
-  assert.equal(names.size, ARCHETYPES.length, "two callings share a signature");
+  // Two callings sharing a move would make the sheet's "Guardian only" a lie.
+  assert.equal(names.size, ARCHETYPES.length * 2, "two callings share a signature");
+});
+
+test("signature: the second one waits for level five", () => {
+  for (const archetype of ARCHETYPES) {
+    assert.equal(signaturesFor(archetype.value, 1).length, 1, archetype.value);
+    assert.equal(signaturesFor(archetype.value, 4).length, 1, archetype.value);
+    assert.equal(signaturesFor(archetype.value, 5).length, 2, archetype.value);
+  }
 });
 
 test("signature: a calling nobody has heard of simply has none", () => {
   // The Cloud Baker is not worse off than she was — a signature is something
   // eight callings gained, not something anybody lost.
-  assert.equal(signatureFor("Cloud Baker"), undefined);
+  assert.deepEqual(signaturesFor("Cloud Baker"), []);
 });
 
 test("signature: found however it was capitalised", () => {
-  assert.equal(signatureFor("  guardian ")?.name, signatureFor("Guardian")?.name);
+  assert.deepEqual(signaturesFor("  guardian "), signaturesFor("Guardian"));
 });
 
 // ---- Saving a grown adventurer ----------------------------------------------
@@ -254,7 +256,7 @@ test("growth: a grown sheet is not something the builder's rule can describe", (
   // She earned three points and spent them, so her sheet legitimately adds up
   // to more than the build budget. The editor no longer writes stats at all,
   // which is why this can be true and safe at the same time.
-  const grown: StatBlock = { might: 5, wits: 4, heart: 3, spark: 3 };
+  const grown: StatBlock = statBlock({ might: 5, wits: 4, heart: 3, spark: 3 });
 
   assert.equal(validateStats(grown).ok, false, "the build rule rejects it, correctly");
   assert.equal(statPointsUnspent(grown, 30), 0, "and she has spent exactly what she earned");

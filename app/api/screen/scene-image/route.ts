@@ -1,5 +1,15 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { db } from "@/lib/db";
 import { screenFromRequest } from "@/lib/game/screen";
+import { shippedChapterArt } from "@/lib/game/scene-picture";
+
+/** Worked out from the name, because a file on disk has no stored type. */
+function mimeFor(path: string): string {
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +33,57 @@ export async function GET(request: Request) {
   const scene = await db.scene.findFirst({
     where: { campaignId: screen.campaignId, status: "OPEN" },
     orderBy: { index: "desc" },
-    select: { image: { select: { data: true, mimeType: true, createdAt: true } } },
+    select: {
+      id: true,
+      actIndex: true,
+      image: { select: { data: true, mimeType: true } },
+      campaign: { select: { storyline: { select: { slug: true } } } },
+    },
   });
-  if (!scene?.image) return new Response("No picture yet.", { status: 404 });
+  if (!scene) return new Response("No picture yet.", { status: 404 });
 
-  return new Response(Buffer.from(scene.image.data), {
+  // A drawing this family made wins, then the adventure's own chapter art, then
+  // a generated one — the same ladder the table uses, so the two screens can
+  // never show different pictures of the same chapter.
+  const [drawn, chapter] = await Promise.all([
+    db.campaignImage.findFirst({
+      where: { campaignId: screen.campaignId, kind: "SCENE", key: scene.id },
+      select: { data: true, mimeType: true },
+    }),
+    db.chapterImage.findUnique({
+      where: {
+        storylineSlug_actIndex: {
+          storylineSlug: scene.campaign.storyline.slug,
+          actIndex: scene.actIndex,
+        },
+      },
+      select: { data: true, mimeType: true },
+    }),
+  ]);
+
+  // Art shipped as a file is served by Next from `public/`, which a television
+  // holding only a screen token cannot be redirected to usefully — so it is
+  // read off disk here and handed over like any other picture.
+  const shipped =
+    !drawn && !chapter ? shippedChapterArt(scene.campaign.storyline.slug, scene.actIndex) : null;
+  if (shipped) {
+    const file = await readFile(join(process.cwd(), "public", shipped)).catch(() => null);
+    if (file) {
+      return new Response(new Uint8Array(file), {
+        headers: {
+          "Content-Type": mimeFor(shipped),
+          "Cache-Control": "private, max-age=86400",
+        },
+      });
+    }
+  }
+
+  const picture = drawn ?? chapter ?? scene.image;
+  if (!picture) return new Response("No picture yet.", { status: 404 });
+
+  return new Response(Buffer.from(picture.data), {
     headers: {
-      "Content-Type": scene.image.mimeType,
+      "Content-Type": picture.mimeType,
       // A drawn scene never changes, but which scene is current does, so the
       // display asks again on every version change and this only saves the
       // repeat fetches within one scene.

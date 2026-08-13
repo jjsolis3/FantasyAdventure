@@ -5,23 +5,63 @@
  * components and tests alike without dragging in the database.
  */
 
-export const STATS = ["might", "wits", "heart", "spark"] as const;
+export const STATS = ["might", "wits", "heart", "spark", "grace", "luck", "grit"] as const;
 export type StatKey = (typeof STATS)[number];
 
+/**
+ * The seven things a check can be about.
+ *
+ * Four for a long time, and four was thin: spreading twelve points over four
+ * sliders is not really a decision, and every character came out much like every
+ * other. Three more make the builder worth lingering over — and they were chosen
+ * to be things the storyteller can tell apart, because two stats it cannot
+ * distinguish are worse than one stat too few.
+ *
+ * Might's blurb used to read "Lifting, carrying, holding on, standing firm",
+ * where the second half is exactly what Grit is now for. It has been narrowed to
+ * pure force so the two do not compete for the same checks.
+ */
 export const STAT_INFO: Record<StatKey, { label: string; blurb: string }> = {
-  might: { label: "Might", blurb: "Lifting, carrying, holding on, standing firm." },
+  might: { label: "Might", blurb: "Force. Lifting, shoving, breaking, carrying something heavy." },
   wits: { label: "Wits", blurb: "Noticing, puzzling out, remembering, planning." },
-  heart: { label: "Heart", blurb: "Comforting, persuading, being brave for someone else." },
+  heart: { label: "Heart", blurb: "Comforting, persuading, being brave for somebody else." },
   spark: { label: "Spark", blurb: "Magic, wonder, and talking to things that shouldn't talk." },
+  grace: { label: "Grace", blurb: "Balance, sneaking, quick hands, dodging, climbing without falling." },
+  luck: {
+    label: "Luck",
+    blurb: "What turns up. Rummaging, shortcuts, whether the loose board is the right one.",
+  },
+  grit: { label: "Grit", blurb: "Keeping going. Holding on, staying awake, not being scared off." },
 };
 
-// Every stat starts at MIN and the player distributes the rest. A budget of 12
-// across four stats averages 3 — competent everywhere, exceptional nowhere,
-// unless you choose otherwise.
 export const STAT_MIN = 1;
 /** The highest a stat may be *built* at. Growth goes further; see STAT_CEILING. */
 export const STAT_MAX = 5;
-export const STAT_BUDGET = 12;
+
+/**
+ * The value that rolls at +0 — see `statModifier`, where 3 is the hinge.
+ *
+ * Named because the budget is built from it, and because the relationship
+ * between the two is the whole reason the budget is not a hardcoded number.
+ */
+export const NEUTRAL_STAT = 3;
+
+/**
+ * Every stat starts at MIN and the player distributes the rest.
+ *
+ * Derived rather than written down, and this matters more than it looks. The
+ * budget used to be a literal 12, which was exactly three per stat across four
+ * stats — so an average character rolled at +0. Adding three stats without
+ * moving that number would have left the average at 1.7 and made every
+ * character in the game quietly worse at everything, which is the sort of change
+ * nobody notices until the dice have been unkind for an evening.
+ *
+ * Tying it to the count means that can never happen again, and it is also what
+ * made the migration exact: an existing character on twelve points across four
+ * stats, given three new stats at the neutral value, lands on twenty-one across
+ * seven — precisely the new budget, with nothing gained and nothing lost.
+ */
+export const STAT_BUDGET = STATS.length * NEUTRAL_STAT;
 
 /**
  * The highest a stat can ever reach, through play.
@@ -71,29 +111,81 @@ export function canRaise(stats: StatBlock, xp: number, stat: StatKey): boolean {
 export const SKILLS_PER_CHARACTER = 2;
 
 /**
- * How many skills a character has room for, by level.
+ * How many skills she is entitled to have *chosen*.
  *
- * The one thing still worth earning once the stat sheet is full. Stats stop at
- * a ceiling and knacks run out at the end of the catalogue, but there is no
- * natural limit on the number of things a person turns out to be good at — and
- * skills are the reward the girls actually notice, because each one is named
- * after something they *did*. "Humming" is on the sheet because she hummed at a
- * frightened creature four times.
+ * Two at the builder, then one more at every level after the second. Level 3
+ * hands over a third, level 4 a fourth, and levelling up stops being a number
+ * that goes up with nothing attached to it.
  *
- * Two extra slots, at levels 6 and 11, which is slow on purpose: room to learn
- * is only worth having if learning something is still an event.
- *
- * Additive with Fast Learner rather than instead of it — the knack is somebody's
- * choice, and a choice that stops mattering once you level up is not a choice.
+ * Starting at 3 rather than 2 is deliberate. The first level-up already carries
+ * a knack, and stacking two choices on one moment makes both of them smaller.
  */
-export function skillRoomForLevel(level: number): number {
-  let room = 0;
-  if (level >= 6) room += 1;
-  if (level >= 11) room += 1;
-  return room;
+export function chosenSkillsFor(level: number): number {
+  return SKILLS_PER_CHARACTER + Math.max(0, level - 2);
 }
 
+/**
+ * Spare slots kept above what she is entitled to choose.
+ *
+ * The nicest thing on a sheet is a skill that arrived because she kept doing it
+ * — four goes at climbing turning into Climbing, without anybody deciding it
+ * should. If the cap were exactly what she may pick, that would stop the moment
+ * she used her level-up choice, and the game would have traded its best mechanic
+ * for its newest one.
+ */
+export const PRACTICE_HEADROOM = 2;
+
+/**
+ * The most skills that fit on one sheet, from every source at once.
+ *
+ * This was a flat six with an extra at levels 6 and 11, which was right when two
+ * skills were chosen at the builder and everything else arrived by accident.
+ * With a choice at every level it would have become a wall she hit around level
+ * six and never got past.
+ *
+ * Fast Learner still adds on top rather than instead — a knack that stops
+ * mattering once you level up is not a choice.
+ */
+export function skillRoom(level: number, knackExtras: number = 0): number {
+  return chosenSkillsFor(level) + PRACTICE_HEADROOM + knackExtras;
+}
+
+
 export type StatBlock = Record<StatKey, number>;
+
+/**
+ * A whole stat block from however much of one you have.
+ *
+ * Anything unnamed comes back at the neutral value, which is also what the
+ * budget is built from — so `statBlock({})` is a legal, fully-spent build and
+ * `statBlock({ might: 5 })` is that build with two points moved into Might.
+ *
+ * Worth having beyond tests: it is what the builder opens on, and it means a
+ * partial block from anywhere is completed the same way every time rather than
+ * by each caller remembering to fill the gaps.
+ */
+export function statBlock(partial: Partial<StatBlock> = {}): StatBlock {
+  return Object.fromEntries(
+    STATS.map((stat) => [stat, partial[stat] ?? NEUTRAL_STAT]),
+  ) as StatBlock;
+}
+
+/**
+ * Pulls the stats off a character row.
+ *
+ * Ten or so places used to write `{ might: row.might, wits: row.wits, ... }` by
+ * hand, which is fine at four and a liability at seven: every one of them is a
+ * place a new stat can be forgotten, and forgetting one is silent — the block
+ * just carries a stale value and the sheet quietly disagrees with itself.
+ */
+export function statsOf(row: Record<string, unknown>): StatBlock {
+  return Object.fromEntries(STATS.map((stat) => [stat, Number(row[stat] ?? 0)])) as StatBlock;
+}
+
+/** The other direction, for writing a whole block back to the database. */
+export function statColumns(stats: StatBlock): Record<StatKey, number> {
+  return Object.fromEntries(STATS.map((stat) => [stat, stats[stat]])) as Record<StatKey, number>;
+}
 
 export function totalSpent(stats: StatBlock): number {
   return STATS.reduce((sum, stat) => sum + stats[stat], 0);

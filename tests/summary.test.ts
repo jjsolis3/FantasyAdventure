@@ -8,7 +8,7 @@ import {
   xpFromRolls,
   type QuestRecord,
 } from "../lib/game/summary.ts";
-import { QUEST_XP } from "../lib/game/rules.ts";
+import { QUEST_XP, statBlock } from "../lib/game/rules.ts";
 import { abilitiesFor, abilityHints, abilityUnlockedAt, RANK_ABILITIES } from "../lib/game/practice.ts";
 
 // ---- What the evening earned ------------------------------------------------
@@ -158,7 +158,7 @@ function member(overrides: Partial<PartyMemberContext> = {}): PartyMemberContext
     pronouns: "she/her",
     ageBand: "CHILD",
     level: 2,
-    stats: { might: 3, wits: 3, heart: 3, spark: 3 },
+    stats: statBlock({ might: 3, wits: 3, heart: 3, spark: 3 }),
     skills: [],
     ...overrides,
   };

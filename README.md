@@ -79,6 +79,9 @@ carrying it mean anything.
 | ✅ | **M11** Once-a-scene and once-a-chapter moves that are actually limited |
 | ✅ | **M11** A front page that leads with whose turn it is |
 | ✅ | **M11** Starting an adventurer again, administrator-only |
+| ✅ | **M12** Seven stats — Grace, Luck and Grit — on a derived budget |
+| ✅ | **M12** 56 skills, and a new one to choose at every level after the second |
+| ✅ | **M12** A second signature move for every calling, at level 5 |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1037,6 +1040,104 @@ The form asks, pre-filled with a proportional scale-down that keeps her shape
 Confirmation is the character's name typed in full. Not an "are you sure?" —
 those get clicked through — but the one confirmation that cannot be given by
 accident, and that makes resetting the wrong adventurer of two very hard to do.
+
+### What picture a chapter gets
+
+Four possible answers, in a strict order, decided in one place
+(`lib/game/scene-picture.ts`) because four callers need the same one — the table,
+the route that serves the bytes, the television, and the code that decides
+whether to ask a drawing service at all.
+
+1. **A drawing this family made**, from the adventure's own picture page.
+2. **Chapter art uploaded here**, in Settings → Adventures. Every family who
+   plays that adventure sees it.
+3. **A file shipped with the game**, at
+   `public/adventures/<slug>/act-<n>.webp` — see the README in that folder.
+4. **A generated picture**, from the drawing service.
+5. Nothing, which is the only case where a drawing service is asked at all.
+
+That last point is the one that matters: a chapter with art never reaches a
+model, so there is no wait, no cost, and no chance of a machine's guess landing
+on top of a child's felt-tip.
+
+Chapter art is keyed by **storyline slug and chapter number**, not by act id.
+The seed deletes and recreates every act row on container start, so art hung off
+an id would be destroyed by the next redeploy — which is exactly when somebody
+would have just finished adding it.
+
+### Pictures the family made
+
+Scene art has always been *generated* — asked for from whatever drawing model
+the household configured, which most have not, and which in any case produces
+one interpretation of a chapter rather than the family's own.
+
+`/campaigns/<id>/pictures` is the other half. Everybody the storyteller has
+bothered to remember gets a frame with their name under it — people met, places
+been, chapters played — and anyone at the table can put a drawing in one. A
+ten-year-old draws the beekeeper in felt-tip on a Tuesday and he is on the
+television that evening, with his own face, for the rest of the adventure.
+
+Four decisions worth knowing:
+
+- **Any player, not just the host.** The person most likely to have drawn the
+  beekeeper is the child who met him, and making her ask a grown-up to upload
+  her own drawing would take the best thing about this and file it under admin.
+- **A drawing beats a generated picture everywhere.** The preference lives in
+  the routes that serve bytes, so it holds at the table, on the television, and
+  anywhere a chapter picture is added later.
+- **Faces appear when their person is in the scene**, matched by name against
+  the narration. Rough on purpose: an exact answer would need the storyteller to
+  tag who is present, and it does not. A false positive shows a friendly face a
+  beat early; a false negative shows what the game showed yesterday.
+- **Shrunk in the browser**, faces squared and places cropped wide, so a
+  four-megabyte photograph of a kitchen table never leaves the phone.
+
+One picture per thing — redrawing replaces rather than piling up, and the
+version rises so every device that cached the old one asks again.
+
+### Seven stats, and a skill every level
+
+Four stats and two skills made a builder you could finish in thirty seconds, and
+then the sheet was done. For players who spend their afternoons in Roblox and
+Minecraft that is not a character, it is a form.
+
+**Seven stats now**: Might, Wits, Heart, Spark, **Grace**, **Luck**, **Grit**.
+Might was narrowed to pure force — its blurb used to end "holding on, standing
+firm", which is exactly what Grit is for, and two stats the storyteller cannot
+tell apart are worse than one stat too few.
+
+`STAT_BUDGET` is now derived — `STATS.length × NEUTRAL_STAT` — rather than the
+literal 12 it used to be. That is load-bearing. Three is the value that rolls at
++0, so twelve across four stats put an average character at +0; adding three
+stats without moving the budget would have dropped the average to 1.7 and made
+every character in the game quietly worse at everything.
+
+It also made the migration exact. The new columns default to 3, so a character on
+twelve points across four lands on twenty-one across seven — precisely the new
+budget. A part-grown character is equally safe: unspent points are measured as
+`total − budget` and both sides rise by nine.
+
+**A skill at every level after the second.** Level 3 gives a third skill, level 4
+a fourth. Three suggestions drawn from what she has actually been doing, plus the
+whole catalogue — grown from 24 to 56 — behind *show me everything*, because a
+girl who has decided her adventurer talks to animals should not have to wait for
+the game to guess.
+
+Skill room grows with her and keeps two spare slots above what she may pick, so a
+skill she *chose* and a skill she *earned by doing it four times* never compete.
+`CharacterSkill.chosenAtLevel` tells the two apart — null means she practised her
+way into it.
+
+**A second signature at level 5.** A calling used to be finished the moment it was
+picked: a Guardian had Step In and always would, so the most characterful line on
+the sheet was the only one that never changed. Each of the eight now gains a
+second move — Hold the Line, Never Where You Looked, The One About Us — and the
+sheet names it before she has it, because a thing you are working towards is
+worth more than a thing that appears without warning.
+
+The adjudication prompt lists the stats one per line with a *pick this when*
+for each. Seven options is harder for a small local model than four, and Luck
+and Grit are the least obvious of them.
 
 ### Once a scene, once a chapter
 

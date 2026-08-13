@@ -23,7 +23,7 @@
  * within a month.
  */
 
-import { findArchetype, type SignatureEffect } from "@/lib/game/character-options";
+import { signaturesFor, type SignatureEffect } from "@/lib/game/character-options";
 import { KNACKS } from "@/lib/game/knacks";
 import { RANK_ABILITIES } from "@/lib/game/practice";
 
@@ -79,6 +79,8 @@ const LIMITED_KNACKS: Record<string, { effect: SignatureEffect }> = {
 
 export type CharacterAbilityInput = {
   archetype: string;
+  /** Which signatures have arrived. A second one turns up at level 5. */
+  level: number;
   knackKeys: string[];
   skills: { name: string; rank: number }[];
 };
@@ -93,16 +95,22 @@ export type CharacterAbilityInput = {
 export function abilitiesFor(character: CharacterAbilityInput): Ability[] {
   const abilities: Ability[] = [];
 
-  const archetype = findArchetype(character.archetype);
-  if (archetype) {
+  // The first one keeps the key it has always had. In-flight `AbilityUse` rows
+  // name it, and a rename would quietly hand every Guardian mid-scene their
+  // signature back — so the second gets a new key rather than both being
+  // renumbered.
+  for (const signature of signaturesFor(character.archetype, character.level)) {
     abilities.push({
       kind: "SIGNATURE",
-      key: `signature:${archetype.value.toLowerCase()}`,
-      name: archetype.signature.name,
-      blurb: archetype.signature.blurb,
+      key:
+        signature.fromLevel <= 1
+          ? `signature:${character.archetype.toLowerCase()}`
+          : `signature:${character.archetype.toLowerCase()}:${signature.fromLevel}`,
+      name: signature.name,
+      blurb: signature.blurb,
       scope: "SCENE",
-      effect: archetype.signature.effect,
-      narrationHint: archetype.signature.narrationHint,
+      effect: signature.effect,
+      narrationHint: signature.narrationHint,
     });
   }
 

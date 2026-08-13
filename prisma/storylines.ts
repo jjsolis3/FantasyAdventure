@@ -37,75 +37,20 @@
 export const storylines = [
   {
     slug: "the-star-in-grandmas-garden",
-    title: "The Star in Grandma's Garden",
-    tagline: "Something fell out of the sky, and it is frightened.",
+    title: "The Star Thief",
+    tagline: "The stars are going out one by one. One of them landed in the tomatoes, and it knows why.",
     premise:
-      "A small star has fallen into the family's vegetable patch and cannot get home. " +
-      "It is not hurt, but it is homesick, and it hums when it is scared. Getting it " +
-      "back to the sky means asking help from neighbours the family has never quite " +
-      "gotten around to visiting.",
+      "A star crash-lands in the family's garden — not fallen, knocked down. Every night " +
+      "since, more stars go out, in order, like somebody working through a list. The star " +
+      "knows whose list, because before it ran, it picked the collector's pocket. Getting " +
+      "it home means a market that only opens where moths gather, a bottled moonbeam, and " +
+      "breaking into a museum where the exhibits are the sky.",
     hook:
-      "It is just past bedtime when the tomatoes start glowing. In the middle of the " +
-      "garden, sitting in a shallow dent in the soil, is a light about the size of a " +
-      "cat — and it is humming a worried little tune.",
-    defaultTone: "COZY",
-    readingLevel: "EARLY_READER",
-    minPlayers: 2,
-    maxPlayers: 5,
-    estimatedScenes: 10,
-    acts: [
-      {
-        index: 1,
-        title: "The Glow in the Greens",
-        goal: "Let the family meet the star and earn its trust. Nobody should be able to calm it alone — it settles only when two characters comfort it together.",
-        beats: [
-          "The star hides under the runner beans and has to be coaxed, not grabbed",
-          "It copies the first kind sound anyone makes at it",
-          "It will not travel unless someone promises out loud to bring it home",
-        ],
-        seeks: ["Grandma's preserving jar, with the lid left loose"],
-      },
-      {
-        index: 2,
-        title: "Asking the Neighbours",
-        goal: "Send the family to three neighbours for help. Each neighbour wants something small and human in return — company, an apology, a favour long forgotten.",
-        beats: [
-          "The beekeeper knows which way is up but is afraid of the dark",
-          "The bridge troll is lonely rather than fierce and mostly wants someone to eat dinner with",
-          "The old lighthouse keeper has the lens they need but has misplaced her glasses",
-        ],
-        seeks: [
-          "the lighthouse keeper's missing spectacles",
-          "the beekeeper's smallest lantern",
-        ],
-      },
-      {
-        index: 3,
-        title: "The Long Way Up",
-        goal: "Get the star home from the lighthouse. The final push needs every character contributing something different at the same moment.",
-        beats: [
-          "The lens must be aimed, steadied, and lit by three different hands",
-          "The star tries to stay because it has become fond of the family",
-          "It leaves a small piece of itself behind as a keepsake",
-        ],
-        seeks: ["the piece of itself the star leaves behind"],
-      },
-    ],
-  },
-  {
-    slug: "the-bakers-missing-recipe",
-    title: "The Baker's Missing Recipe",
-    tagline: "The festival is in three days and the honey-cake recipe has walked off.",
-    premise:
-      "Every autumn the village bakes one enormous honey-cake from a recipe nobody has " +
-      "ever written down — it lives in old Master Pim's memory, and this year Pim's " +
-      "memory has gone foggy. The family must reassemble the recipe from the people who " +
-      "each remember one piece of it.",
-    hook:
-      "Master Pim is sitting on the bakery step with flour on his elbows and a very " +
-      "worried face. 'I know it starts with something golden,' he says. 'And I know " +
-      "your grandmother laughed when I put it in. That is all I have got.'",
-    defaultTone: "COZY",
+      "The tomatoes are glowing again. In a dent in the soil sits a light the size of a " +
+      "cat, breathing hard, and the first thing it says is: \"You didn't see me.\" Above " +
+      "the garden its constellation is missing a piece — and while you watch, two streets " +
+      "of sky further over, another star quietly goes out.",
+    defaultTone: "ADVENTUROUS",
     readingLevel: "MIDDLE_GRADE",
     minPlayers: 2,
     maxPlayers: 5,
@@ -113,93 +58,165 @@ export const storylines = [
     acts: [
       {
         index: 1,
-        title: "What Pim Remembers",
-        goal: "Establish the shape of the problem and let the family interview Pim gently. Rushing him makes him more confused, not less.",
+        title: "Knocked Out of the Sky",
+        goal: "Let the family get the truth out of a witness who lies. The star glows brighter when it fibs, and it fibs about nearly everything — it only cracks when two characters compare its stories out loud and catch the contradiction together.",
         beats: [
-          "Pim remembers smells far better than words",
-          "A burnt page in the oven gives one ingredient and destroys another",
-          "Someone in the family recognises the smell from their own childhood",
+          "The star glows brighter when it lies, and it lies about almost everything at first",
+          "A scorch-trail crosses the garden that the star's landing cannot explain — something swept through here, searching",
+          "The truth at last: it picked the collector's pocket first, and what it took is buried under the runner beans",
         ],
-        seeks: ["the burnt page from the oven, with one ingredient still readable"],
+        seeks: ["the collector's sky-map, creased and still warm"],
       },
       {
         index: 2,
-        title: "Six People, Six Pieces",
-        goal: "Scatter the remaining ingredients across the village. Each holder trades their piece for help with something they cannot manage alone.",
+        title: "The Night Market",
+        goal: "Passage home is bought, not found. The market opens where moths gather, everything is bartered rather than sold, and the collector's agents are shopping too. Every stall wants something odd but personal, and no single character can afford the fare alone.",
         beats: [
-          "The goatherd's memory is tied to a song only children remember the words to",
-          "The river-miller will only talk while his wheel is turning, and it is stuck",
-          "One ingredient turns out to be a mistake Pim made forty years ago and never corrected",
+          "The moth broker sells directions for secrets, and checks each one for freshness",
+          "The collector's agents look almost right — it is their shadows that give them away, pointing the wrong direction",
+          "The fare home is a bottled moonbeam, and the last one on any stall goes to auction at midnight",
         ],
         seeks: [
-          "the goatherd's song, written down at last",
-          "the pin that jammed the miller's wheel",
+          "a bottled moonbeam, paid for fair and square",
+          "the collector's name, written on the back of a receipt",
         ],
       },
       {
         index: 3,
-        title: "Festival Morning",
-        goal: "Bake the cake in front of the whole village. Let the family's choices during the hunt visibly change how it turns out.",
+        title: "The Museum of Lights",
+        goal: "The collector is not a monster: an astronomer who started rescuing falling stars and stopped asking whether they wanted rescuing. The gallery must be undone rather than smashed — jars opened in the right order, the star's own theft returned, and every pair of hands needed at once when the sky takes its lights back.",
         beats: [
-          "The oven is too big for one person to manage",
-          "Something goes wrong that only improvisation fixes",
-          "Pim tastes it and remembers everything, all at once",
+          "The jars are labelled in careful handwriting, in the order they were taken — and the next label is already written",
+          "The star has to give back what it stole, in person, and would rather do anything else in the world",
+          "The sky refills constellation by constellation, and the collector keeps one empty jar, as a telescope stand",
         ],
-        seeks: ["the recipe, written down for the first time in its life"],
+        seeks: [
+          "the ring of keys to every jar in the gallery",
+          "the collector's ledger of stolen stars",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "the-bakers-missing-recipe",
+    title: "The Case of the Stolen Recipe",
+    tagline: "The festival is in three days. The recipe is gone, and everyone in the village is lying about something.",
+    premise:
+      "Every autumn the village bakes one enormous honey-cake from a recipe that lives " +
+      "only in old Master Pim's memory. Three days before the festival, that memory is " +
+      "gone — swapped clean out of his head at the Memory Fair and laundered through so " +
+      "many trades that even the thief may have lost track of it. The family has three " +
+      "days, five suspects, and a village where everybody remembers a slightly " +
+      "different cake.",
+    hook:
+      "Master Pim stands in the middle of his bakery holding a bowl he cannot remember " +
+      "picking up. \"It was in my head last night,\" he says, tapping his temple. \"This " +
+      "morning there is a hole where it used to be. And whoever took it left this.\" On " +
+      "the counter, pressed into spilled flour, is a footprint that fits nobody in the " +
+      "village.",
+    defaultTone: "ADVENTUROUS",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 12,
+    acts: [
+      {
+        index: 1,
+        title: "Everyone Is a Suspect",
+        goal: "A proper interrogation. Five suspects, five alibis, and at least two true things in everything they say. No single interview cracks it — answers only become evidence when two characters compare what they were separately told and spot where the stories disagree.",
+        beats: [
+          "Pim's hole has edges: he remembers the smell of the cake perfectly, and the smell has one ingredient in it that nobody local sells",
+          "The flour footprint is the wrong size for every suspect — but exactly right for somebody on a stilt",
+          "The town gossip trades secrets two-for-one, and always shortchanges you",
+        ],
+        seeks: [
+          "the flour footprint, traced onto baking paper",
+          "the torn corner of a recipe card that should not exist",
+        ],
+      },
+      {
+        index: 2,
+        title: "The Memory Fair",
+        goal: "Follow the recipe through the fair where memories are traded openly. Three swaps stand between the theft and now, each trader drives a bargain, and looking inside a memory costs a small one of your own — make the table decide, out loud, what they are willing to give up.",
+        beats: [
+          "A memory viewed twice goes blurry, so every look has to count",
+          "One trader deals only with children, and drives the hardest bargain at the fair",
+          "The final swap in the ledger went to a name nobody in the village has ever had",
+        ],
+        seeks: [
+          "the middle memory of the chain, bottled and fogging up",
+          "the fair-master's ledger page for festival week",
+        ],
+      },
+      {
+        index: 3,
+        title: "The Bake-Off",
+        goal: "The thief is Pim's old apprentice, and her claim is half-just: half the recipe was hers before she left, and her name never made it onto the card. Judging day happens anyway, in front of the whole village. The ending belongs to the family — expose her, defend her, or bake both halves into one cake with two names on it.",
+        beats: [
+          "The two halves of the recipe fail separately and only work together",
+          "Somebody tampers with the oven mid-bake, and it is not who anyone expects",
+          "The judges are three grandmothers who, between them, have never once been fooled",
+        ],
+        seeks: ["the festival cake, with both names on the card at last"],
       },
     ],
   },
   {
     slug: "the-lantern-fox-family",
-    title: "The Lantern Fox Family",
-    tagline: "A fox family got separated in the fog. Ours is going to fix that.",
+    title: "The Valley That Ate Its Lights",
+    tagline: "The fog came early, the lamps are going out one by one, and the foxes are the only fire it cannot smother.",
     premise:
-      "The lantern foxes carry their light in their tails and navigate by each other's " +
-      "glow. A thick autumn fog has split a family of five across the whole valley, and " +
-      "the kits are too dim to find their way back. Reuniting them means the family " +
-      "splitting up too — and discovering how much they rely on each other.",
+      "The lantern foxes carry the valley's fire in their tails, and tonight is the night " +
+      "that matters: a fog has come down that eats light — street lamps first, then " +
+      "windows, then anything left glowing. The fox family that lights the lamps was " +
+      "scattered in the first hour. Finding them means splitting up in a fog where " +
+      "voices carry to the wrong places, where the chalk arrows home have been redrawn " +
+      "by something, and where all that missing light has to have gone somewhere.",
     hook:
-      "The fog came in so fast that the road disappeared between one step and the next. " +
-      "Somewhere in it, something small is crying — and every so often, a faint orange " +
-      "light blinks on and off, as though it is running out.",
+      "The lamp outside the gate does not flicker out — it goes all at once, like a " +
+      "mouthful, with a sound like a swallowed word. Somewhere in the fog a fox kit is " +
+      "crying. Somewhere further out, something very large is being very quiet.",
     defaultTone: "ADVENTUROUS",
-    readingLevel: "FAMILY_MIXED",
-    minPlayers: 3,
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
     maxPlayers: 5,
-    estimatedScenes: 14,
+    estimatedScenes: 12,
     acts: [
       {
         index: 1,
-        title: "Into the Fog",
-        goal: "Separate the party deliberately and let them feel it. Characters can hear but not see each other, and must describe their surroundings to navigate.",
+        title: "The Fog Came Wrong",
+        goal: "Split the party on purpose and let them feel it: characters can hear but not see each other, and have to describe where they are to move at all. Establish the rule of the night — this fog does not smother light, it eats it, and it is choosing what to eat.",
         beats: [
-          "The first kit is found within reach but will not come to a stranger",
-          "Voices carry strangely — the fog moves sound to the wrong place",
-          "Someone realises the foxes answer to humming, not calling",
+          "Voices carry to the wrong places, so the party's own words are the first puzzle",
+          "The first kit is found within arm's reach and will not come until somebody trades it a secret, said out loud",
+          "The chalk arrows the lamplighters leave have all been redrawn to point the same wrong way",
         ],
-        seeks: ["a tuft of fox-fur snagged on the fence, still faintly glowing"],
+        seeks: ["a jar of lantern-fox light, freely given"],
       },
       {
         index: 2,
-        title: "Following the Blinks",
-        goal: "Turn the search into a relay. Each recovered fox brightens the chain and makes the next one findable.",
+        title: "The Relay",
+        goal: "Each recovered fox brightens the chain and makes the next one findable — and makes the party easier to see. Let the table work it out for themselves: they are not being hunted, they are being herded, and the arrows, the fog and the dying lamps all point the same direction.",
         beats: [
-          "Two kits are found together and refuse to be separated again",
-          "The mother fox is trapped somewhere that needs a boost and a reach",
-          "The fog thickens right when the party is most spread out",
+          "The mother fox is trapped exactly where the light is thinnest, and freeing her takes a boost, a reach, and somebody glowing on purpose as bait",
+          "It will not cross running water — until, at the worst possible moment, it does",
+          "The old lamplighter's map shows every lamp in the valley, and the dead ones make an arrow of their own",
         ],
-        seeks: ["the orchard ladder, half a metre short"],
+        seeks: [
+          "the old lamplighter's map, dead lamps crossed out in soot",
+          "the mother fox's cracked lantern-glass",
+        ],
       },
       {
         index: 3,
-        title: "The Whole Bright Line",
-        goal: "Bring every fox and every family member back together. The reunion should mirror whatever the party learned about staying in contact.",
+        title: "The Dark End of the Valley",
+        goal: "What waits there is starving, not wicked: a shadow-thing burned by the town's new electric lamps, eating the only light that no longer hurts it, herding the brightest things in the valley toward itself because it is too weak to chase. The ending is a treaty, not a fight — and the foxes will only offer one if the family brokers the terms.",
         beats: [
-          "One fox is missing until someone thinks to look behind them",
-          "The full family of foxes lights the road home",
-          "The foxes follow the party for a little while before turning back",
+          "It speaks in the party's own voices, borrowed from the fog, and gives every one of them back afterwards",
+          "The foxes' offer: a tithe of light, freely given every night, in exchange for the fog going back to being weather",
+          "The valley relights lamp by lamp, in order, from the dark end back to home",
         ],
-        seeks: ["a lantern-fox tail-light, given rather than taken"],
+        seeks: ["the treaty, written in soot and fox-light"],
       },
     ],
   },

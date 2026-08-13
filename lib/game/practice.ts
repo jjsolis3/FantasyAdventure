@@ -28,11 +28,16 @@ import { MAX_SKILL_RANK } from "@/lib/game/rules";
 export const ATTEMPTS_TO_LEARN = 4;
 
 /**
- * The most skills anybody can carry.
+ * A fallback for callers that do not know the character's level.
  *
- * A sheet is read at a glance across a kitchen table. Past half a dozen it
- * stops being a character and starts being a spreadsheet — and the interesting
- * question ("what am I good at?") stops having an answer.
+ * This used to be the real cap, and the reasoning was sound while two skills
+ * were chosen at the builder and the rest arrived by accident: past half a dozen
+ * a sheet stops being a character and starts being a spreadsheet.
+ *
+ * It is no longer the cap. A choice arrives at every level after the second, so
+ * the room has to grow with her or the promise breaks around level six — see
+ * `skillRoom` in `lib/game/rules.ts`, which is what the turn pipeline asks.
+ * Kept only as the default argument below, where there is no level to hand it.
  */
 export const MAX_SKILLS = 6;
 

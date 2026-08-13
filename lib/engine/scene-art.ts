@@ -13,6 +13,7 @@ import { db, isUniqueViolation } from "@/lib/db";
 import { drawScene, ImagesUnavailableError, sceneArtPrompt } from "@/lib/ai/images";
 import { resolveImageConfig } from "@/lib/ai/settings";
 import { memberCampaignFilter } from "@/lib/game/access";
+import { needsGenerating } from "@/lib/game/scene-picture";
 
 export type SceneArtOutcome =
   | { ok: true; sceneId: string; drawn: boolean }
@@ -33,7 +34,12 @@ export async function ensureSceneArt(
 ): Promise<SceneArtOutcome> {
   const campaign = await db.campaign.findFirst({
     where: memberCampaignFilter(campaignId, userId),
-    select: { id: true, title: true, tone: true, storyline: { select: { title: true } } },
+    select: {
+      id: true,
+      title: true,
+      tone: true,
+      storyline: { select: { title: true, slug: true } },
+    },
   });
   if (!campaign) return { ok: false, reason: "Adventure not found." };
 
@@ -51,6 +57,21 @@ export async function ensureSceneArt(
   });
   if (!scene) return { ok: false, reason: "That chapter is not part of this adventure." };
   if (scene.image) return { ok: true, sceneId, drawn: false };
+
+  // The last gate before spending money and half a minute. A chapter with a
+  // picture from any better source — a child's drawing, the adventure's own
+  // chapter art, a file shipped with the game — must never reach a model, or a
+  // machine's guess ends up painted on top of somebody's felt-tip.
+  if (
+    !(await needsGenerating({
+      campaignId: campaign.id,
+      sceneId,
+      actIndex: scene.actIndex,
+      storylineSlug: campaign.storyline.slug,
+    }))
+  ) {
+    return { ok: true, sceneId, drawn: false };
+  }
 
   const config = await resolveImageConfig();
   if (!config) return { ok: false, reason: "Pictures are switched off for this table." };

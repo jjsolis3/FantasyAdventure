@@ -3,8 +3,22 @@
 import { useActionState, useMemo, useState } from "react";
 import { createCharacterAction, updateCharacterAction } from "@/lib/game/actions";
 import type { FormState } from "@/lib/auth/actions";
-import { AGE_BANDS, ARCHETYPES, PRONOUN_PRESETS, RACES, findArchetype, findRace } from "@/lib/game/character-options";
-import { SKILLS_PER_CHARACTER, type StatBlock, type StatKey } from "@/lib/game/rules";
+import {
+  AGE_BANDS,
+  ARCHETYPES,
+  PRONOUN_PRESETS,
+  RACES,
+  findArchetype,
+  findRace,
+  skillGroupsFor,
+} from "@/lib/game/character-options";
+import {
+  NEUTRAL_STAT,
+  SKILLS_PER_CHARACTER,
+  STATS,
+  type StatBlock,
+  type StatKey,
+} from "@/lib/game/rules";
 import { generateName } from "@/lib/game/names";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -33,7 +47,10 @@ export const BLANK_CHARACTER: CharacterDraft = {
   pronouns: "they/them",
   ageBand: "GROWNUP",
   description: "",
-  stats: { might: 3, wits: 3, heart: 3, spark: 3 },
+  // Every stat at the neutral value, which is also exactly the budget — so the
+  // builder opens on a legal spread with nothing left to spend, and a child who
+  // wants to change nothing can simply carry on.
+  stats: Object.fromEntries(STATS.map((stat) => [stat, NEUTRAL_STAT])) as StatBlock,
   skills: [],
 };
 
@@ -132,10 +149,12 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
     findArchetype(archetype)?.affinity ?? findRace(race)?.affinity ?? null;
 
   const suggested = useMemo(() => findArchetype(archetype)?.skills ?? [], [archetype]);
-  const skillPool = useMemo(() => {
-    const rest = ARCHETYPES.flatMap((entry) => entry.skills).filter((skill) => !suggested.includes(skill));
-    return [...suggested, ...[...new Set(rest)].sort()];
-  }, [suggested]);
+  // Grouped rather than one long row. This used to be a flat list of the
+  // twenty-four skills the callings suggest, which was already a wall; with
+  // fifty-six it would be an unreadable one, and the general pool exists so a
+  // girl can be good at swimming or drawing, which is no use if she cannot find
+  // them. Her own calling's three come first and stay green.
+  const skillGroups = useMemo(() => skillGroupsFor(archetype), [archetype]);
 
   const atSkillLimit = skills.length >= SKILLS_PER_CHARACTER;
 
@@ -287,28 +306,37 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {skillPool.map((skill) => {
-            const chosen = skills.includes(skill);
-            const isSuggested = suggested.includes(skill);
-            return (
-              <button
-                key={skill}
-                type="button"
-                onClick={() => toggleSkill(skill)}
-                disabled={!chosen && atSkillLimit}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-30 ${
-                  chosen
-                    ? "border-hearth-500 bg-hearth-700/50 text-hearth-100"
-                    : isSuggested
-                      ? "border-moss-600/50 text-moss-400 hover:border-moss-600"
-                      : "border-hearth-800/70 text-hearth-300 hover:border-hearth-700"
-                }`}
-              >
-                {skill}
-              </button>
-            );
-          })}
+        <div className="space-y-4">
+          {skillGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-1.5 text-xs uppercase tracking-wide text-hearth-500">
+                {group.label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {group.skills.map((skill) => {
+                  const chosen = skills.includes(skill);
+                  const isSuggested = suggested.includes(skill);
+                  return (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => toggleSkill(skill)}
+                      disabled={!chosen && atSkillLimit}
+                      className={`rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-30 ${
+                        chosen
+                          ? "border-hearth-500 bg-hearth-700/50 text-hearth-100"
+                          : isSuggested
+                            ? "border-moss-600/50 text-moss-400 hover:border-moss-600"
+                            : "border-hearth-800/70 text-hearth-300 hover:border-hearth-700"
+                      }`}
+                    >
+                      {skill}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
         {suggested.length > 0 ? (
           <p className="mt-3 text-sm text-hearth-400">

@@ -2,7 +2,13 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
-import { STATS, STAT_INFO, kindFromPerspective, RELATIONSHIP_LABELS } from "@/lib/game/rules";
+import {
+  RELATIONSHIP_LABELS,
+  STATS,
+  STAT_INFO,
+  kindFromPerspective,
+  statsOf,
+} from "@/lib/game/rules";
 import { AGE_BANDS } from "@/lib/game/character-options";
 import { LevelBadge } from "@/components/character/level-badge";
 import { waitingPointsFor } from "@/lib/game/waiting-points";
@@ -37,8 +43,9 @@ export default async function CharactersPage() {
     characters.map((character) => ({
       id: character.id,
       xp: character.xp,
-      stats: { might: character.might, wits: character.wits, heart: character.heart, spark: character.spark },
+      stats: statsOf(character),
       knackCount: character.knacks.length,
+      chosenSkillCount: character.skills.filter((skill) => skill.chosenAtLevel !== null).length,
       level: character.level,
     })),
   );

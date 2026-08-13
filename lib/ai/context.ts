@@ -14,7 +14,7 @@
  */
 
 import { STAT_INFO, STATS, RELATIONSHIP_LABELS, type RelationshipKind } from "@/lib/game/rules";
-import { signatureFor } from "@/lib/game/character-options";
+import { signaturesFor } from "@/lib/game/character-options";
 import { narrativeHints } from "@/lib/game/knacks";
 import { renderKnownPeople, type KnownPerson } from "@/lib/game/acquaintances";
 import { abilityHints } from "@/lib/game/practice";
@@ -141,13 +141,18 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
     // exact opposite. A storyteller reading "can always" has no reason ever to
     // say no, so the limit could not have held even if somebody had been
     // counting — and nobody was.
-    const signature = signatureFor(member.archetype);
+    //
+    // Plural since a second signature arrives at level 5, and listed one per
+    // line from there: two of these run to well over a line each, and a party
+    // of four at level five would otherwise be eight sentences run together.
     const spent = new Set(member.spentAbilities ?? []);
-    const own = signature
-      ? spent.has(signature.name)
-        ? ` Once a scene: ${signature.name} — ALREADY USED this scene; do not offer it again until the next one.`
-        : ` Once a scene: ${signature.name} — ${signature.narrationHint}`
-      : "";
+    const own = signaturesFor(member.archetype, member.level)
+      .map((signature) =>
+        spent.has(signature.name)
+          ? `\n  Once a scene: ${signature.name} — ALREADY USED this scene; do not offer it again until the next one.`
+          : `\n  Once a scene: ${signature.name} — ${signature.narrationHint}`,
+      )
+      .join("");
 
     // Knacks the story has to behave differently because of. The ones that are
     // only a number are left out — the dice have already applied those, and

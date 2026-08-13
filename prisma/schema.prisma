@@ -64,6 +64,8 @@ model User {
   sessions       AuthSession[]
   characters     Character[]
   campaigns      Campaign[]
+  uploadedImages CampaignImage[]
+  chapterImages  ChapterImage[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
   roundAnswers   RoundAnswer[]
@@ -158,13 +160,19 @@ model Character {
   /// Appearance and manner, in the player's own words. Feeds the GM prompt.
   description String?
 
-  // The four stats. Constrained by a point budget that is enforced in code
+  // The seven stats. Constrained by a point budget that is enforced in code
   // (see lib/game/rules.ts) rather than by the database, so the rule can change
-  // without a migration invalidating characters that were already legal.
+  // without a migration invalidating characters that were already legal — which
+  // is exactly what happened when Grace, Luck and Grit were added: the budget
+  // moved from 12 to 21 and every existing character stayed legal, because the
+  // default below is the same neutral value the budget is built from.
   might Int @default(3)
   wits  Int @default(3)
   heart Int @default(3)
   spark Int @default(3)
+  grace Int @default(3)
+  luck  Int @default(3)
+  grit  Int @default(3)
 
   /// Earned through play. Level is derived from xp, never set directly.
   xp    Int @default(0)
@@ -296,6 +304,14 @@ model CharacterSkill {
   /// Matches a skill key from lib/game/character-options.ts.
   name String
   rank Int    @default(1)
+
+  /// The level whose choice bought this, or null if she earned it by doing it.
+  ///
+  /// Both kinds sit in this table and should: a skill is a skill, and the sheet
+  /// does not sort them into two lists. But "how many of her level-up choices
+  /// has she spent" is unanswerable without knowing which is which, and a girl
+  /// who practised her way to four skills should not lose her picks for it.
+  chosenAtLevel Int?
   /// Progress toward the next rank, awarded when the skill is used well.
   xp   Int    @default(0)
 
@@ -608,6 +624,7 @@ model Campaign {
   rounds   TurnRound[]
   screens  ScreenPairing[]
   abilityUses AbilityUse[]
+  images      CampaignImage[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)
@@ -1265,4 +1282,99 @@ enum AbilityKind {
   KNACK
   /// Earned by practising one skill to rank 2 — Steady Hand. Once a chapter.
   RANK
+}
+
+
+/// What a picture the family made is a picture *of*.
+enum CampaignImageKind {
+  /// A chapter or a moment. Keyed by scene id.
+  SCENE
+  /// Somebody they met. Keyed by a normalised version of the name.
+  PERSON
+  /// Somewhere they have been, and might go back to.
+  PLACE
+}
+
+/// A picture somebody at this table drew, photographed and uploaded.
+///
+/// Scene art has always been available and always been *generated* — asked for
+/// from whatever drawing model the household configured, which most households
+/// have not configured, and which in any case produces one interpretation of a
+/// chapter rather than the family's own.
+///
+/// This is the other half, and the better one. A ten-year-old draws the
+/// beekeeper in felt-tip on a Tuesday and he is on the television that evening,
+/// with his own face, for the rest of the adventure. A generated picture is
+/// content; a drawn one is a memento, and the whole game is built around
+/// mementos.
+///
+/// One table for all three kinds rather than three tables, because the question
+/// asked of it is always the same: is there a picture of this thing, and which
+/// bytes are it. `kind` plus `key` is the address.
+model CampaignImage {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  kind CampaignImageKind
+  /// A scene id for SCENE, a normalised name for PERSON and PLACE.
+  key  String
+  /// What to write underneath: "The beekeeper", "The drowned schoolhouse".
+  label String
+
+  data     Bytes
+  mimeType String
+
+  /// Bumped on every replacement, so a picture cached on one child's phone is
+  /// never the one that has since been redrawn.
+  version Int @default(1)
+
+  /// Who added it. Kept so the gallery can say whose drawing it is, and set to
+  /// null rather than cascading if that account ever goes — the picture belongs
+  /// to the adventure now.
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, kind, key])
+  @@index([campaignId])
+}
+
+
+/// A picture of one chapter of one adventure, used by every family who plays it.
+///
+/// Keyed by the storyline's **slug and act number**, deliberately, rather than
+/// by the act's id. The seed deletes and recreates every act row on container
+/// start — see `prisma/seed.ts` — so art hung off an act id would be destroyed
+/// by the next redeploy, which is exactly when somebody would have just added
+/// it. Slug and number survive that, and they are also what the art-prompt
+/// sheet names its files after.
+///
+/// Distinct from `CampaignImage` on purpose. That is one family's drawing of
+/// their own chapter; this is the picture the adventure ships with, and every
+/// table that plays it sees the same one. When both exist the family's own wins
+/// — see `lib/game/scene-picture.ts`.
+model ChapterImage {
+  id String @id @default(cuid())
+
+  storylineSlug String
+  /// 1-based, matching StorylineAct.index.
+  actIndex      Int
+
+  data     Bytes
+  mimeType String
+
+  /// Bumped on replacement, so a redrawn chapter is not the old one on every
+  /// device that has already seen it.
+  version Int @default(1)
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storylineSlug, actIndex])
 }

@@ -43,7 +43,6 @@ import {
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
 import {
-  MAX_SKILLS,
   abilityUnlockedAt,
   hasRequirement,
   learnedMessage,
@@ -63,13 +62,16 @@ import {
 } from "@/lib/game/acquaintances";
 import {
   SKILL_XP_PER_USE,
+  STATS,
+  STAT_INFO,
   bondLevelFor,
   familyMoveByKey,
   kindFromPerspective,
   levelFor,
   movesUnlockedBetween,
   skillRankFor,
-  skillRoomForLevel,
+  skillRoom,
+  statsOf,
   type StatKey,
 } from "@/lib/game/rules";
 
@@ -247,6 +249,7 @@ async function spentAbilityNames(
   for (const member of campaign.party) {
     const owned = abilitiesFor({
       archetype: member.character.archetype,
+      level: member.character.level,
       knackKeys: member.character.knacks.map((knack) => knack.key),
       skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
     });
@@ -760,6 +763,7 @@ async function validateAbilitySpends(
 
     const owned = abilitiesFor({
       archetype: member.character.archetype,
+      level: member.character.level,
       knackKeys: member.character.knacks.map((knack) => knack.key),
       skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
     });
@@ -1103,9 +1107,8 @@ export async function playTurn(
         where: { id: check.characterId },
         select: { level: true },
       });
-      const room =
-        MAX_SKILLS +
-        skillRoomForLevel(learner.level) +
+      const room = skillRoom(
+        learner.level,
         extraSkillRoom(
           (
             await tx.characterKnack.findMany({
@@ -1113,7 +1116,8 @@ export async function playTurn(
               select: { key: true },
             })
           ).map((knack) => knack.key),
-        );
+        ),
+      );
       if (!readyToLearn(practice, skills, room)) continue;
 
       const name = skillNameFrom(practice.label);
@@ -1586,9 +1590,13 @@ export async function suggestActions(campaignId: string, userId: string, charact
   const calls = modelCalls(config);
 
   const character = member.character;
+  // Built from STATS rather than written out — the four-stat version of this
+  // line survived the seven-stat change unnoticed, which meant the suggestion
+  // prompt described a girl with no Grace, Luck or Grit at all.
+  const characterStats = statsOf(character);
   const summary =
     `${character.race} ${character.archetype}, ` +
-    `Might ${character.might} Wits ${character.wits} Heart ${character.heart} Spark ${character.spark}` +
+    STATS.map((stat) => `${STAT_INFO[stat].label} ${characterStats[stat]}`).join(" ") +
     (character.skills.length > 0
       ? `, good at ${character.skills.map((skill) => skill.name).join(", ")}`
       : "");

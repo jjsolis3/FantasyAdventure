@@ -15,6 +15,7 @@
 import { db } from "@/lib/db";
 import { statPointsUnspent, type StatBlock } from "@/lib/game/rules";
 import { knacksUnspent } from "@/lib/game/knacks";
+import { skillPicksUnspent } from "@/lib/game/skill-offer";
 
 export type WaitingPoint = { label: string; href: string };
 
@@ -24,6 +25,8 @@ export type CharacterState = {
   stats: StatBlock;
   level: number;
   knackCount: number;
+  /** Skills bought with a level-up pick, not earned by practising. */
+  chosenSkillCount: number;
 };
 
 export async function waitingPointsFor(
@@ -79,9 +82,15 @@ export async function waitingPointsFor(
     // because the destination is the same sheet either way.
     const statPoints = statPointsUnspent(character.stats, character.xp);
     const knacks = knacksUnspent(character.level, character.knackCount);
-    if (statPoints > 0 || knacks > 0) {
+    const skills = skillPicksUnspent({
+      level: character.level,
+      chosen: character.chosenSkillCount,
+    });
+
+    if (statPoints > 0 || knacks > 0 || skills > 0) {
       const parts = [
         statPoints > 0 ? `${statPoints} to spend` : null,
+        skills > 0 ? `${skills} skill${skills === 1 ? "" : "s"} to pick` : null,
         knacks > 0 ? `${knacks} knack${knacks === 1 ? "" : "s"} to choose` : null,
       ].filter(Boolean);
       found.push({ label: parts.join(" · "), href: `/characters/${character.id}` });

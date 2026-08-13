@@ -8,11 +8,23 @@ import { DeleteCharacter } from "@/components/character/delete-character";
 import { PortraitUpload } from "@/components/character/portrait-upload";
 import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
-import { kindFromPerspective, statPointsUnspent, type StatBlock } from "@/lib/game/rules";
+import {
+  kindFromPerspective,
+  statPointsUnspent,
+  statsOf,
+  type StatBlock,
+} from "@/lib/game/rules";
 import { Growth } from "@/components/character/growth";
 import { KnackOffer, KnacksHeld } from "@/components/character/knacks";
 import { knacksUnspent, offerFor } from "@/lib/game/knacks";
-import { signatureFor } from "@/lib/game/character-options";
+import { SkillOffer } from "@/components/character/skill-offer";
+import {
+  browsableSkills,
+  reasonFor,
+  skillPicksUnspent,
+  suggestedSkills,
+} from "@/lib/game/skill-offer";
+import { signaturesFor } from "@/lib/game/character-options";
 import { abilitiesFor, hasRequirement, lockedFor } from "@/lib/game/practice";
 import { capitalise, pronounsOf, toBe, toHave } from "@/lib/game/pronouns";
 
@@ -42,19 +54,19 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       },
       knacks: { orderBy: { createdAt: "asc" } },
       acquaintances: { orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }] },
-      practices: { select: { key: true, attempts: true } },
+      practices: { select: { key: true, label: true, attempts: true } },
     },
   });
   if (!character) notFound();
 
-  const stats: StatBlock = {
-    might: character.might,
-    wits: character.wits,
-    heart: character.heart,
-    spark: character.spark,
-  };
+  const stats: StatBlock = statsOf(character);
   const unspent = statPointsUnspent(stats, character.xp);
-  const signature = signatureFor(character.archetype);
+  const signatures = signaturesFor(character.archetype, character.level);
+  // Named on the sheet before she has it, because a thing you are working
+  // towards is worth more than a thing that appears without warning.
+  const stillToCome = signaturesFor(character.archetype).filter(
+    (signature) => signature.fromLevel > character.level,
+  );
 
   // Pronouns have always been stored and always been handed to the storyteller,
   // which is why the story got them right and these headings did not.
@@ -64,6 +76,18 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
   // The offer is a pure function of her own state, so it is the same three on
   // every page load — an offer that reshuffled on refresh would turn a decision
   // into a slot machine.
+  // The same idea for skills, and the reason both exist: a knack is a privilege
+  // the game picks three of, a skill is a thing she decides to be good at. One
+  // is being noticed; the other is having a plan.
+  const skillInput = {
+    archetype: character.archetype,
+    level: character.level,
+    held: character.skills.map((skill) => skill.name),
+    chosen: character.skills.filter((skill) => skill.chosenAtLevel !== null).length,
+    practices: character.practices,
+  };
+  const skillsWaiting = skillPicksUnspent(skillInput);
+
   const takenKnacks = character.knacks.map((knack) => knack.key);
   const knacksWaiting = knacksUnspent(character.level, takenKnacks.length);
   const offered = knacksWaiting > 0
@@ -151,6 +175,23 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         {/* A knack waiting to be chosen goes above everything. It is the reason
             she opened her page, and it is the only thing here that will not
             still be true tomorrow if she ignores it. */}
+        {skillsWaiting > 0 ? (
+          <Card>
+            <h2 className="font-display mb-1 text-xl text-hearth-100">
+              Something new to be good at
+            </h2>
+            <SkillOffer
+              characterId={character.id}
+              suggestions={suggestedSkills(skillInput).map((skill) => ({
+                skill,
+                reason: reasonFor(skill, skillInput),
+              }))}
+              browsable={browsableSkills(skillInput)}
+              unspent={skillsWaiting}
+            />
+          </Card>
+        ) : null}
+
         {offered.length > 0 ? (
           <Card>
             <h2 className="font-display mb-1 text-xl text-hearth-100">
@@ -182,15 +223,18 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
 
         {/* Also shown for a character with neither yet: her calling's signature
             is the one thing on this card she has from the moment she is made. */}
-        {signature || character.skills.length > 0 || character.inventory.length > 0 ? (
+        {signatures.length > 0 || character.skills.length > 0 || character.inventory.length > 0 ? (
           <Card>
             <h2 className="font-display mb-4 text-xl text-hearth-100">What they can do</h2>
 
             {/* The one thing her calling alone can do. Listed first, because
                 it is the only line on the sheet that is true of her and of
                 nobody else at the table. */}
-            {signature ? (
-              <div className="mb-4 rounded-lg border border-hearth-700/50 bg-hearth-800/20 p-3">
+            {signatures.map((signature) => (
+              <div
+                key={signature.name}
+                className="mb-4 rounded-lg border border-hearth-700/50 bg-hearth-800/20 p-3"
+              >
                 <p className="text-sm text-hearth-100">
                   {signature.name}
                   <span className="ml-2 text-xs tracking-wide text-hearth-400 uppercase">
@@ -198,6 +242,20 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
                   </span>
                 </p>
                 <p className="text-sm text-hearth-200/70">{signature.blurb}</p>
+              </div>
+            ))}
+
+            {/* What is still to come. A calling used to be finished the moment
+                it was picked; saying the second one is waiting at level five is
+                the whole reason it was worth adding. */}
+            {stillToCome.length > 0 ? (
+              <div className="mb-4 rounded-lg border border-dashed border-hearth-800 p-3">
+                {stillToCome.map((signature) => (
+                  <p key={signature.name} className="text-sm text-hearth-400">
+                    <span className="text-hearth-300">{signature.name}</span> — at level{" "}
+                    {signature.fromLevel}. {signature.blurb}
+                  </p>
+                ))}
               </div>
             ) : null}
 
@@ -367,12 +425,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
                 pronouns: character.pronouns,
                 ageBand: character.ageBand,
                 description: character.description ?? "",
-                stats: {
-                  might: character.might,
-                  wits: character.wits,
-                  heart: character.heart,
-                  spark: character.spark,
-                },
+                stats: statsOf(character),
                 skills: character.skills.map((skill) => skill.name),
               }}
             />
