@@ -279,12 +279,15 @@ function partyContext(campaign: LoadedCampaign, spent?: Map<string, string[]>) {
     ageBand: member.character.ageBand,
     description: member.character.description,
     level: member.character.level,
-    stats: {
-      might: member.character.might,
-      wits: member.character.wits,
-      heart: member.character.heart,
-      spark: member.character.spark,
-    } as Record<StatKey, number>,
+    // `statsOf`, and never a literal. This block was written out by hand with
+    // four stats and a cast, and it survived the move to seven — so Grace, Luck
+    // and Grit arrived at the dice as `undefined`, every modifier built from one
+    // came out NaN, and every comparison against NaN is false. A Grace check
+    // was therefore an automatic complication no matter what the die said,
+    // short of a natural 20. The cast is what hid it: `as Record<StatKey,
+    // number>` told the type checker the block was complete when three of its
+    // seven keys were missing.
+    stats: statsOf(member.character),
     skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
     knacks: member.character.knacks.map((knack) => knack.key),
     // Worked out here rather than in the context builder, which has no business
@@ -859,12 +862,10 @@ export async function playTurn(
       party: campaign.party.map((member) => ({
         id: member.characterId,
         name: member.character.name,
-        stats: {
-          might: member.character.might,
-          wits: member.character.wits,
-          heart: member.character.heart,
-          spark: member.character.spark,
-        } as Record<StatKey, number>,
+        // The same hand-written block, in the other place it survived. This one
+        // only reaches a prompt rather than the dice, so it was quieter: the
+        // storyteller was simply told nothing about three of her stats.
+        stats: statsOf(member.character),
         skills: member.character.skills.map((skill) => ({ name: skill.name, rank: skill.rank })),
         knacks: member.character.knacks.map((knack) => knack.key),
       })),
@@ -990,6 +991,11 @@ export async function playTurn(
             // Carried so the transcript can show what a Family Move did, long
             // after the turn that spent it.
             ...(check.move ? { move: check.move } : {}),
+            // Same reason, and one more: a lucky break is invisible in the
+            // numbers. The roll, the total and the target all still say she
+            // missed, so without this the card would read as a complication
+            // that inexplicably went fine.
+            ...(check.luck ? { luck: check.luck } : {}),
           },
         },
       });

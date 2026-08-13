@@ -3,6 +3,8 @@ import {
   STATS,
   STAT_CEILING,
   STAT_INFO,
+  LUCK_NUDGE_NOTE,
+  luckOdds,
   statModifier,
   statPointsUnspent,
   type StatBlock,
@@ -75,6 +77,12 @@ export function Growth({
 
                 <span className="text-sm text-hearth-400 tabular-nums">
                   {value} · {modifier >= 0 ? `+${modifier}` : modifier} to rolls
+                  {/* Luck alone carries a second number, because it alone does
+                      something on every check rather than on its own. Printed
+                      next to the modifier for the same reason the modifier is
+                      printed at all: a point is about to be spent here, and
+                      what it buys should be readable before it is spent. */}
+                  {stat === "luck" ? ` · ${luckOdds(value)}` : ""}
                 </span>
 
                 {yours && unspent > 0 && !full ? (
@@ -93,6 +101,7 @@ export function Growth({
               </div>
               <p className="mt-0.5 pl-[4.25rem] text-sm text-hearth-200/50">
                 {STAT_INFO[stat].blurb}
+                {stat === "luck" ? ` ${LUCK_NUDGE_NOTE}` : ""}
               </p>
             </li>
           );

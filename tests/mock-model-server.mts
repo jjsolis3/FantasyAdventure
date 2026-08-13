@@ -25,6 +25,17 @@ const FINALE = "And that was the end of it.";
 
 /** Set MOCK_UNSAFE=1 to make the first narration trip the safety guard. */
 const unsafeFirst = process.env.MOCK_UNSAFE === "1";
+
+/**
+ * Which stat the adjudicator asks for. Heart unless told otherwise.
+ *
+ * Overridable because a check is the only way into the dice, and three of the
+ * seven stats had never been through them: the party block feeding the pipeline
+ * was written by hand with four keys, so a Grace check reached `statModifier`
+ * as `undefined` and every roll came out NaN. Nothing caught it, because
+ * nothing had ever asked this mock for a Grace check.
+ */
+const stat = process.env.MOCK_STAT ?? "heart";
 let narrationCount = 0;
 
 /**
@@ -117,7 +128,7 @@ const server = createServer((request, response) => {
     } else if (prompt.includes("decide which attempts need a dice roll")) {
       // Fenced, with a preamble — exactly what a 7B model tends to emit.
       content =
-        'Sure, here you go:\n```json\n{"checks":[{"character":"Mira","stat":"heart","difficulty":"NORMAL",' +
+        `Sure, here you go:\n\`\`\`json\n{"checks":[{"character":"Mira","stat":"${stat}","difficulty":"NORMAL",` +
         '"intent":"Speak with Animals to hum to the frightened creature","practice":"humming"}],' +
         '"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
     } else if (prompt.includes("extract what should be remembered")) {

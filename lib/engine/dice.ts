@@ -12,7 +12,7 @@
  */
 
 import { randomInt } from "node:crypto";
-import { STAT_INFO, statModifier, type StatKey } from "@/lib/game/rules";
+import { STAT_INFO, luckChance, statModifier, type StatKey } from "@/lib/game/rules";
 import type { SignatureEffect } from "@/lib/game/character-options";
 
 export const DIFFICULTIES = {
@@ -98,12 +98,32 @@ export type CheckResult = CheckRequest & {
   move?: MoveEffect & { note: string };
   /** Set when a spent ability altered this check. */
   ability?: { name: string; note: string };
+  /** Set when her Luck lifted this check. */
+  luck?: { from: CheckOutcome; note: string };
 };
 
 /** Rolls a fair d20 using a cryptographic source, not Math.random. */
 export function rollD20(): number {
   return randomInt(1, 21);
 }
+
+/** 1–100, for the things that happen by chance rather than by roll. */
+export function rollPercent(): number {
+  return randomInt(1, 101);
+}
+
+/**
+ * What a lucky break turns a bad result into.
+ *
+ * One step, never two, and never past a plain success. A critical is the die's
+ * to give: a girl telling the table she rolled a natural 20 is the best thirty
+ * seconds in the game, and a *chance* handing out the same word would cheapen
+ * every one of them.
+ */
+const LUCK_LIFTS: Partial<Record<CheckOutcome, CheckOutcome>> = {
+  COMPLICATION: "PARTIAL",
+  PARTIAL: "SUCCESS",
+};
 
 export function resolveOutcome(roll: number, total: number, target: number): CheckOutcome {
   // Natural 20 and natural 1 always mean something, regardless of modifiers —
@@ -131,6 +151,15 @@ export function resolveCheck(
   roller: () => number = rollD20,
   move?: MoveEffect,
   spend?: AbilitySpend,
+  /**
+   * The chance Luck runs on, kept separate from `roller` on purpose.
+   *
+   * A test that hands in a fixed sequence of d20s is describing the dice on the
+   * table, and a hidden seventh roll drawn from the same sequence would shift
+   * every number after it. Separate here means every test written before Luck
+   * existed still rolls exactly what it says it rolls.
+   */
+  luckRoller: () => number = rollPercent,
 ): CheckResult {
   const modifier = statModifier(stats[request.stat]) + (request.knackBonus ?? 0);
   const skillBonus = request.skillRank ?? 0;
@@ -207,6 +236,29 @@ export function resolveCheck(
     attempt = { ...attempt, outcome: "SUCCESS" };
   }
 
+  // Last of everything, and only ever on a result that was going to disappoint.
+  //
+  // Late because Luck is the fallback, not a competitor: a Family Move or a
+  // spent ability that has already saved the roll should be what saved it, and
+  // a girl who spent something she had been holding on to must never be told
+  // afterwards that she got lucky instead.
+  //
+  // A natural 1 is left alone. "Nothing saves a 1" is a rule the whole table
+  // learns in one evening and enjoys, and a fumble that quietly works out is
+  // worth less than a fumble everybody groans at.
+  let luck: CheckResult["luck"];
+  const lift = LUCK_LIFTS[attempt.outcome];
+  if (lift && attempt.roll !== 1 && luckRoller() <= luckChance(stats.luck)) {
+    luck = {
+      from: attempt.outcome,
+      note:
+        attempt.outcome === "PARTIAL"
+          ? "Luck was with them: a near miss turned out fine after all"
+          : "Luck was with them: it went wrong, but not as wrong as it should have",
+    };
+    attempt = { ...attempt, outcome: lift };
+  }
+
   return {
     ...request,
     roll: attempt.roll,
@@ -215,6 +267,7 @@ export function resolveCheck(
     total: attempt.total,
     target,
     outcome: attempt.outcome,
+    ...(luck ? { luck } : {}),
     ...(move ? { move: { ...move, note } } : {}),
     ...(abilityNotes.length > 0
       ? { ability: { name: spend?.own?.name ?? "Helped", note: abilityNotes.join("; ") } }
@@ -236,12 +289,23 @@ export function describeResult(result: CheckResult): string {
 
   const moveLine = result.move ? `\n  FAMILY MOVE — ${result.move.moveName}: ${result.move.note}` : "";
 
+  // Spelled out as an instruction rather than a fact, because the failure mode
+  // is specific: told only the outcome, the storyteller writes a girl skilfully
+  // pulling off the thing she actually fumbled. What happened is that the world
+  // was kind — the branch held, the guard looked the other way — and that is a
+  // different sentence entirely.
+  const luckLine = result.luck
+    ? `\n  LUCK — this was heading for ${result.luck.from} and fortune intervened. Narrate the` +
+      ` *world* turning out kindly, not ${result.characterName} being clever or strong.`
+    : "";
+
   return (
     `${result.characterName} attempts: ${result.intent}\n` +
     `  ${STAT_INFO[result.stat].label} check` +
     (result.skillName ? ` (using ${result.skillName})` : "") +
     ` vs ${result.difficulty} (${result.target})\n` +
     `  rolled ${result.roll}${bonusText} = ${result.total} → ${outcomeText[result.outcome]}` +
+    luckLine +
     moveLine
   );
 }
