@@ -592,6 +592,150 @@ export function familyMoveByKey(key: string): FamilyMove | undefined {
   return FAMILY_MOVES.find((move) => move.key === key);
 }
 
+// ---- Whose move it is ------------------------------------------------------
+
+/**
+ * The three kinds of closeness these moves come out of.
+ *
+ * The game has stored a relationship kind since the beginning and used it for
+ * exactly one thing: a label on a sheet. Every pair unlocked the same five
+ * moves with the same five names, so *Stand Together* between two sisters and
+ * *Stand Together* between a father and his daughter were the same sentence —
+ * which is a shame, because they are not remotely the same thing.
+ *
+ * Three rather than seven, because seven sets of five names is thirty-five
+ * pieces of writing to keep good and most of them would be near-duplicates. A
+ * grandparent and a parent are the same move from a child's side; a best friend
+ * and a beloved dog are closer than either is to a sibling.
+ */
+export type MoveFlavour = "SIBLINGS" | "ELDER" | "FRIENDS";
+
+const FLAVOUR_OF: Record<RelationshipKind, MoveFlavour> = {
+  SIBLING: "SIBLINGS",
+  PARENT: "ELDER",
+  CHILD: "ELDER",
+  GRANDPARENT: "ELDER",
+  GRANDCHILD: "ELDER",
+  FRIEND: "FRIENDS",
+  // A companion animal is a friend who cannot talk, which is closer to a best
+  // friend than to anything else on this list.
+  PET: "FRIENDS",
+};
+
+export function flavourOf(kind: RelationshipKind): MoveFlavour {
+  return FLAVOUR_OF[kind] ?? "FRIENDS";
+}
+
+/**
+ * What each move is called, depending on who is using it.
+ *
+ * The mechanics are untouched — every one of these resolves through the same
+ * `move.key` in `resolveCheck`, and a family that renames nothing plays exactly
+ * the same game. What changes is the sentence a child reads on the button and
+ * the sentence the storyteller is handed, and those are the whole reason
+ * anybody remembers a move at all.
+ *
+ * First drafts, all fifteen. Worth reading aloud before they are final: a name
+ * the girls find funny is worth more than one that is precise.
+ */
+const MOVE_FLAVOURS: Record<MoveFlavour, Record<string, Omit<FamilyMove, "key" | "requires">>> = {
+  SIBLINGS: {
+    lend_a_hand: {
+      name: "Shove Over",
+      blurb: "Move up and let them in. Add +2 to what they are doing.",
+      narrationHint: "elbowed in beside them without being asked, the way siblings do",
+    },
+    stand_together: {
+      name: "Both of Us or Neither",
+      blurb: "Roll twice and keep the better roll.",
+      narrationHint: "refused to let them try it alone, so they went at it as a pair",
+    },
+    never_alone: {
+      name: "You Are Not Doing That Alone",
+      blurb: "If it goes wrong, try once more.",
+      narrationHint: "caught them mid-mistake and made them go again, immediately",
+    },
+    two_as_one: {
+      name: "You Always Do That",
+      blurb: "A near miss becomes a success.",
+      narrationHint: "knew exactly what they were about to do, because they always do that",
+    },
+    hearthlight: {
+      name: "Since We Were Small",
+      blurb: "It simply works. Once, when it matters most.",
+      narrationHint: "fell into something they have been doing together since they were small",
+    },
+  },
+
+  ELDER: {
+    lend_a_hand: {
+      name: "Here, Let Me",
+      blurb: "A steadier pair of hands. Add +2 to what they are doing.",
+      narrationHint: "steadied it for them without taking it over",
+    },
+    stand_together: {
+      name: "On My Shoulders",
+      blurb: "Roll twice and keep the better roll.",
+      narrationHint: "lifted them to where they could reach it themselves",
+    },
+    never_alone: {
+      name: "Go On. I Am Right Here.",
+      blurb: "If it goes wrong, try once more.",
+      narrationHint: "did not fix it, and did not leave — just told them to try again",
+    },
+    two_as_one: {
+      name: "I Knew You Would",
+      blurb: "A near miss becomes a success.",
+      narrationHint: "was not surprised for a second, and said so",
+    },
+    hearthlight: {
+      name: "Everything I Know",
+      blurb: "It simply works. Once, when it matters most.",
+      narrationHint: "handed over everything they know about this, all at once",
+    },
+  },
+
+  FRIENDS: {
+    lend_a_hand: {
+      name: "Boost",
+      blurb: "Cupped hands and a heave. Add +2 to what they are doing.",
+      narrationHint: "gave them a leg up without needing to be asked twice",
+    },
+    stand_together: {
+      name: "On Three",
+      blurb: "Roll twice and keep the better roll.",
+      narrationHint: "counted to three out loud and went at exactly the same moment",
+    },
+    never_alone: {
+      name: "Not Without You",
+      blurb: "If it goes wrong, try once more.",
+      narrationHint: "was not going anywhere without them, so they had another go",
+    },
+    two_as_one: {
+      name: "Same Idea",
+      blurb: "A near miss becomes a success.",
+      narrationHint: "had the very same idea at the very same second",
+    },
+    hearthlight: {
+      name: "Best in the World",
+      blurb: "It simply works. Once, when it matters most.",
+      narrationHint: "drew on being the best friend anybody at this table has",
+    },
+  },
+};
+
+/**
+ * A move, in the words that belong to this particular pair.
+ *
+ * Falls back to the plain version rather than throwing. A relationship kind
+ * that has no flavour yet, or a move added without one, should read a little
+ * generic — never break a button somebody is halfway through pressing.
+ */
+export function moveNamesFor(kind: RelationshipKind, move: FamilyMove): FamilyMove {
+  const flavoured = MOVE_FLAVOURS[flavourOf(kind)]?.[move.key];
+  return flavoured ? { ...move, ...flavoured } : move;
+}
+
 /** Which moves a given bond level has unlocked. */
 export function movesUnlockedAt(bondLevel: number): FamilyMove[] {
   return FAMILY_MOVES.filter((move) => move.requires <= bondLevel);

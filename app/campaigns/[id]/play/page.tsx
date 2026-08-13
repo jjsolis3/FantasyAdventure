@@ -7,7 +7,7 @@ import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
 import type { AvailableMove } from "@/components/play/family-move-picker";
-import { kindFromPerspective, movesUnlockedAt } from "@/lib/game/rules";
+import { kindFromPerspective, moveNamesFor, movesUnlockedAt } from "@/lib/game/rules";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import { currentRound } from "@/lib/game/rounds";
 import { questBoard } from "@/lib/game/quests";
@@ -134,24 +134,39 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         const helperName = member.character.name;
 
         // A move is between two people, and either can be the one helping.
+        // Named from each helper's own side. The two directions of one move
+        // can read differently — a daughter helping her father and a father
+        // helping his daughter are the same mechanic and not the same sentence.
+        const kindFromMember = kindFromPerspective(row, member.characterId);
+        const kindFromOther = kindFromPerspective(row, other.id);
+
         return movesUnlockedAt(row.bondLevel)
           .filter((move) => !spentKeys.has(`${row.id}:${move.key}`))
-          .flatMap((move) => [
-            {
-              key: move.key,
-              helperId: member.characterId,
-              helperName,
-              targetId: other.id,
-              targetName: other.name,
-            },
-            {
-              key: move.key,
-              helperId: other.id,
-              helperName: other.name,
-              targetId: member.characterId,
-              targetName: helperName,
-            },
-          ]);
+          .flatMap((move) => {
+            const asMember = moveNamesFor(kindFromMember, move);
+            const asOther = moveNamesFor(kindFromOther, move);
+
+            return [
+              {
+                key: move.key,
+                helperId: member.characterId,
+                helperName,
+                targetId: other.id,
+                targetName: other.name,
+                name: asMember.name,
+                blurb: asMember.blurb,
+              },
+              {
+                key: move.key,
+                helperId: other.id,
+                helperName: other.name,
+                targetId: member.characterId,
+                targetName: helperName,
+                name: asOther.name,
+                blurb: asOther.blurb,
+              },
+            ];
+          });
       }),
   );
 

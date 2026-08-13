@@ -11,6 +11,7 @@ import type { Prisma } from "@/generated/prisma/client.ts";
 import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/context";
 import {
   conversationPrompt,
+  listeningPrompt,
   nudgePrompt,
   openingPrompt,
   personalQuestsPrompt,
@@ -21,6 +22,7 @@ import {
   type ToneKey,
 } from "@/lib/ai/prompts";
 import {
+  listeningSchema,
   nudgeSchema,
   personalQuestsSchema,
   suggestionsSchema,
@@ -42,6 +44,7 @@ import {
   type PersonalAim,
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
+import { pairsIn } from "@/lib/game/together";
 import {
   advance,
   pressureAt,
@@ -73,6 +76,7 @@ import {
   STAT_INFO,
   bondLevelFor,
   familyMoveByKey,
+  moveNamesFor,
   kindFromPerspective,
   levelFor,
   movesUnlockedBetween,
@@ -651,6 +655,37 @@ async function fetchPersonalAims(
 }
 
 /**
+ * Who took up whose idea, from a turn spent talking.
+ *
+ * Its own call, and a small one — the conversation reply is prose and this is
+ * JSON, and a local model asked for both in one breath gives up the JSON every
+ * time.
+ *
+ * Silent on failure, and that silence leans the right way. This is the only
+ * thing standing between a conversation and a bond, so a model that could not
+ * read the exchange simply means nobody earned anything — which is a far better
+ * outcome than a bond nobody at the table would recognise having earned.
+ */
+async function fetchListening(
+  calls: ModelCalls,
+  said: { character: string; text: string }[],
+): Promise<{ who: string; to: string }[]> {
+  // Nobody can listen to themselves. Cheaper to notice here than to ask a model
+  // about a monologue and then throw its answer away.
+  if (new Set(said.map((line) => line.character)).size < 2) return [];
+
+  try {
+    const result = await requestStructured({
+      call: (hint) => calls.json(listeningPrompt({ said }), hint),
+      validate: validator(listeningSchema),
+    });
+    return result.value.listened;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The question the opening passage leaves the table with.
  *
  * Every other turn gets this out of extraction for free. The opening has no
@@ -721,6 +756,10 @@ async function validateFamilyMove(
   });
   if (!relationship || relationship.bondLevel < move.requires) return null;
 
+  // Flavoured from the helper's side, which is the side that matters: what the
+  // storyteller is handed should be what the girl pressing the button read.
+  const named = moveNamesFor(kindFromPerspective(relationship, choice.helperId), move);
+
   // Once per scene, so it stays a moment rather than a routine.
   const alreadyUsed = await db.familyMoveUse.findUnique({
     where: {
@@ -733,7 +772,7 @@ async function validateFamilyMove(
   });
   if (alreadyUsed) return null;
 
-  return { relationshipId: relationship.id, moveName: move.name };
+  return { relationshipId: relationship.id, moveName: named.name };
 }
 
 /**
@@ -1013,6 +1052,9 @@ export async function playTurn(
             // missed, so without this the card would read as a complication
             // that inexplicably went fine.
             ...(check.luck ? { luck: check.luck } : {}),
+            // Same reason as the two above: the total on the card includes the
+            // +1 and nothing else would say where it came from.
+            ...(check.together ? { together: check.together } : {}),
           },
         },
       });
@@ -1155,19 +1197,28 @@ export async function playTurn(
       milestones.push(learnedMessage(check.characterName, practice.label));
     }
 
-    // Bonds, from moments the extraction identified.
-    for (const moment of result.extraction.bondMoments) {
-      const from = campaign.party.find((member) => member.character.name === moment.from)?.characterId;
-      const to = campaign.party.find((member) => member.character.name === moment.to)?.characterId;
-      if (!from || !to) continue;
+    /**
+     * Deepens one tie by one, and says so if it opened a new move.
+     *
+     * Extracted because bonds now have three sources rather than one — a moment
+     * of care, a plan two of them acted on, and listening to each other while
+     * talking it over — and three copies of "find the row, add one, check what
+     * unlocked" is three places for the ladder to be climbed slightly
+     * differently.
+     *
+     * Returns whether anything happened, so a caller that needs to avoid paying
+     * the same pair twice in one turn can tell.
+     */
+    const deepen = async (aId: string, bId: string): Promise<boolean> => {
+      if (aId === bId) return false;
 
-      const [a, b] = from < to ? [from, to] : [to, from];
+      const [a, b] = aId < bId ? [aId, bId] : [bId, aId];
       const existing = await tx.relationship.findUnique({
         where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
       });
       // Only deepens ties the family already declared; the Game Master does not
       // get to invent relatives.
-      if (!existing) continue;
+      if (!existing) return false;
 
       const bondXp = existing.bondXp + 1;
       const bondLevel = bondLevelFor(bondXp);
@@ -1176,12 +1227,44 @@ export async function playTurn(
         data: { bondXp, bondLevel },
       });
 
-      const unlocked = movesUnlockedBetween(existing.bondLevel, bondLevel);
-      for (const move of unlocked) {
+      const nameOf = (id: string) =>
+        campaign.party.find((member) => member.characterId === id)?.character.name ?? "Someone";
+
+      for (const move of movesUnlockedBetween(existing.bondLevel, bondLevel)) {
+        const named = moveNamesFor(kindFromPerspective(existing, a), move);
         milestones.push(
-          `${moment.from} and ${moment.to} can now use ${move.name} together — ${move.blurb}`,
+          `${nameOf(a)} and ${nameOf(b)} can now use ${named.name} together — ${named.blurb}`,
         );
       }
+      return true;
+    };
+
+    // Paid at most once per pair per turn. Two sisters who both looked after
+    // each other *and* acted on one plan had a lovely turn; paying them twice
+    // for it would make the fastest way up the ladder a matter of stacking
+    // sources rather than of caring about each other.
+    const deepenedThisTurn = new Set<string>();
+    const deepenOnce = async (aId: string, bId: string) => {
+      const key = [aId, bId].sort().join("|");
+      if (deepenedThisTurn.has(key)) return;
+      deepenedThisTurn.add(key);
+      await deepen(aId, bId);
+    };
+
+    // Bonds, from moments the extraction identified.
+    for (const moment of result.extraction.bondMoments) {
+      const from = campaign.party.find((member) => member.character.name === moment.from)?.characterId;
+      const to = campaign.party.find((member) => member.character.name === moment.to)?.characterId;
+      if (!from || !to) continue;
+      await deepenOnce(from, to);
+    }
+
+    // And from a plan they acted on together — the second source these ties
+    // have ever had, and the one that has nothing to do with looking after
+    // anybody. Two people simply having the same good idea is worth as much as
+    // one of them being kind, and until now it was worth nothing at all.
+    for (const plan of result.plans) {
+      for (const [a, b] of pairsIn(plan)) await deepenOnce(a, b);
     }
 
     // Items the party is now carrying.
@@ -1556,6 +1639,12 @@ export async function talkTurn(
 
   const narration = reply.trim();
 
+  // Who took up whose idea. Its own small call, and a failure costs nothing:
+  // an unearned bond is worth less to this family than no bond at all, so the
+  // empty answer is the safe one in both directions.
+  const listened = await fetchListening(calls, named);
+  const milestones: string[] = [];
+
   await db.$transaction(async (tx) => {
     let ordinal = await nextOrdinal(scene.id);
 
@@ -1599,6 +1688,56 @@ export async function talkTurn(
       data: { sceneId: scene.id, ordinal: ordinal++, type: "NARRATION", content: narration },
     });
 
+    // Bonds, from listening rather than from looking after somebody.
+    //
+    // One pair, one scene, once — enforced by a unique key rather than by
+    // counting, so two phones sending conversations at the same moment cannot
+    // both pay the same pair. Without a ceiling the fastest way up this ladder
+    // would be to type "hi" at each other eleven times, which is exactly the
+    // opposite of what any of this is for.
+    for (const moment of listened) {
+      const who = campaign.party.find((m) => m.character.name === moment.who)?.characterId;
+      const to = campaign.party.find((m) => m.character.name === moment.to)?.characterId;
+      if (!who || !to || who === to) continue;
+
+      const [a, b] = who < to ? [who, to] : [to, who];
+      const relationship = await tx.relationship.findUnique({
+        where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
+      });
+      if (!relationship) continue;
+
+      // `createMany` with skipDuplicates, and the reason matters: the obvious
+      // version of this was a plain `create` with `.catch(() => null)` around
+      // it, which looks like it swallows the duplicate and does not. In
+      // Postgres a failed statement poisons the whole transaction — every
+      // command after it is refused until rollback — so the second conversation
+      // in a scene took the entire turn down with it. Caught by the end-to-end
+      // test on its first run, and invisible to every unit test, because it is
+      // a property of the database rather than of the code.
+      //
+      // This compiles to ON CONFLICT DO NOTHING: no error, nothing poisoned,
+      // and a count of zero is how "they already had one this scene" arrives.
+      const { count } = await tx.listeningBond.createMany({
+        data: [{ campaignId: campaign.id, sceneId: scene.id, relationshipId: relationship.id }],
+        skipDuplicates: true,
+      });
+      if (count === 0) continue;
+
+      const bondXp = relationship.bondXp + 1;
+      const bondLevel = bondLevelFor(bondXp);
+      await tx.relationship.update({
+        where: { id: relationship.id },
+        data: { bondXp, bondLevel },
+      });
+
+      for (const move of movesUnlockedBetween(relationship.bondLevel, bondLevel)) {
+        const named = moveNamesFor(kindFromPerspective(relationship, a), move);
+        milestones.push(
+          `${moment.who} and ${moment.to} can now use ${named.name} together — ${named.blurb}`,
+        );
+      }
+    }
+
     await tx.campaign.update({
       where: { id: campaign.id },
       data: { lastPlayedAt: new Date() },
@@ -1607,7 +1746,7 @@ export async function talkTurn(
 
   await logAiCalls(campaign.id, records, 0);
 
-  return { narration };
+  return { narration, milestones };
 }
 
 /**
@@ -1653,6 +1792,12 @@ export async function suggestActions(campaignId: string, userId: string, charact
           sceneText: lastNarration?.content ?? campaign.storyline.hook,
           characterName: character.name,
           characterSummary: summary,
+          // Everybody else travelling with her. Cheap to pass and the whole
+          // reason one of the three ideas can now be worth more than the other
+          // two put together.
+          others: campaign.party
+            .filter((entry) => entry.characterId !== characterId)
+            .map((entry) => entry.character.name),
         }),
         hint,
       ),

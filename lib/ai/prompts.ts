@@ -171,10 +171,27 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 Reply with ONLY this JSON, no other text:
 {
   "checks": [{"character": "<name>", "stat": "<one of ${STATS.join("|")}>", "difficulty": "EASY|NORMAL|HARD", "intent": "<what they are attempting>", "practice": "<one word for the kind of thing>"}],
-  "automatic": [{"character": "<name>", "effect": "<what simply happens>"}]
+  "automatic": [{"character": "<name>", "effect": "<what simply happens>"}],
+  "together": [{"characters": ["<name>", "<name>"], "plan": "<the one thing they are both doing>"}]
 }
 
-Every character must appear in exactly one of the two lists.
+Every character must appear in exactly one of the first two lists.
+
+"together" is for when two or more of them are working on ONE plan. You are the
+only part of this game that can see it — everybody writes their action on their
+own phone, and whether two of those actions are one idea is visible here and
+nowhere else. Look for it every turn:
+
+- One holds, lifts, distracts or covers while another does the thing.
+- Two of them go at the same problem from opposite sides.
+- One says the plan out loud and another carries it out.
+- They split up on purpose, to cover more ground between them.
+
+They do NOT have to say each other's names. "I boost her up" and "I reach for
+the latch" is one plan. Two people doing unrelated things in the same room is
+not — do not force it, and [] is the right answer most turns. A character may
+still appear in "checks" or "automatic" as well; this says nothing about whether
+anybody rolls, only about who is working with whom.
 
 "practice" is the KIND of thing being attempted, not this particular attempt:
 "climbing", "persuading", "sneaking", "listening", "mending", "swimming". One
@@ -433,6 +450,46 @@ Write only the story. No headings, no lists, no questions to the players.`;
 }
 
 /**
+ * Who listened to whom, read out of a conversation.
+ *
+ * The gap this fills is embarrassing in hindsight: talking it over is the most
+ * cooperative thing that happens at this table, and it earned *nothing*. Not a
+ * bond, not a point — the turn ran one model call, wrote a paragraph, and
+ * touched no state at all. Meanwhile the only source of bonds was a storyteller
+ * noticing that one character had comforted another, which rewards looking
+ * after somebody and never rewards listening to them.
+ *
+ * Asked as its own tiny call rather than folded into the conversation reply,
+ * for the same reason narration and extraction are separate everywhere else: a
+ * small local model asked for good dialogue *and* valid JSON gives up one of
+ * them, and it is always the JSON.
+ */
+export function listeningPrompt(options: {
+  said: { character: string; text: string }[];
+}): string {
+  return `Read this conversation between characters in a family story.
+
+WHAT THEY SAID:
+${options.said.map((line) => `- ${line.character}: ${line.text}`).join("\n")}
+
+Who actually listened to whom? Report a pair when one of them genuinely took up
+somebody else's idea — built on it, agreed to it, asked a real question about
+it, changed their mind because of it, or offered to help with it.
+
+Reply with ONLY this JSON, no other text:
+{"listened": [{"who": "<name>", "to": "<name>", "why": "<what they took up, in a few words>"}]}
+
+Rules:
+- Both names must be characters listed above, and they must be different people.
+- Talking at the same time is not listening. Two people stating their own plans
+  is not listening. There must be something one of them said that the other
+  visibly took on board.
+- Most conversations have one of these, some have none, and [] is a perfectly
+  good answer. Do not invent one to be helpful — a bond that was not earned is
+  worth less to this family than no bond at all.`;
+}
+
+/**
  * Three things a character might try, for a player who has gone blank.
  *
  * Deliberately grounded in the scene and in who this character is, because a
@@ -442,7 +499,26 @@ export function suggestionPrompt(options: {
   sceneText: string;
   characterName: string;
   characterSummary: string;
+  /**
+   * Everybody else at the table, so an idea can involve one of them.
+   *
+   * These three lines are read every time a child goes blank, which makes them
+   * the most-read text in the game — and until now every one of them was
+   * something to do alone. The prompt did not even say who else was there. A
+   * game that rewards working together and never once suggests it is teaching
+   * the lesson to nobody.
+   */
+  others?: string[];
 }): string {
+  const others = options.others?.filter((name) => name !== options.characterName) ?? [];
+
+  const togetherRule = others.length
+    ? `\nWith ${others.join(", ")} here, make ONE of the three an idea that needs somebody
+else — asking for a boost, holding something while they do the tricky part,
+going two ways at once, or talking it over first. Name them. The other two stay
+things ${options.characterName} can do alone.\n`
+    : "";
+
   return `A player is stuck and would like some ideas.
 
 THE SCENE:
@@ -450,11 +526,11 @@ ${options.sceneText}
 
 THE CHARACTER:
 ${options.characterName} — ${options.characterSummary}
-
+${others.length ? `\nWHO ELSE IS HERE:\n${others.map((name) => `- ${name}`).join("\n")}\n` : ""}
 Suggest three different things ${options.characterName} could try. Make them
 genuinely different from each other: one careful, one bold, one kind or
 curious. Each must fit this scene and suit this character.
-
+${togetherRule}
 Write each as ${options.characterName} would say it, in the first person, in
 under fifteen words. No numbering, no explanation.
 

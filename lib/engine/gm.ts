@@ -23,6 +23,14 @@ import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type
 import type { SignatureEffect } from "@/lib/game/character-options";
 import type { StatKey } from "@/lib/game/rules";
 import { knackBonusFor } from "@/lib/game/knacks";
+import {
+  TOGETHER_BONUS,
+  namesOf,
+  planFor,
+  resolvePlans,
+  togetherGuidance,
+  type SharedPlan,
+} from "@/lib/game/together";
 
 /** Everything the pipeline needs, with no database or HTTP knowledge. */
 export type TurnInput = {
@@ -104,6 +112,16 @@ export type TurnProgress =
 
 export type TurnResult = {
   adjudication: Adjudication;
+  /**
+   * Shared plans, already matched to real party members.
+   *
+   * Handed out rather than left for the caller to work out again from
+   * `adjudication.together`: resolving a claim is where the dropped names, the
+   * duplicates and the one-person "teams" get filtered, and two callers doing
+   * that separately is two chances to disagree about who was working with whom
+   * — one paying the dice bonus and the other paying the bond.
+   */
+  plans: SharedPlan[];
   checks: CheckResult[];
   narration: string;
   extraction: Extraction;
@@ -140,6 +158,25 @@ function skillFor(
     .sort((a, b) => b.rank - a.rank)[0];
 }
 
+/**
+ * What a shared plan adds to one person's check, phrased from her side.
+ *
+ * "with Rowan" rather than "with Mira and Rowan": she knows who she is. Naming
+ * her back to herself is the sort of small wrongness a ten-year-old spots
+ * immediately and a test never would.
+ */
+function togetherFor(
+  plans: SharedPlan[],
+  characterId: string,
+  name: string,
+): { together?: { with: string; bonus: number } } {
+  const plan = planFor(plans, characterId);
+  if (!plan) return {};
+
+  const others = { ...plan, names: plan.names.filter((entry) => entry !== name) };
+  return { together: { with: namesOf(others), bonus: TOGETHER_BONUS } };
+}
+
 export async function runTurn(
   input: TurnInput,
   calls: ModelCalls,
@@ -161,7 +198,7 @@ export async function runTurn(
 
   // ---- 1. Adjudicate -------------------------------------------------------
   onProgress?.({ type: "stage", stage: "adjudicating" });
-  let adjudication: Adjudication = { checks: [], automatic: [] };
+  let adjudication: Adjudication = { checks: [], automatic: [], together: [] };
   try {
     const result = await requestStructured({
       call: (hint) =>
@@ -188,11 +225,21 @@ export async function runTurn(
     adjudication = {
       checks: [],
       automatic: namedActions.map((action) => ({ character: action.character, effect: action.text })),
+      together: [],
     };
   }
 
   // ---- 2. Roll -------------------------------------------------------------
   onProgress?.({ type: "stage", stage: "rolling" });
+
+  // Resolved before any dice, because a shared plan changes every roll inside
+  // it and half the party rolling with the bonus and half without would be the
+  // worst possible version of this.
+  const plans = resolvePlans(
+    adjudication.together ?? [],
+    input.party.map((member) => ({ characterId: member.id, name: member.name })),
+  );
+
   const checks: CheckResult[] = [];
   for (const requested of adjudication.checks) {
     const member = findMember(input.party, requested.character);
@@ -212,6 +259,7 @@ export async function runTurn(
       // the right thing to file it under.
       practice: requested.practice?.trim() || requested.intent,
       knackBonus: knackBonusFor(member.knacks ?? [], requested.stat as StatKey),
+      ...togetherFor(plans, member.id, member.name),
     };
 
     // The move applies to the one check it was aimed at, and only if that
@@ -262,7 +310,14 @@ export async function runTurn(
       `${spend.characterName} uses ${spend.name} — this is happening, narrate it: ${spend.narrationHint}`,
   );
 
+  const shared = togetherGuidance(plans);
+
   const resolutions = [
+    // Ahead of the individual results, because it changes how all of them
+    // should be read. A passage told "Mira rolled well" and then "they were
+    // working together" writes the success first and remembers the sister
+    // afterwards, which is the wrong way round for the thing this rewards.
+    ...(shared ? [shared] : []),
     ...spends,
     ...checks.map(describeResult),
     ...adjudication.automatic.map((entry) => `${entry.character}: ${entry.effect} (happens automatically)`),
@@ -354,5 +409,5 @@ export async function runTurn(
     return from !== undefined && to !== undefined && from.id !== to.id;
   });
 
-  return { adjudication, checks, narration, extraction, diagnostics };
+  return { adjudication, plans, checks, narration, extraction, diagnostics };
 }

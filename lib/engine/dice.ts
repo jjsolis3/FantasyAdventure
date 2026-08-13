@@ -57,6 +57,16 @@ export type CheckRequest = {
    * are good at climbing", and a child deserves to be told which is which.
    */
   knackBonus?: number;
+  /**
+   * Somebody else is on the same plan.
+   *
+   * On the request rather than in `AbilitySpend` because it is not spent — it
+   * is a fact about how this attempt was made, true for everybody in the plan
+   * at once, and it costs nobody anything. `bonus` is carried rather than
+   * assumed so the dice never have to know what a shared plan is worth; see
+   * TOGETHER_BONUS.
+   */
+  together?: { with: string; bonus: number };
 };
 
 /**
@@ -170,8 +180,14 @@ export function resolveCheck(
   // rather than a correction bolted on after one of them.
   const lent = spend?.boost?.amount ?? 0;
 
+  // Working on the same plan as somebody else. Folded in beside the lent boost
+  // so it is part of every path through the Family Move switch below — a
+  // shared plan and a spent move can land on the same check, and they should
+  // simply add up rather than one quietly replacing the other.
+  const shared = request.together?.bonus ?? 0;
+
   const settle = (roll: number, bonus = 0) => {
-    const total = roll + modifier + skillBonus + bonus + lent;
+    const total = roll + modifier + skillBonus + bonus + lent + shared;
     return { roll, total, outcome: resolveOutcome(roll, total, target) };
   };
 
@@ -277,7 +293,7 @@ export function resolveCheck(
 
 /** A short line the Game Master is shown so it can narrate the right result. */
 export function describeResult(result: CheckResult): string {
-  const bonus = result.modifier + result.skillBonus;
+  const bonus = result.modifier + result.skillBonus + (result.together?.bonus ?? 0);
   const bonusText = bonus === 0 ? "" : bonus > 0 ? ` + ${bonus}` : ` − ${Math.abs(bonus)}`;
 
   const outcomeText: Record<CheckOutcome, string> = {
@@ -288,6 +304,15 @@ export function describeResult(result: CheckResult): string {
   };
 
   const moveLine = result.move ? `\n  FAMILY MOVE — ${result.move.moveName}: ${result.move.note}` : "";
+
+  // Said per check as well as once at the top of the narration prompt, because
+  // the two do different jobs: the block up there says a plan exists, and this
+  // says *this roll* was part of it — which is what stops a passage narrating
+  // one girl's success as though she managed it on her own.
+  const togetherLine = result.together
+    ? `\n  TOGETHER — with ${result.together.with}: +${result.together.bonus}. This attempt` +
+      ` was part of their shared plan; do not describe it as done alone.`
+    : "";
 
   // Spelled out as an instruction rather than a fact, because the failure mode
   // is specific: told only the outcome, the storyteller writes a girl skilfully
@@ -305,6 +330,7 @@ export function describeResult(result: CheckResult): string {
     (result.skillName ? ` (using ${result.skillName})` : "") +
     ` vs ${result.difficulty} (${result.target})\n` +
     `  rolled ${result.roll}${bonusText} = ${result.total} → ${outcomeText[result.outcome]}` +
+    togetherLine +
     luckLine +
     moveLine
   );

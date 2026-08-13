@@ -139,11 +139,16 @@ const server = createServer((request, response) => {
     } else if (prompt.includes("decide which attempts need a dice roll")) {
       content = idle
         ? '{"checks":[],"automatic":[{"character":"Mira","effect":"wanders about humming"},' +
-          '{"character":"Rowan","effect":"kicks a stone"}]}'
+          '{"character":"Rowan","effect":"kicks a stone"}],"together":[]}'
         : // Fenced, with a preamble — exactly what a 7B model tends to emit.
           `Sure, here you go:\n\`\`\`json\n{"checks":[{"character":"Mira","stat":"${stat}","difficulty":"NORMAL",` +
           '"intent":"Speak with Animals to hum to the frightened creature","practice":"humming"}],' +
-          '"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
+          '"automatic":[{"character":"Rowan","effect":"keeps watch"}],' +
+          '"together":[{"characters":["Mira","Rowan"],"plan":"one hums while the other keeps watch"}]}\n```';
+    } else if (prompt.includes("Who actually listened to whom")) {
+      // Two of them, so the listening bond has a real pair to land on.
+      content =
+        '{"listened":[{"who":"Rowan","to":"Mira","why":"took up her idea about the humming"}]}';
     } else if (prompt.includes("extract what should be remembered")) {
       // A story can be ended on purpose. Nothing else makes the mock report
       // actComplete, and the completion path — the ending, and the people who

@@ -626,6 +626,7 @@ model Campaign {
   invites PartyInvite[]
   scenes Scene[]
   familyMoveUses FamilyMoveUse[]
+  listeningBonds ListeningBond[]
   quests   Quest[]
   keepsakes Keepsake[]
   memories Memory[]
@@ -1040,6 +1041,32 @@ model FamilyMoveUse {
   createdAt  DateTime @default(now())
 
   @@unique([sceneId, relationshipId, moveKey])
+  @@index([campaignId])
+}
+
+/**
+ * One pair listening to each other, once per scene.
+ *
+ * Talking it over now deepens a bond, and this is the ceiling on it. Without a
+ * ceiling the fastest way up the ladder would be to open the conversation box
+ * and type "hi" at each other eleven times, which is precisely the opposite of
+ * the behaviour the feature exists to reward.
+ *
+ * Modelled on FamilyMoveUse — same shape, same once-per-scene unique key —
+ * because it is the same kind of fact: a thing this pair has already had out of
+ * this scene.
+ */
+model ListeningBond {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  sceneId        String
+  relationshipId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([sceneId, relationshipId])
   @@index([campaignId])
 }
 

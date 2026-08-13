@@ -84,6 +84,7 @@ carrying it mean anything.
 | ✅ | **M12** A second signature move for every calling, at level 5 |
 | ✅ | **M12** Luck that bends the dice on every roll, not just its own checks |
 | ✅ | **M12** An act clock, so going in circles costs something and being stuck does not |
+| ✅ | **M12** Bonds from working together and from listening, not only from being looked after |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1142,6 +1143,70 @@ worth more than a thing that appears without warning.
 The adjudication prompt lists the stats one per line with a *pick this when*
 for each. Seven options is harder for a small local model than four, and Luck
 and Grit are the least obvious of them.
+
+### Bonds that count more than kindness
+
+Bonds only ever rose from one thing: a `bondMoment`, which the storyteller is
+told to report *"only when one genuinely helped, protected, encouraged or
+comforted the other."* One-directional care — standing between her and the
+noise. Lovely, and about half of what actually happens at a table.
+
+The other half was invisible. **Talking it over earned nothing at all** — the
+conversation turn made one model call, wrote a paragraph, and touched no state
+whatsoever, so the single most cooperative thing an evening produces was worth
+exactly zero. And **two girls executing one plan looked like two unrelated
+things** that happened in the same room, because adjudication read every action
+on its own.
+
+Three changes, and a fourth so the game suggests what it rewards.
+
+**Together.** The adjudicator now reports when two or more actions serve one
+plan — *"I boost her up"* and *"I reach for the latch"*. Everyone in it rolls at
+**+1**, every pair in it earns a bond, and both the dice card and the storyteller
+are told, so one plan is narrated as one thing two people did rather than two
+things that happened near each other.
+
+It cannot be claimed, only done. There is no button: two children have to write
+two actions that genuinely serve one plan. If they end up doing that every turn,
+that is not an exploit, it is the entire point.
+
+The bonus is deliberately **smaller than Lend a Hand's +2**. That is a Family
+Move — earned through a bond, spent once a scene. This is free, repeatable and
+available on the first evening, and if it paid the same then the moves a family
+works up to would be worth less than the thing anybody can do for nothing.
+
+**Listening.** After a conversation, a small second call asks who genuinely took
+up whose idea — built on it, agreed to it, changed their mind because of it.
+Those pairs earn a bond, **capped at one per pair per scene**. Without the cap
+the fastest route up the ladder would be typing "hi" at each other eleven times,
+which is the exact opposite of the point.
+
+This also pairs with the act clock: the clock only moves on action turns, so
+**talking is the untaxed way to get unstuck**. Being stuck costs you; conferring
+does not.
+
+**Moves that know whose they are.** The seven relationship kinds had been stored,
+labelled and then used for nothing — sisters, a father and a daughter, and two
+best friends all unlocked the identical five moves with the identical five
+names. They now fall into three flavours, same mechanics, different words:
+
+| | Siblings | A grown-up and a child | Friends |
+|---|---|---|---|
+| `lend_a_hand` | Shove Over | Here, Let Me | Boost |
+| `stand_together` | Both of Us or Neither | On My Shoulders | On Three |
+| `never_alone` | You Are Not Doing That Alone | Go On. I Am Right Here. | Not Without You |
+| `two_as_one` | You Always Do That | I Knew You Would | Same Idea |
+| `hearthlight` | Since We Were Small | Everything I Know | Best in the World |
+
+Everything still resolves through `move.key`, so a family that renames nothing
+plays exactly the same game. Named from the *helper's* side, so the two
+directions of one move can read differently — a daughter helping her father is
+not the same sentence as a father helping his daughter.
+
+**And the hints point at each other.** The three ideas offered to a stuck player
+were solo-only; the prompt did not even mention who else was in the party. When
+somebody else is there, one of the three is now an idea that needs them, by
+name. You cannot reward teamwork the girls were never shown.
 
 ### The act clock
 
