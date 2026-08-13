@@ -16,6 +16,7 @@ export function CampaignSettingsForm({
   readingLevel,
   pacing,
   inputMode,
+  diceMode,
 }: {
   campaignId: string;
   title: string;
@@ -23,6 +24,7 @@ export function CampaignSettingsForm({
   readingLevel: string;
   pacing: string;
   inputMode: string;
+  diceMode: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(updateCampaignSettingsAction, null);
   const saved = state !== null && state.error === "";
@@ -54,6 +56,20 @@ export function CampaignSettingsForm({
         defaultValue={inputMode}
         options={INPUT_MODE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
         hint="Changing this puts away any round the party is part-way through answering."
+      />
+
+      <SelectField
+        label="Who rolls the dice?"
+        name="diceMode"
+        defaultValue={diceMode}
+        options={[
+          { value: "SERVER", label: "The app rolls" },
+          { value: "TABLE", label: "We roll our own and type in what we got" },
+        ]}
+        hint={
+          "With your own dice the story stops and asks — one d20 each, and the app still does " +
+          "all the adding up. Switch back any time the dice are in another room."
+        }
       />
 
       <SelectField

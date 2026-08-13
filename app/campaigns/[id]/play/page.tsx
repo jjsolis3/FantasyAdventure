@@ -7,7 +7,7 @@ import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
 import type { AvailableMove } from "@/components/play/family-move-picker";
-import { kindFromPerspective, movesUnlockedAt } from "@/lib/game/rules";
+import { kindFromPerspective, moveNamesFor, movesUnlockedAt } from "@/lib/game/rules";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import { currentRound } from "@/lib/game/rounds";
 import { questBoard } from "@/lib/game/quests";
@@ -17,6 +17,8 @@ import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
 import { scenePicture } from "@/lib/game/scene-picture";
+import { PressureClock } from "@/components/play/pressure-clock";
+import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 
@@ -132,24 +134,39 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         const helperName = member.character.name;
 
         // A move is between two people, and either can be the one helping.
+        // Named from each helper's own side. The two directions of one move
+        // can read differently — a daughter helping her father and a father
+        // helping his daughter are the same mechanic and not the same sentence.
+        const kindFromMember = kindFromPerspective(row, member.characterId);
+        const kindFromOther = kindFromPerspective(row, other.id);
+
         return movesUnlockedAt(row.bondLevel)
           .filter((move) => !spentKeys.has(`${row.id}:${move.key}`))
-          .flatMap((move) => [
-            {
-              key: move.key,
-              helperId: member.characterId,
-              helperName,
-              targetId: other.id,
-              targetName: other.name,
-            },
-            {
-              key: move.key,
-              helperId: other.id,
-              helperName: other.name,
-              targetId: member.characterId,
-              targetName: helperName,
-            },
-          ]);
+          .flatMap((move) => {
+            const asMember = moveNamesFor(kindFromMember, move);
+            const asOther = moveNamesFor(kindFromOther, move);
+
+            return [
+              {
+                key: move.key,
+                helperId: member.characterId,
+                helperName,
+                targetId: other.id,
+                targetName: other.name,
+                name: asMember.name,
+                blurb: asMember.blurb,
+              },
+              {
+                key: move.key,
+                helperId: other.id,
+                helperName: other.name,
+                targetId: member.characterId,
+                targetName: helperName,
+                name: asOther.name,
+                blurb: asOther.blurb,
+              },
+            ];
+          });
       }),
   );
 
@@ -327,6 +344,16 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                 />
               </div>
             ) : null}
+
+            {/* Above the recap and below the picture, where the eye lands on
+                the way to the story. Renders nothing until it has moved, so a
+                party getting on with it never sees a clock at all. */}
+            <div className="mb-6">
+              <PressureClock
+                name={campaign.storyline.pressureName}
+                {...pressureAt(campaign.pressure, pressureLimit(campaign.pacing))}
+              />
+            </div>
 
             {recap.length > 0 ? (
               <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">

@@ -46,6 +46,32 @@ export const adjudicationSchema = z.object({
     )
     .max(8)
     .default([]),
+
+  /**
+   * Two or more of them acting on one plan.
+   *
+   * Read out of the actions themselves rather than declared by anybody: a girl
+   * who writes "I boost Rowan up" and a brother who writes "I reach for the
+   * latch" have coordinated, and nothing in the game could see it before this.
+   *
+   * Which is why it cannot be gamed by *claiming* teamwork — there is no button
+   * for it. They have to actually write two actions that serve one plan, and if
+   * they end up doing that every turn then the feature has done its job.
+   *
+   * Defaults to empty, so a model that never uses it simply gives a party the
+   * game it had last week rather than one that is broken.
+   */
+  together: z
+    .array(
+      z.object({
+        /** Two or more party names. One name is not a team. */
+        characters: z.array(z.string().min(1)).min(2).max(6),
+        /** The single plan they are both serving, for the card and the prose. */
+        plan: z.string().min(1).max(200),
+      }),
+    )
+    .max(3)
+    .default([]),
 });
 
 export type Adjudication = z.infer<typeof adjudicationSchema>;
@@ -152,6 +178,18 @@ export const extractionSchema = z.object({
    */
   whatNow: z.string().max(160).nullish(),
 
+  /**
+   * Whether the party got anywhere at all this turn.
+   *
+   * Defaults to **true**, which is the whole point of the default. This is the
+   * second opinion behind the act clock, and the clock only moves when nothing
+   * measurable happened *and* this is false. A model that omits the field, or
+   * emits something unparseable, therefore lands on "they got somewhere" and
+   * costs the party nothing — an unfair tick is felt immediately by a child,
+   * and a missed one is invisible.
+   */
+  movedForward: z.coerce.boolean().default(true),
+
   /** True when the party has clearly finished what this act was about. */
   actComplete: z.coerce.boolean().default(false),
   /** True when the scene has changed place or time enough to close it. */
@@ -170,6 +208,26 @@ export type Extraction = z.infer<typeof extractionSchema>;
  */
 export const nudgeSchema = z.object({
   whatNow: z.string().min(1).max(160),
+});
+
+/**
+ * Who took up whose idea, from a turn spent talking.
+ *
+ * Empty by default and empty on failure, which is the right direction for a
+ * bond: one that was not earned is worth less to this family than none at all,
+ * and a conversation the model could not read should cost nobody anything.
+ */
+export const listeningSchema = z.object({
+  listened: z
+    .array(
+      z.object({
+        who: z.string().min(1),
+        to: z.string().min(1),
+        why: z.string().max(200).nullish(),
+      }),
+    )
+    .max(6)
+    .default([]),
 });
 
 /**

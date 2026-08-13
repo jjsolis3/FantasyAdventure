@@ -38,10 +38,20 @@ test("at the expected length, it is told to start closing", () => {
   assert.match(guidance, /drawing this act toward its close/i);
 });
 
-test("well past the expected length, it is told to wrap up", () => {
+test("well past the expected length, it presses rather than wraps up", () => {
   const guidance = pacingGuidance({ pacing: "BRISK", sceneInAct: 9, actIndex: 2, actCount: 3 });
   assert.match(guidance, /run well past/i);
-  assert.match(guidance, /do not cut/i, "wrapping up must not mean cutting a moment short");
+
+  // This used to say "look for an honest way to finish it soon", which was an
+  // open invitation to the one thing that ruins the game: handed a stuck party,
+  // the cheapest honest-looking exit is to tell them the answer. An overrunning
+  // act is a reason to raise the pressure, never to lower the drawbridge.
+  assert.match(guidance, /raise the pressure/i);
+  assert.match(guidance, /never by giving the party the answer/i);
+  assert.doesNotMatch(guidance, /finish it soon/i);
+
+  // And an act still ends when it ends, not when the clock says so.
+  assert.match(guidance, /genuinely met/i, "an act must not be ended on a count");
 });
 
 test("guidance never demands an ending outright", () => {

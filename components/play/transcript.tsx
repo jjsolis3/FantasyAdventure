@@ -32,6 +32,8 @@ export type DiceDetail = {
   move?: { moveName: string; note: string } | null;
   /** Present when her Luck lifted this check. */
   luck?: { from: string; note: string } | null;
+  /** Present when this attempt was part of a plan shared with somebody. */
+  together?: { with: string; bonus: number } | null;
 };
 
 const OUTCOME_STYLE: Record<DiceDetail["outcome"], { label: string; className: string }> = {
@@ -44,7 +46,10 @@ const OUTCOME_STYLE: Record<DiceDetail["outcome"], { label: string; className: s
 /** One dice check, shown the way a table would read it aloud. */
 export function DiceCard({ dice, animate = false }: { dice: DiceDetail; animate?: boolean }) {
   const style = OUTCOME_STYLE[dice.outcome];
-  const bonus = dice.modifier + dice.skillBonus;
+  // The together bonus is counted in, or the card's own arithmetic stops
+  // working: the total already includes it, so leaving it out of the shown
+  // bonus leaves a card whose numbers do not add up, and these girls check.
+  const bonus = dice.modifier + dice.skillBonus + (dice.together?.bonus ?? 0);
 
   // A short tumble before settling. Purely for the ten-year-olds, and skipped
   // entirely for rolls already in the transcript.
@@ -84,6 +89,19 @@ export function DiceCard({ dice, animate = false }: { dice: DiceDetail; animate?
         </span>
       </div>
       <p className="mt-1.5 text-sm opacity-80">{dice.intent}</p>
+
+      {/* First of the three, because it is the only one that was true before
+          the dice were even picked up — and because it is the line this table
+          most wants to see. */}
+      {dice.together ? (
+        <p className="mt-2 border-t border-current/20 pt-2 text-sm">
+          <span className="font-medium">Together</span>
+          <span className="opacity-80">
+            {" "}
+            — with {dice.together.with}: +{dice.together.bonus}
+          </span>
+        </p>
+      ) : null}
 
       {/* Above the Family Move line, in the order the two actually happened.
           Worth showing at all because the numbers on this card contradict the

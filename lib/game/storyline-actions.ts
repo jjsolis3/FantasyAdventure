@@ -40,6 +40,7 @@ const storylineSchema = z.object({
   minPlayers: z.coerce.number().int().min(1).max(8),
   maxPlayers: z.coerce.number().int().min(1).max(8),
   estimatedScenes: z.coerce.number().int().min(3).max(60),
+  pressureName: z.string().trim().min(1, "What gets worse while they dither?").max(60),
   isActive: z.string().optional(),
 });
 
@@ -104,6 +105,7 @@ export async function saveStorylineAction(_prev: FormState, formData: FormData):
     minPlayers: formData.get("minPlayers"),
     maxPlayers: formData.get("maxPlayers"),
     estimatedScenes: formData.get("estimatedScenes"),
+    pressureName: formData.get("pressureName"),
     isActive: formData.get("isActive") ?? undefined,
   });
   if (!parsed.success) {
@@ -223,6 +225,7 @@ export async function duplicateStorylineAction(formData: FormData): Promise<void
       minPlayers: source.minPlayers,
       maxPlayers: source.maxPlayers,
       estimatedScenes: source.estimatedScenes,
+      pressureName: source.pressureName,
       // Copies start switched off, so an unedited duplicate never appears in
       // the setup list next to the one it was copied from.
       isActive: false,

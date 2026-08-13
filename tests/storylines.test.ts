@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { storylines } from "../prisma/storylines.ts";
+import { DEFAULT_PRESSURE_NAME } from "../lib/game/pressure.ts";
 
 /**
  * Guards on the shipped adventures.
@@ -74,4 +75,31 @@ test("storylines: no chapter is a shopping list", () => {
     const seeks = "seeks" in act && Array.isArray(act.seeks) ? (act.seeks as string[]) : [];
     assert.ok(seeks.length <= 3, `${act.story}, chapter ${act.index} asks for ${seeks.length}`);
   }
+});
+
+test("storylines: every adventure names its own clock", () => {
+  // The generic fallback exists so a half-written adventure works at all, and
+  // it is exactly what a shipped one must never use. "The clock: 3 of 6" is a
+  // rule a child reads; "The fog: 3 of 6" is a story she is inside of, and the
+  // whole mechanic teaches itself through the difference.
+  for (const story of storylines) {
+    assert.ok(story.pressureName, `${story.title} has no clock`);
+    assert.notEqual(
+      story.pressureName,
+      DEFAULT_PRESSURE_NAME,
+      `${story.title} still uses the placeholder clock`,
+    );
+    assert.ok(
+      story.pressureName.length <= 40,
+      `${story.title}: "${story.pressureName}" is too long to sit beside a scene title`,
+    );
+  }
+});
+
+test("storylines: no two adventures share a clock", () => {
+  // Not a correctness rule — a coincidence would work fine. It is here because
+  // a duplicate almost always means one was pasted and never rewritten, and a
+  // clock borrowed from another story will not match anything the table sees.
+  const names = storylines.map((story) => story.pressureName.toLocaleLowerCase());
+  assert.equal(new Set(names).size, names.length, JSON.stringify(names));
 });

@@ -13,6 +13,16 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Who throws the dice.
+enum DiceMode {
+  /// The app rolls. Right when the dice are in another room, or nobody owns any.
+  SERVER
+  /// The table rolls its own and types the number in. See lib/game/table-dice.ts
+  /// for what this trades away and why it is the correct trade for one family
+  /// sitting round one table.
+  TABLE
+}
+
 /// How gentle the Game Master should be. Set per storyline as a default,
 /// later overridden per campaign.
 enum Tone {
@@ -594,6 +604,11 @@ model Campaign {
   /// Shaped like an invite code so the two read the same way out loud.
   joinCode String @unique
 
+  /// Whether the girls roll their own dice or the app rolls for them. Changeable
+  /// mid-adventure, because whether anybody remembered to bring the dice is not
+  /// something to be decided once and lived with.
+  diceMode DiceMode @default(SERVER)
+
   /// Whether the party shares a screen or answers from their own devices.
   /// Changeable at any point — a family that plays round the table on Sunday
   /// and from three bedrooms on Wednesday should not need two adventures.
@@ -609,6 +624,15 @@ model Campaign {
   /// 1-based; tracks which act of the storyline the party is working through.
   currentActIndex Int            @default(1)
 
+  /// How far the act's clock has run — see lib/game/pressure.ts.
+  ///
+  /// Rises on a turn where the party got nowhere and nobody even rolled, and
+  /// stays put when they tried something and the dice were unkind. Zeroed when
+  /// it fills and the story turns, and again whenever an act ends: a new act is
+  /// a new problem, and carrying a full clock into it would punish a party for
+  /// something they already paid for.
+  pressure        Int            @default(0)
+
   /// Durable facts the Game Master accumulates — locations, NPCs meets, plot
   /// threads. Empty until the engine lands in M4.
   worldState Json @default("{}")
@@ -617,6 +641,8 @@ model Campaign {
   invites PartyInvite[]
   scenes Scene[]
   familyMoveUses FamilyMoveUse[]
+  listeningBonds ListeningBond[]
+  pendingRoll    PendingRoll?
   quests   Quest[]
   keepsakes Keepsake[]
   memories Memory[]
@@ -1034,6 +1060,68 @@ model FamilyMoveUse {
   @@index([campaignId])
 }
 
+/**
+ * One pair listening to each other, once per scene.
+ *
+ * Talking it over now deepens a bond, and this is the ceiling on it. Without a
+ * ceiling the fastest way up the ladder would be to open the conversation box
+ * and type "hi" at each other eleven times, which is precisely the opposite of
+ * the behaviour the feature exists to reward.
+ *
+ * Modelled on FamilyMoveUse — same shape, same once-per-scene unique key —
+ * because it is the same kind of fact: a thing this pair has already had out of
+ * this scene.
+ */
+model ListeningBond {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  sceneId        String
+  relationshipId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([sceneId, relationshipId])
+  @@index([campaignId])
+}
+
+/**
+ * A turn stopped halfway, waiting for the table to throw its dice.
+ *
+ * The pipeline is one long run — adjudicate, roll, narrate, extract — and real
+ * dice cut it in half: the storyteller has to ask before it can carry on. So
+ * everything needed to finish sits here until the numbers arrive.
+ *
+ * Stored rather than held in memory because the gap is a person picking a die
+ * off the floor. A phone that locks, a browser that reloads, a parent who
+ * wanders off to fetch the popcorn — none of those should cost the table its
+ * turn.
+ *
+ * One per adventure, replaced rather than queued: a table cannot be halfway
+ * through two turns at once, and the newest ask is always the real one.
+ */
+model PendingRoll {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  sceneId String
+
+  /// Everything the turn needs to resume: the declared actions, the family move
+  /// and the adjudication already paid for. Kept whole rather than normalised
+  /// because nothing ever queries inside it — it is written once, read once and
+  /// deleted.
+  payload Json
+
+  /// What the table is being asked for, ready to render. Separate from the
+  /// payload so a phone can show the question without being handed the turn's
+  /// entire innards.
+  awaited Json
+
+  createdAt DateTime @default(now())
+}
+
 enum AiProviderKind {
   /// Anything speaking OpenAI's /v1/chat/completions: Ollama, vLLM, LM Studio,
   /// OpenAI itself, OpenRouter, Groq, Together, DeepSeek.
@@ -1116,6 +1204,16 @@ model Storyline {
   minPlayers      Int            @default(2)
   maxPlayers      Int            @default(5)
   estimatedScenes Int            @default(12)
+
+  /// What this adventure's clock is called, in the story's own words.
+  ///
+  /// "The fog", "The stars going out", "Three days to the festival". Shown to
+  /// the table as it fills and handed to the storyteller as the name of the
+  /// thing that gets worse when nobody is getting anywhere. Named per adventure
+  /// rather than generically because "pressure: 4/8" teaches a child a rule,
+  /// and "the fog has reached the bakery" teaches her a story.
+  pressureName    String         @default("The clock")
+
   isActive        Boolean        @default(true)
 
   /// True once a person has written or edited this adventure in the app.

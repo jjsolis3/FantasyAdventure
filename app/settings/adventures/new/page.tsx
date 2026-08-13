@@ -34,6 +34,7 @@ export default async function NewAdventurePage() {
             minPlayers: 2,
             maxPlayers: 5,
             estimatedScenes: 12,
+            pressureName: "The clock",
             // Off until it is finished. Nothing half-written should appear in
             // the list a family picks from on a Friday evening.
             isActive: false,

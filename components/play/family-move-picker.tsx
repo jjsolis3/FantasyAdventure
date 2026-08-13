@@ -1,7 +1,5 @@
 "use client";
 
-import { FAMILY_MOVES } from "@/lib/game/rules";
-
 /** A move that is unlocked and unspent for this scene. */
 export type AvailableMove = {
   key: string;
@@ -9,6 +7,17 @@ export type AvailableMove = {
   helperName: string;
   targetId: string;
   targetName: string;
+  /**
+   * What this pair calls this move, and what it does in their words.
+   *
+   * Resolved on the server from the relationship kind rather than looked up
+   * here, because the flavour depends on who these two are to each other and
+   * the picker only knows their names. Two sisters see *Shove Over*; a father
+   * and a daughter see *Here, Let Me*; and the button, the storyteller and the
+   * milestone all say the same thing because they all come from one place.
+   */
+  name: string;
+  blurb: string;
 };
 
 export type MoveChoice = { key: string; helperId: string; targetId: string };
@@ -43,9 +52,6 @@ export function FamilyMovePicker({
 
       <div className="space-y-2">
         {available.map((option) => {
-          const move = FAMILY_MOVES.find((entry) => entry.key === option.key);
-          if (!move) return null;
-
           const selected = chosen !== null && same(chosen, option);
 
           return (
@@ -68,9 +74,9 @@ export function FamilyMovePicker({
               }`}
             >
               <span className="block text-hearth-100">
-                {option.helperName} helps {option.targetName} — {move.name}
+                {option.helperName} helps {option.targetName} — {option.name}
               </span>
-              <span className="block text-sm text-hearth-300/80">{move.blurb}</span>
+              <span className="block text-sm text-hearth-300/80">{option.blurb}</span>
             </button>
           );
         })}

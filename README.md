@@ -83,6 +83,9 @@ carrying it mean anything.
 | ✅ | **M12** 56 skills, and a new one to choose at every level after the second |
 | ✅ | **M12** A second signature move for every calling, at level 5 |
 | ✅ | **M12** Luck that bends the dice on every roll, not just its own checks |
+| ✅ | **M12** An act clock, so going in circles costs something and being stuck does not |
+| ✅ | **M12** Bonds from working together and from listening, not only from being looked after |
+| ✅ | **M12** The family's own dice: the story stops and asks, and they type in what they got |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1141,6 +1144,180 @@ worth more than a thing that appears without warning.
 The adjudication prompt lists the stats one per line with a *pick this when*
 for each. Seven options is harder for a small local model than four, and Luck
 and Grit are the least obvious of them.
+
+### The family's own dice
+
+The girls each own a set, and the app was rolling for them. Now the storyteller
+stops and asks: **"Mira, roll your d20."** Somebody picks it up, the whole table
+watches it land, and the number gets typed in.
+
+**What the app keeps is the arithmetic.** She rolls a 14 and types 14; the game
+adds her stat, her skill, her knacks, whatever a shared plan is worth, and then
+asks Luck. That is the right division of labour for a nine-year-old — she gets
+the part with the clatter, and nobody adds up seven modifiers while everyone
+waits.
+
+**Every roll in the game becomes theirs.** There are no storyteller-side rolls
+to keep back: no monster attacks, no saving throws, no initiative. Every roll
+this game has ever made came from something a player chose to try. The one
+exception is **Luck's nudge**, which stays hidden — it asks whether the *world*
+happened to oblige, and a girl rolling to find out whether she got lucky would
+know she got lucky.
+
+**The trade, stated plainly.** *"The server rolls, never the model"* is the
+oldest rule in this codebase and it exists so the fiction cannot cheat. Typed
+dice hand that to the players, who can. That is the correct trade for a family
+at one table: a physical die is a social contract enforced by everybody who can
+see it, which is a stronger guarantee than software has ever managed. So the
+number is entered in the open, shown to the table, and put on the television —
+exactly as it would be at any other game night. There is no timer, no "are you
+sure", and no clever guard against a number that looks too good.
+
+**How it works.** The pipeline is one long run — adjudicate, roll, narrate,
+extract — and real dice cut it in half. `adjudicateOnly` runs the first stage,
+the ask is persisted as a `PendingRoll`, and the rest of the turn happens when
+the numbers arrive, with `rollerFrom` feeding them through the pipeline's
+existing injectable roller. That last part is why this needed **no change at all
+to how a check resolves**: the dice do not care where a number came from.
+
+The ask lives on the server rather than in a browser, so a locked phone, a
+reload, or a second device joining halfway all see the same question. And a
+stopped turn **has not happened** — no experience, no bonds, no clock, nothing in
+the transcript — so a table that puts their phones down and goes to bed loses one
+model call, not an evening.
+
+On the television it is the biggest thing on the wall: **WAITING ON A ROLL —
+Mira**, so the room looks up instead of down at four phones.
+
+Set per adventure in its settings, and switchable mid-story. `SERVER` is the
+default and stays the behaviour when the dice are in another room.
+
+### Bonds that count more than kindness
+
+Bonds only ever rose from one thing: a `bondMoment`, which the storyteller is
+told to report *"only when one genuinely helped, protected, encouraged or
+comforted the other."* One-directional care — standing between her and the
+noise. Lovely, and about half of what actually happens at a table.
+
+The other half was invisible. **Talking it over earned nothing at all** — the
+conversation turn made one model call, wrote a paragraph, and touched no state
+whatsoever, so the single most cooperative thing an evening produces was worth
+exactly zero. And **two girls executing one plan looked like two unrelated
+things** that happened in the same room, because adjudication read every action
+on its own.
+
+Three changes, and a fourth so the game suggests what it rewards.
+
+**Together.** The adjudicator now reports when two or more actions serve one
+plan — *"I boost her up"* and *"I reach for the latch"*. Everyone in it rolls at
+**+1**, every pair in it earns a bond, and both the dice card and the storyteller
+are told, so one plan is narrated as one thing two people did rather than two
+things that happened near each other.
+
+It cannot be claimed, only done. There is no button: two children have to write
+two actions that genuinely serve one plan. If they end up doing that every turn,
+that is not an exploit, it is the entire point.
+
+The bonus is deliberately **smaller than Lend a Hand's +2**. That is a Family
+Move — earned through a bond, spent once a scene. This is free, repeatable and
+available on the first evening, and if it paid the same then the moves a family
+works up to would be worth less than the thing anybody can do for nothing.
+
+**Listening.** After a conversation, a small second call asks who genuinely took
+up whose idea — built on it, agreed to it, changed their mind because of it.
+Those pairs earn a bond, **capped at one per pair per scene**. Without the cap
+the fastest route up the ladder would be typing "hi" at each other eleven times,
+which is the exact opposite of the point.
+
+This also pairs with the act clock: the clock only moves on action turns, so
+**talking is the untaxed way to get unstuck**. Being stuck costs you; conferring
+does not.
+
+**Moves that know whose they are.** The seven relationship kinds had been stored,
+labelled and then used for nothing — sisters, a father and a daughter, and two
+best friends all unlocked the identical five moves with the identical five
+names. They now fall into three flavours, same mechanics, different words:
+
+| | Siblings | A grown-up and a child | Friends |
+|---|---|---|---|
+| `lend_a_hand` | Shove Over | Here, Let Me | Boost |
+| `stand_together` | Both of Us or Neither | On My Shoulders | On Three |
+| `never_alone` | You Are Not Doing That Alone | Go On. I Am Right Here. | Not Without You |
+| `two_as_one` | You Always Do That | I Knew You Would | Same Idea |
+| `hearthlight` | Since We Were Small | Everything I Know | Best in the World |
+
+Everything still resolves through `move.key`, so a family that renames nothing
+plays exactly the same game. Named from the *helper's* side, so the two
+directions of one move can read differently — a daughter helping her father is
+not the same sentence as a father helping his daughter.
+
+**And the hints point at each other.** The three ideas offered to a stuck player
+were solo-only; the prompt did not even mention who else was in the party. When
+somebody else is there, one of the three is now an idea that needs them, by
+name. You cannot reward teamwork the girls were never shown.
+
+### The act clock
+
+Nothing was ever refused. An action with nothing to do with the story got
+narrated as warmly as one that cracked it open, and the game's only response to
+a table going in circles was more pleasant prose. Two things followed, and the
+second is the dangerous one:
+
+1. An evening could be spent going nowhere with no signal it was happening.
+   Pacing counts *scenes*, and a scene only ends when the party moves — so ten
+   turns in one kitchen is still scene one.
+2. When an act overran, the storyteller was told to *"look for an honest way to
+   finish it soon"*. Handed a stuck party, the cheapest honest-looking way out is
+   to hand them the answer. Children work that pattern out in about two
+   evenings, and once they have there is no reason left to think about anything.
+
+**The rule is the one the game already believed, extended one step.** A failed
+roll never stops the story, it complicates it — and now an unfocused *idea* is
+treated the same way. It is never refused. It **costs**.
+
+Each act carries a clock named in the story's own words: *The fog*, *The stars
+going out*, *Days until the festival*. It fills on a turn where the party got
+nowhere, and the girls can see it move.
+
+**The fairness line is the whole design:**
+
+| | |
+|---|---|
+| She tried the right thing and the dice said no | **nothing moves** |
+| She did something that was not really anything | **the clock moves** |
+
+Charging her twice for one bad roll is how a game teaches a child not to try.
+
+**A wasted turn is computed, not judged.** The pipeline already reports
+`deedsDone`, `itemsGained`, `questsOpened`, the outcome of every check, and
+whether a scene or act closed — so a turn that produced none of those and had no
+successful roll is definitionally one where nothing moved. On top of that the
+extraction now answers `movedForward`, which exists to catch the one kind of
+turn the hard signals cannot see: asking an innkeeper who else was at the fair
+finishes no objective and fills no pocket, and is exactly the thinking this
+feature is meant to protect. **Both must agree** before anything ticks, and the
+field defaults to `true` — an unfair tick is felt at once by a nine-year-old and
+a missed one is invisible.
+
+**Nobody rolled anything** is the third condition. A roll means somebody
+committed to an attempt the game thought could fail, and that is engagement
+whatever the die said.
+
+**A full clock is a debt, not an event.** A passage is written before it can be
+read, so the turn that fills the clock cannot also show the consequence — the
+next one collects. And what it collects is never a loss: what the party was
+trying to prevent partly happens, the story carries on from a worse position,
+and the storyteller is told in as many words that nobody is hurt, the adventure
+is not over, and it must not scold anybody.
+
+The limit is `scenesPerAct + 2`, so it means the same thing in a brisk act as in
+a leisurely one — four notches for *one evening*, nine for *take our time*.
+
+Two prompt changes back it up. The core contract now carries **never hand the
+players the answer because they are stuck — give them a new way to look, never
+the thing itself**, on every single call rather than only when the clock is
+running. And the pacing overrun line was rewritten from "finish it soon" to
+*raise the pressure rather than the curtain*.
 
 ### What Luck actually does
 

@@ -36,6 +36,17 @@ const unsafeFirst = process.env.MOCK_UNSAFE === "1";
  * nothing had ever asked this mock for a Grace check.
  */
 const stat = process.env.MOCK_STAT ?? "heart";
+
+/**
+ * Set MOCK_IDLE=1 to play a table going in circles.
+ *
+ * Nobody rolls anything, nothing is found, no objective finishes, and the
+ * storyteller says outright that the party got nowhere — which is the exact
+ * shape the act clock is looking for. Without a way to produce it on demand,
+ * the only way to test the clock end to end would be to feed a real model
+ * nonsense and hope.
+ */
+const idle = process.env.MOCK_IDLE === "1";
 let narrationCount = 0;
 
 /**
@@ -126,11 +137,18 @@ const server = createServer((request, response) => {
         "The barley shifts while you talk, and whatever is in there goes very still, as though " +
         "it is listening to every word.";
     } else if (prompt.includes("decide which attempts need a dice roll")) {
-      // Fenced, with a preamble — exactly what a 7B model tends to emit.
+      content = idle
+        ? '{"checks":[],"automatic":[{"character":"Mira","effect":"wanders about humming"},' +
+          '{"character":"Rowan","effect":"kicks a stone"}],"together":[]}'
+        : // Fenced, with a preamble — exactly what a 7B model tends to emit.
+          `Sure, here you go:\n\`\`\`json\n{"checks":[{"character":"Mira","stat":"${stat}","difficulty":"NORMAL",` +
+          '"intent":"Speak with Animals to hum to the frightened creature","practice":"humming"}],' +
+          '"automatic":[{"character":"Rowan","effect":"keeps watch"}],' +
+          '"together":[{"characters":["Mira","Rowan"],"plan":"one hums while the other keeps watch"}]}\n```';
+    } else if (prompt.includes("Who actually listened to whom")) {
+      // Two of them, so the listening bond has a real pair to land on.
       content =
-        `Sure, here you go:\n\`\`\`json\n{"checks":[{"character":"Mira","stat":"${stat}","difficulty":"NORMAL",` +
-        '"intent":"Speak with Animals to hum to the frightened creature","practice":"humming"}],' +
-        '"automatic":[{"character":"Rowan","effect":"keeps watch"}]}\n```';
+        '{"listened":[{"who":"Rowan","to":"Mira","why":"took up her idea about the humming"}]}';
     } else if (prompt.includes("extract what should be remembered")) {
       // A story can be ended on purpose. Nothing else makes the mock report
       // actComplete, and the completion path — the ending, and the people who
@@ -138,7 +156,11 @@ const server = createServer((request, response) => {
       // hand-replayed one.
       const ending = prompt.includes(FINALE);
 
-      content = ending
+      content = idle
+        ? '{"sceneTitle":null,"location":null,"memories":[],"bondMoments":[],"itemsGained":[],' +
+          '"deedsDone":[],"questsOpened":[],"whatNow":"You are still standing in the barley. Now what?",' +
+          '"movedForward":false,"actComplete":false,"sceneComplete":false}'
+        : ending
         ? '{"sceneTitle":"The Last of It","location":"the barley field","memories":[],' +
           '"bondMoments":[],"itemsGained":[],"actComplete":true,"sceneComplete":true}'
         :

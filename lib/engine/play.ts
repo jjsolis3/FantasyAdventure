@@ -11,6 +11,7 @@ import type { Prisma } from "@/generated/prisma/client.ts";
 import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/context";
 import {
   conversationPrompt,
+  listeningPrompt,
   nudgePrompt,
   openingPrompt,
   personalQuestsPrompt,
@@ -21,6 +22,7 @@ import {
   type ToneKey,
 } from "@/lib/ai/prompts";
 import {
+  listeningSchema,
   nudgeSchema,
   personalQuestsSchema,
   suggestionsSchema,
@@ -31,10 +33,18 @@ import { requestStructured } from "@/lib/ai/json";
 import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
-import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
+import { adjudicateOnly, runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
+import type { Adjudication } from "@/lib/ai/schemas";
+import { rollD20 } from "@/lib/engine/dice";
+import {
+  checkRolls,
+  rollerFrom,
+  type AwaitedRoll,
+  type RollEntry,
+} from "@/lib/game/table-dice";
 import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
-import { memberCampaignFilter } from "@/lib/game/access";
+import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import {
   advanceQuests,
   openMainQuest,
@@ -42,6 +52,14 @@ import {
   type PersonalAim,
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
+import { pairsIn } from "@/lib/game/together";
+import {
+  advance,
+  pressureAt,
+  pressureGuidance,
+  pressureLimit,
+  shouldTick,
+} from "@/lib/game/pressure";
 import {
   abilityUnlockedAt,
   hasRequirement,
@@ -66,6 +84,7 @@ import {
   STAT_INFO,
   bondLevelFor,
   familyMoveByKey,
+  moveNamesFor,
   kindFromPerspective,
   levelFor,
   movesUnlockedBetween,
@@ -644,6 +663,37 @@ async function fetchPersonalAims(
 }
 
 /**
+ * Who took up whose idea, from a turn spent talking.
+ *
+ * Its own call, and a small one — the conversation reply is prose and this is
+ * JSON, and a local model asked for both in one breath gives up the JSON every
+ * time.
+ *
+ * Silent on failure, and that silence leans the right way. This is the only
+ * thing standing between a conversation and a bond, so a model that could not
+ * read the exchange simply means nobody earned anything — which is a far better
+ * outcome than a bond nobody at the table would recognise having earned.
+ */
+async function fetchListening(
+  calls: ModelCalls,
+  said: { character: string; text: string }[],
+): Promise<{ who: string; to: string }[]> {
+  // Nobody can listen to themselves. Cheaper to notice here than to ask a model
+  // about a monologue and then throw its answer away.
+  if (new Set(said.map((line) => line.character)).size < 2) return [];
+
+  try {
+    const result = await requestStructured({
+      call: (hint) => calls.json(listeningPrompt({ said }), hint),
+      validate: validator(listeningSchema),
+    });
+    return result.value.listened;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The question the opening passage leaves the table with.
  *
  * Every other turn gets this out of extraction for free. The opening has no
@@ -714,6 +764,10 @@ async function validateFamilyMove(
   });
   if (!relationship || relationship.bondLevel < move.requires) return null;
 
+  // Flavoured from the helper's side, which is the side that matters: what the
+  // storyteller is handed should be what the girl pressing the button read.
+  const named = moveNamesFor(kindFromPerspective(relationship, choice.helperId), move);
+
   // Once per scene, so it stays a moment rather than a routine.
   const alreadyUsed = await db.familyMoveUse.findUnique({
     where: {
@@ -726,7 +780,7 @@ async function validateFamilyMove(
   });
   if (alreadyUsed) return null;
 
-  return { relationshipId: relationship.id, moveName: move.name };
+  return { relationshipId: relationship.id, moveName: named.name };
 }
 
 /**
@@ -808,6 +862,14 @@ export async function playTurn(
   familyMove?: FamilyMoveChoice | null,
   /** Set when retelling a turn the table took back. */
   correction?: string | null,
+  /**
+   * The second half of a turn the table rolled real dice for.
+   *
+   * Carries the adjudication that was already paid for and the numbers that
+   * were thrown against it. Never set by a player-facing caller — see
+   * `submitRolls`, which is the only thing that builds one.
+   */
+  resume?: { adjudication: Adjudication; values: number[] } | null,
 ) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
@@ -853,8 +915,13 @@ export async function playTurn(
     })
   ).map((objective) => objective.text);
 
-  const result = await runTurn(
-    {
+  // Where the act's clock stands as this turn begins — read before the turn,
+  // because it describes the weather the passage is written in. Whether *this*
+  // turn moves it can only be known afterwards, once there is a passage to
+  // read.
+  const clock = pressureAt(campaign.pressure, pressureLimit(campaign.pacing));
+
+  const turnInput = {
       context: built.text,
       tone: campaign.tone as ToneKey,
       readingLevel: campaign.readingLevel as ReadingLevelKey,
@@ -871,6 +938,10 @@ export async function playTurn(
       })),
       actions: accepted,
       correction: correction?.trim() || undefined,
+      pressure: pressureGuidance({
+        name: campaign.storyline.pressureName,
+        ...clock,
+      }),
       pacing: pacingGuidance({
         pacing: campaign.pacing,
         // Scenes already played in this act, including the one in progress.
@@ -898,9 +969,81 @@ export async function playTurn(
       })),
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
       openDeeds,
+  };
+
+  // ---- The table's own dice ------------------------------------------------
+  //
+  // The pipeline is one long run, and real dice cut it in half: the storyteller
+  // decides what needs rolling, everybody looks at Mira, and the rest of the
+  // turn happens once the number is in.
+  //
+  // Nothing is written here except the question. A turn that stops has not
+  // happened yet — no experience, no bonds, no clock, nothing in the transcript
+  // — so a table that puts their phones down mid-roll and goes to bed loses a
+  // model call and not an evening.
+  if (campaign.diceMode === "TABLE" && !resume) {
+    const first = await adjudicateOnly(turnInput, calls, onProgress);
+
+    const awaited: AwaitedRoll[] = first.adjudication.checks
+      .map((check, index): AwaitedRoll | null => {
+        const member = campaign.party.find(
+          (entry) => entry.character.name.toLowerCase() === check.character.trim().toLowerCase(),
+        );
+        if (!member) return null;
+        return {
+          index,
+          characterId: member.characterId,
+          characterName: member.character.name,
+          intent: check.intent,
+          stat: check.stat,
+          difficulty: check.difficulty,
+        };
+      })
+      .filter((roll): roll is AwaitedRoll => roll !== null);
+
+    // A turn where nothing was uncertain needs no dice, and asking for one
+    // would be a worse game than the app rolling: "type a number, it changes
+    // nothing" teaches a child that the die is decoration.
+    if (awaited.length > 0) {
+      await db.pendingRoll.upsert({
+        where: { campaignId: campaign.id },
+        create: {
+          campaignId: campaign.id,
+          sceneId: scene.id,
+          payload: {
+            actions: accepted,
+            familyMove: familyMove ?? null,
+            correction: correction ?? null,
+            adjudication: first.adjudication,
+          } as unknown as Prisma.InputJsonValue,
+          awaited: awaited as unknown as Prisma.InputJsonValue,
+        },
+        update: {
+          sceneId: scene.id,
+          payload: {
+            actions: accepted,
+            familyMove: familyMove ?? null,
+            correction: correction ?? null,
+            adjudication: first.adjudication,
+          } as unknown as Prisma.InputJsonValue,
+          awaited: awaited as unknown as Prisma.InputJsonValue,
+          createdAt: new Date(),
+        },
+      });
+
+      await logAiCalls(campaign.id, records, first.repairs);
+      onProgress?.({ type: "awaiting", awaited });
+      return { awaiting: awaited };
+    }
+  }
+
+  const result = await runTurn(
+    {
+      ...turnInput,
+      ...(resume ? { adjudication: resume.adjudication } : {}),
     },
     calls,
-    undefined,
+    resume ? rollerFrom(resume.values, rollD20) : undefined,
     onProgress,
   );
 
@@ -996,6 +1139,9 @@ export async function playTurn(
             // missed, so without this the card would read as a complication
             // that inexplicably went fine.
             ...(check.luck ? { luck: check.luck } : {}),
+            // Same reason as the two above: the total on the card includes the
+            // +1 and nothing else would say where it came from.
+            ...(check.together ? { together: check.together } : {}),
           },
         },
       });
@@ -1138,19 +1284,28 @@ export async function playTurn(
       milestones.push(learnedMessage(check.characterName, practice.label));
     }
 
-    // Bonds, from moments the extraction identified.
-    for (const moment of result.extraction.bondMoments) {
-      const from = campaign.party.find((member) => member.character.name === moment.from)?.characterId;
-      const to = campaign.party.find((member) => member.character.name === moment.to)?.characterId;
-      if (!from || !to) continue;
+    /**
+     * Deepens one tie by one, and says so if it opened a new move.
+     *
+     * Extracted because bonds now have three sources rather than one — a moment
+     * of care, a plan two of them acted on, and listening to each other while
+     * talking it over — and three copies of "find the row, add one, check what
+     * unlocked" is three places for the ladder to be climbed slightly
+     * differently.
+     *
+     * Returns whether anything happened, so a caller that needs to avoid paying
+     * the same pair twice in one turn can tell.
+     */
+    const deepen = async (aId: string, bId: string): Promise<boolean> => {
+      if (aId === bId) return false;
 
-      const [a, b] = from < to ? [from, to] : [to, from];
+      const [a, b] = aId < bId ? [aId, bId] : [bId, aId];
       const existing = await tx.relationship.findUnique({
         where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
       });
       // Only deepens ties the family already declared; the Game Master does not
       // get to invent relatives.
-      if (!existing) continue;
+      if (!existing) return false;
 
       const bondXp = existing.bondXp + 1;
       const bondLevel = bondLevelFor(bondXp);
@@ -1159,12 +1314,44 @@ export async function playTurn(
         data: { bondXp, bondLevel },
       });
 
-      const unlocked = movesUnlockedBetween(existing.bondLevel, bondLevel);
-      for (const move of unlocked) {
+      const nameOf = (id: string) =>
+        campaign.party.find((member) => member.characterId === id)?.character.name ?? "Someone";
+
+      for (const move of movesUnlockedBetween(existing.bondLevel, bondLevel)) {
+        const named = moveNamesFor(kindFromPerspective(existing, a), move);
         milestones.push(
-          `${moment.from} and ${moment.to} can now use ${move.name} together — ${move.blurb}`,
+          `${nameOf(a)} and ${nameOf(b)} can now use ${named.name} together — ${named.blurb}`,
         );
       }
+      return true;
+    };
+
+    // Paid at most once per pair per turn. Two sisters who both looked after
+    // each other *and* acted on one plan had a lovely turn; paying them twice
+    // for it would make the fastest way up the ladder a matter of stacking
+    // sources rather than of caring about each other.
+    const deepenedThisTurn = new Set<string>();
+    const deepenOnce = async (aId: string, bId: string) => {
+      const key = [aId, bId].sort().join("|");
+      if (deepenedThisTurn.has(key)) return;
+      deepenedThisTurn.add(key);
+      await deepen(aId, bId);
+    };
+
+    // Bonds, from moments the extraction identified.
+    for (const moment of result.extraction.bondMoments) {
+      const from = campaign.party.find((member) => member.character.name === moment.from)?.characterId;
+      const to = campaign.party.find((member) => member.character.name === moment.to)?.characterId;
+      if (!from || !to) continue;
+      await deepenOnce(from, to);
+    }
+
+    // And from a plan they acted on together — the second source these ties
+    // have ever had, and the one that has nothing to do with looking after
+    // anybody. Two people simply having the same good idea is worth as much as
+    // one of them being kind, and until now it was worth nothing at all.
+    for (const plan of result.plans) {
+      for (const [a, b] of pairsIn(plan)) await deepenOnce(a, b);
     }
 
     // Items the party is now carrying.
@@ -1372,11 +1559,33 @@ export async function playTurn(
       }
     }
 
+    // Did this turn get anywhere?
+    //
+    // Hard signals first and the storyteller's own reading only as a tiebreak —
+    // see lib/game/pressure.ts for why both have to agree before anything moves.
+    // A new act starts the clock at nothing: a fresh problem should not open
+    // with the fog already at the door because of how the last one went.
+    const nextPressure = advancesAct
+      ? 0
+      : advance(
+          clock,
+          shouldTick({
+            outcomes: result.checks.map((check) => check.outcome),
+            deedsDone: result.extraction.deedsDone.length,
+            itemsGained: result.extraction.itemsGained.length,
+            questsOpened: result.extraction.questsOpened.length,
+            sceneComplete: result.extraction.sceneComplete,
+            actComplete: result.extraction.actComplete,
+            storytellerSaysMoved: result.extraction.movedForward,
+          }),
+        );
+
     await tx.campaign.update({
       where: { id: campaign.id },
       data: {
         turnCounter,
         lastPlayedAt: new Date(),
+        pressure: nextPressure,
         ...(advancesAct ? { currentActIndex: campaign.currentActIndex + 1 } : {}),
         ...(finishes ? { status: "COMPLETE" as const, completedAt: new Date() } : {}),
       },
@@ -1452,6 +1661,91 @@ async function closeScene(campaignId: string, sceneId: string, config: AiConfig,
 
 
 /**
+ * What the table is currently being asked to roll, if anything.
+ *
+ * Read on every page load rather than held in a browser, because the question
+ * belongs to the adventure and not to whoever happened to press the button: a
+ * second phone opened halfway through should show the same ask, and a page
+ * reloaded after somebody knocked the dice off the table should still know
+ * what it wanted.
+ */
+export async function awaitedRolls(
+  campaignId: string,
+  userId: string,
+): Promise<AwaitedRoll[]> {
+  const membership = await membershipFor(campaignId, userId);
+  if (!membership.isMember) return [];
+
+  const pending = await db.pendingRoll.findUnique({
+    where: { campaignId },
+    select: { awaited: true },
+  });
+  return (pending?.awaited as unknown as AwaitedRoll[]) ?? [];
+}
+
+/**
+ * The numbers came off the table. Finish the turn.
+ *
+ * Nothing about how a check resolves changed for this: the values are handed to
+ * the pipeline through the same injectable roller the tests have always used,
+ * so every modifier, skill, shared plan and lucky break applies exactly as it
+ * did when the server was throwing.
+ *
+ * The pending record is deleted first and inside a transaction with nothing
+ * else, which is deliberate. Two phones pressing send at the same moment is the
+ * ordinary case at a table, not a rare one — whoever deletes the row runs the
+ * turn, and the other is told it has already been taken.
+ */
+export async function submitRolls(
+  campaignId: string,
+  userId: string,
+  entries: RollEntry[],
+  onProgress?: (event: TurnProgress) => void,
+) {
+  const membership = await membershipFor(campaignId, userId);
+  if (!membership.isMember) throw new Error("Campaign not found.");
+
+  const pending = await db.pendingRoll.findUnique({ where: { campaignId } });
+  if (!pending) throw new Error("Nothing is waiting on a roll.");
+
+  const awaited = pending.awaited as unknown as AwaitedRoll[];
+  const verdict = checkRolls(awaited, entries);
+  if (!verdict.ok) throw new Error(verdict.reason);
+
+  const payload = pending.payload as unknown as {
+    actions: PlayerAction[];
+    familyMove: FamilyMoveChoice | null;
+    correction: string | null;
+    adjudication: Adjudication;
+  };
+
+  // Claimed by deleting. A conditional delete is the cheapest lock there is,
+  // and the only one that survives two people pressing at once.
+  const { count } = await db.pendingRoll.deleteMany({ where: { id: pending.id } });
+  if (count === 0) throw new Error("Somebody else has already sent those in.");
+
+  return playTurn(campaignId, userId, payload.actions, onProgress, payload.familyMove, payload.correction, {
+    adjudication: payload.adjudication,
+    values: verdict.values,
+  });
+}
+
+/**
+ * Puts the dice back down and gives the table its actions to rewrite.
+ *
+ * The escape hatch for the evening a die goes under the sofa, or the moment a
+ * girl realises she meant to say something else entirely. Throws the pending
+ * ask away without costing anybody anything, because a stopped turn has not
+ * happened yet.
+ */
+export async function cancelRolls(campaignId: string, userId: string): Promise<void> {
+  const membership = await membershipFor(campaignId, userId);
+  if (!membership.isMember) throw new Error("Campaign not found.");
+
+  await db.pendingRoll.deleteMany({ where: { campaignId } });
+}
+
+/**
  * A turn where the party talks instead of acting.
  *
  * One model call rather than three: no adjudication, no dice, no extraction,
@@ -1517,6 +1811,12 @@ export async function talkTurn(
 
   const narration = reply.trim();
 
+  // Who took up whose idea. Its own small call, and a failure costs nothing:
+  // an unearned bond is worth less to this family than no bond at all, so the
+  // empty answer is the safe one in both directions.
+  const listened = await fetchListening(calls, named);
+  const milestones: string[] = [];
+
   await db.$transaction(async (tx) => {
     let ordinal = await nextOrdinal(scene.id);
 
@@ -1560,6 +1860,56 @@ export async function talkTurn(
       data: { sceneId: scene.id, ordinal: ordinal++, type: "NARRATION", content: narration },
     });
 
+    // Bonds, from listening rather than from looking after somebody.
+    //
+    // One pair, one scene, once — enforced by a unique key rather than by
+    // counting, so two phones sending conversations at the same moment cannot
+    // both pay the same pair. Without a ceiling the fastest way up this ladder
+    // would be to type "hi" at each other eleven times, which is exactly the
+    // opposite of what any of this is for.
+    for (const moment of listened) {
+      const who = campaign.party.find((m) => m.character.name === moment.who)?.characterId;
+      const to = campaign.party.find((m) => m.character.name === moment.to)?.characterId;
+      if (!who || !to || who === to) continue;
+
+      const [a, b] = who < to ? [who, to] : [to, who];
+      const relationship = await tx.relationship.findUnique({
+        where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
+      });
+      if (!relationship) continue;
+
+      // `createMany` with skipDuplicates, and the reason matters: the obvious
+      // version of this was a plain `create` with `.catch(() => null)` around
+      // it, which looks like it swallows the duplicate and does not. In
+      // Postgres a failed statement poisons the whole transaction — every
+      // command after it is refused until rollback — so the second conversation
+      // in a scene took the entire turn down with it. Caught by the end-to-end
+      // test on its first run, and invisible to every unit test, because it is
+      // a property of the database rather than of the code.
+      //
+      // This compiles to ON CONFLICT DO NOTHING: no error, nothing poisoned,
+      // and a count of zero is how "they already had one this scene" arrives.
+      const { count } = await tx.listeningBond.createMany({
+        data: [{ campaignId: campaign.id, sceneId: scene.id, relationshipId: relationship.id }],
+        skipDuplicates: true,
+      });
+      if (count === 0) continue;
+
+      const bondXp = relationship.bondXp + 1;
+      const bondLevel = bondLevelFor(bondXp);
+      await tx.relationship.update({
+        where: { id: relationship.id },
+        data: { bondXp, bondLevel },
+      });
+
+      for (const move of movesUnlockedBetween(relationship.bondLevel, bondLevel)) {
+        const named = moveNamesFor(kindFromPerspective(relationship, a), move);
+        milestones.push(
+          `${moment.who} and ${moment.to} can now use ${named.name} together — ${named.blurb}`,
+        );
+      }
+    }
+
     await tx.campaign.update({
       where: { id: campaign.id },
       data: { lastPlayedAt: new Date() },
@@ -1568,7 +1918,7 @@ export async function talkTurn(
 
   await logAiCalls(campaign.id, records, 0);
 
-  return { narration };
+  return { narration, milestones };
 }
 
 /**
@@ -1614,6 +1964,12 @@ export async function suggestActions(campaignId: string, userId: string, charact
           sceneText: lastNarration?.content ?? campaign.storyline.hook,
           characterName: character.name,
           characterSummary: summary,
+          // Everybody else travelling with her. Cheap to pass and the whole
+          // reason one of the three ideas can now be worth more than the other
+          // two put together.
+          others: campaign.party
+            .filter((entry) => entry.characterId !== characterId)
+            .map((entry) => entry.character.name),
         }),
         hint,
       ),

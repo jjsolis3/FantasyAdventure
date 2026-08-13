@@ -44,6 +44,9 @@ type View = {
   tone: string;
   status: string;
   actIndex: number;
+  /** The act's clock. `level` is 0 until it has moved, and then nothing draws. */
+  pressure: { name: string; level: number; limit: number };
+  awaitingRolls: { characterName: string; intent: string }[];
   scene: {
     title: string;
     location: string | null;
@@ -317,6 +320,44 @@ function PartyStrip({ party, token }: { party: Party[]; token: string | null }) 
   );
 }
 
+/**
+ * The act's clock, sized for a room rather than a hand.
+ *
+ * Its own component rather than the play page's, because the two want opposite
+ * things. The phone version explains itself — a child reading it alone needs to
+ * know what it means. This one is read at four metres by people who already
+ * know, so it is a name and some lamps going out and nothing else.
+ */
+function ScreenPressure({ name, level, limit }: { name: string; level: number; limit: number }) {
+  if (level <= 0) return null;
+
+  const full = level >= limit;
+  const nearly = !full && level >= limit - 1;
+  const colour = full ? "text-red-400" : nearly ? "text-amber-400" : "text-hearth-400";
+
+  return (
+    <div className="flex items-center gap-3" role="status" aria-label={`${name}: ${level} of ${limit}`}>
+      <span className={`text-xl lg:text-2xl ${colour}`}>{name}</span>
+      <span className="flex gap-1.5" aria-hidden>
+        {Array.from({ length: limit }, (_, index) => (
+          <span
+            key={index}
+            className={`h-3 w-3 rounded-full lg:h-4 lg:w-4 ${
+              index < level
+                ? full
+                  ? "bg-red-400"
+                  : nearly
+                    ? "bg-amber-400"
+                    : "bg-hearth-400"
+                : "bg-hearth-800"
+            }`}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function Paired({ view, token }: { view: View; token: string | null }) {
   const narration = view.scene?.narration ?? [];
   const latest = narration[narration.length - 1];
@@ -327,9 +368,15 @@ function Paired({ view, token }: { view: View; token: string | null }) {
         <h1 className="font-display text-3xl text-hearth-100 lg:text-4xl">
           {view.scene?.title ?? view.campaignTitle}
         </h1>
-        <p className="text-xl text-hearth-500 lg:text-2xl">
-          {view.scene?.location ?? view.storyline}
-        </p>
+        <div className="flex items-baseline gap-6">
+          {/* Beside the location rather than tucked below it. This is the thing
+              the girls should be able to see from the sofa while they are
+              arguing about what to do — that is the moment it is for. */}
+          <ScreenPressure {...view.pressure} />
+          <p className="text-xl text-hearth-500 lg:text-2xl">
+            {view.scene?.location ?? view.storyline}
+          </p>
+        </div>
       </header>
 
       <div className="mt-8 flex flex-1 flex-col gap-8 lg:flex-row lg:gap-12">
@@ -340,6 +387,29 @@ function Paired({ view, token }: { view: View; token: string | null }) {
         ) : null}
 
         <div className="flex flex-1 flex-col justify-center">
+          {/* Above the passage, and the biggest thing on the wall while it is
+              there. This is the whole reason real dice belong on a television:
+              instead of four people looking down at four phones, the room looks
+              up and sees whose turn it is to throw. */}
+          {view.awaitingRolls.length > 0 ? (
+            <div className="mb-10 rounded-2xl border-2 border-moss-500/60 bg-moss-900/30 p-8">
+              <p className="text-xl uppercase tracking-widest text-moss-400 lg:text-2xl">
+                {view.awaitingRolls.length === 1 ? "Waiting on a roll" : "Everybody roll"}
+              </p>
+              <ul className="mt-4 space-y-3">
+                {view.awaitingRolls.map((roll, index) => (
+                  <li key={index}>
+                    <span className="font-display text-4xl text-hearth-50 lg:text-5xl">
+                      {roll.characterName}
+                    </span>
+                    <span className="ml-4 text-2xl text-hearth-400 lg:text-3xl">— {roll.intent}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 text-2xl text-moss-400/80">Roll a d20 and tell it what you got.</p>
+            </div>
+          ) : null}
+
           {latest ? (
             // Only the most recent paragraph, at a size that carries across a
             // room. A television is not for catching up on what you missed —

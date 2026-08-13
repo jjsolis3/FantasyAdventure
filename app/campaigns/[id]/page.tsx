@@ -510,6 +510,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               readingLevel={campaign.readingLevel}
               pacing={campaign.pacing}
               inputMode={campaign.inputMode}
+              diceMode={campaign.diceMode}
             />
           </Card>
         ) : null}

@@ -224,6 +224,7 @@ const settingsSchema = z.object({
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
   inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),
+  diceMode: z.enum(["SERVER", "TABLE"]).default("SERVER"),
 });
 
 export async function updateCampaignSettingsAction(
@@ -239,6 +240,7 @@ export async function updateCampaignSettingsAction(
     readingLevel: formData.get("readingLevel"),
     pacing: formData.get("pacing") ?? undefined,
     inputMode: formData.get("inputMode") ?? undefined,
+    diceMode: formData.get("diceMode") ?? undefined,
   });
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -247,6 +249,13 @@ export async function updateCampaignSettingsAction(
   const { campaignId, ...data } = parsed.data;
   const updated = await db.campaign.updateMany({ where: { id: campaignId, ownerId: user.id }, data });
   if (updated.count === 0) return { error: "Campaign not found." };
+
+  // Handing the dice back to the app mid-question would leave the table staring
+  // at an ask nothing will ever collect. Same reasoning as the round below: a
+  // setting changed halfway through must not strand what is already in flight.
+  if (data.diceMode === "SERVER") {
+    await db.pendingRoll.deleteMany({ where: { campaignId } });
+  }
 
   // Switching to one screen mid-round would leave answers stranded in a waiting
   // room nothing renders any more.

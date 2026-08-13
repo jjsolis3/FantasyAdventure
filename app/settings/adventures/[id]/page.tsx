@@ -104,6 +104,7 @@ export default async function EditAdventurePage({ params }: { params: Promise<{ 
             minPlayers: storyline.minPlayers,
             maxPlayers: storyline.maxPlayers,
             estimatedScenes: storyline.estimatedScenes,
+            pressureName: storyline.pressureName,
             isActive: storyline.isActive,
             acts: storyline.acts.map((act) => ({
               title: act.title,
