@@ -33,10 +33,18 @@ import { requestStructured } from "@/lib/ai/json";
 import { chat, type AiConfig, type TokenUsage } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/settings";
 import { checkNarration, checkPlayerInput, IN_FICTION_DEFLECTION, safetyReminder } from "@/lib/ai/safety";
-import { runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
+import { adjudicateOnly, runTurn, type ModelCalls, type TurnProgress } from "@/lib/engine/gm";
+import type { Adjudication } from "@/lib/ai/schemas";
+import { rollD20 } from "@/lib/engine/dice";
+import {
+  checkRolls,
+  rollerFrom,
+  type AwaitedRoll,
+  type RollEntry,
+} from "@/lib/game/table-dice";
 import { captureSnapshot } from "@/lib/engine/undo";
 import { xpForOutcome } from "@/lib/engine/dice";
-import { memberCampaignFilter } from "@/lib/game/access";
+import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import {
   advanceQuests,
   openMainQuest,
@@ -854,6 +862,14 @@ export async function playTurn(
   familyMove?: FamilyMoveChoice | null,
   /** Set when retelling a turn the table took back. */
   correction?: string | null,
+  /**
+   * The second half of a turn the table rolled real dice for.
+   *
+   * Carries the adjudication that was already paid for and the numbers that
+   * were thrown against it. Never set by a player-facing caller — see
+   * `submitRolls`, which is the only thing that builds one.
+   */
+  resume?: { adjudication: Adjudication; values: number[] } | null,
 ) {
   const campaign = await loadCampaign(campaignId, userId);
   if (!campaign) throw new Error("Campaign not found.");
@@ -905,8 +921,7 @@ export async function playTurn(
   // read.
   const clock = pressureAt(campaign.pressure, pressureLimit(campaign.pacing));
 
-  const result = await runTurn(
-    {
+  const turnInput = {
       context: built.text,
       tone: campaign.tone as ToneKey,
       readingLevel: campaign.readingLevel as ReadingLevelKey,
@@ -954,9 +969,81 @@ export async function playTurn(
       })),
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
       openDeeds,
+  };
+
+  // ---- The table's own dice ------------------------------------------------
+  //
+  // The pipeline is one long run, and real dice cut it in half: the storyteller
+  // decides what needs rolling, everybody looks at Mira, and the rest of the
+  // turn happens once the number is in.
+  //
+  // Nothing is written here except the question. A turn that stops has not
+  // happened yet — no experience, no bonds, no clock, nothing in the transcript
+  // — so a table that puts their phones down mid-roll and goes to bed loses a
+  // model call and not an evening.
+  if (campaign.diceMode === "TABLE" && !resume) {
+    const first = await adjudicateOnly(turnInput, calls, onProgress);
+
+    const awaited: AwaitedRoll[] = first.adjudication.checks
+      .map((check, index): AwaitedRoll | null => {
+        const member = campaign.party.find(
+          (entry) => entry.character.name.toLowerCase() === check.character.trim().toLowerCase(),
+        );
+        if (!member) return null;
+        return {
+          index,
+          characterId: member.characterId,
+          characterName: member.character.name,
+          intent: check.intent,
+          stat: check.stat,
+          difficulty: check.difficulty,
+        };
+      })
+      .filter((roll): roll is AwaitedRoll => roll !== null);
+
+    // A turn where nothing was uncertain needs no dice, and asking for one
+    // would be a worse game than the app rolling: "type a number, it changes
+    // nothing" teaches a child that the die is decoration.
+    if (awaited.length > 0) {
+      await db.pendingRoll.upsert({
+        where: { campaignId: campaign.id },
+        create: {
+          campaignId: campaign.id,
+          sceneId: scene.id,
+          payload: {
+            actions: accepted,
+            familyMove: familyMove ?? null,
+            correction: correction ?? null,
+            adjudication: first.adjudication,
+          } as unknown as Prisma.InputJsonValue,
+          awaited: awaited as unknown as Prisma.InputJsonValue,
+        },
+        update: {
+          sceneId: scene.id,
+          payload: {
+            actions: accepted,
+            familyMove: familyMove ?? null,
+            correction: correction ?? null,
+            adjudication: first.adjudication,
+          } as unknown as Prisma.InputJsonValue,
+          awaited: awaited as unknown as Prisma.InputJsonValue,
+          createdAt: new Date(),
+        },
+      });
+
+      await logAiCalls(campaign.id, records, first.repairs);
+      onProgress?.({ type: "awaiting", awaited });
+      return { awaiting: awaited };
+    }
+  }
+
+  const result = await runTurn(
+    {
+      ...turnInput,
+      ...(resume ? { adjudication: resume.adjudication } : {}),
     },
     calls,
-    undefined,
+    resume ? rollerFrom(resume.values, rollD20) : undefined,
     onProgress,
   );
 
@@ -1572,6 +1659,91 @@ async function closeScene(campaignId: string, sceneId: string, config: AiConfig,
   });
 }
 
+
+/**
+ * What the table is currently being asked to roll, if anything.
+ *
+ * Read on every page load rather than held in a browser, because the question
+ * belongs to the adventure and not to whoever happened to press the button: a
+ * second phone opened halfway through should show the same ask, and a page
+ * reloaded after somebody knocked the dice off the table should still know
+ * what it wanted.
+ */
+export async function awaitedRolls(
+  campaignId: string,
+  userId: string,
+): Promise<AwaitedRoll[]> {
+  const membership = await membershipFor(campaignId, userId);
+  if (!membership.isMember) return [];
+
+  const pending = await db.pendingRoll.findUnique({
+    where: { campaignId },
+    select: { awaited: true },
+  });
+  return (pending?.awaited as unknown as AwaitedRoll[]) ?? [];
+}
+
+/**
+ * The numbers came off the table. Finish the turn.
+ *
+ * Nothing about how a check resolves changed for this: the values are handed to
+ * the pipeline through the same injectable roller the tests have always used,
+ * so every modifier, skill, shared plan and lucky break applies exactly as it
+ * did when the server was throwing.
+ *
+ * The pending record is deleted first and inside a transaction with nothing
+ * else, which is deliberate. Two phones pressing send at the same moment is the
+ * ordinary case at a table, not a rare one — whoever deletes the row runs the
+ * turn, and the other is told it has already been taken.
+ */
+export async function submitRolls(
+  campaignId: string,
+  userId: string,
+  entries: RollEntry[],
+  onProgress?: (event: TurnProgress) => void,
+) {
+  const membership = await membershipFor(campaignId, userId);
+  if (!membership.isMember) throw new Error("Campaign not found.");
+
+  const pending = await db.pendingRoll.findUnique({ where: { campaignId } });
+  if (!pending) throw new Error("Nothing is waiting on a roll.");
+
+  const awaited = pending.awaited as unknown as AwaitedRoll[];
+  const verdict = checkRolls(awaited, entries);
+  if (!verdict.ok) throw new Error(verdict.reason);
+
+  const payload = pending.payload as unknown as {
+    actions: PlayerAction[];
+    familyMove: FamilyMoveChoice | null;
+    correction: string | null;
+    adjudication: Adjudication;
+  };
+
+  // Claimed by deleting. A conditional delete is the cheapest lock there is,
+  // and the only one that survives two people pressing at once.
+  const { count } = await db.pendingRoll.deleteMany({ where: { id: pending.id } });
+  if (count === 0) throw new Error("Somebody else has already sent those in.");
+
+  return playTurn(campaignId, userId, payload.actions, onProgress, payload.familyMove, payload.correction, {
+    adjudication: payload.adjudication,
+    values: verdict.values,
+  });
+}
+
+/**
+ * Puts the dice back down and gives the table its actions to rewrite.
+ *
+ * The escape hatch for the evening a die goes under the sofa, or the moment a
+ * girl realises she meant to say something else entirely. Throws the pending
+ * ask away without costing anybody anything, because a stopped turn has not
+ * happened yet.
+ */
+export async function cancelRolls(campaignId: string, userId: string): Promise<void> {
+  const membership = await membershipFor(campaignId, userId);
+  if (!membership.isMember) throw new Error("Campaign not found.");
+
+  await db.pendingRoll.deleteMany({ where: { campaignId } });
+}
 
 /**
  * A turn where the party talks instead of acting.

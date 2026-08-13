@@ -46,6 +46,7 @@ type View = {
   actIndex: number;
   /** The act's clock. `level` is 0 until it has moved, and then nothing draws. */
   pressure: { name: string; level: number; limit: number };
+  awaitingRolls: { characterName: string; intent: string }[];
   scene: {
     title: string;
     location: string | null;
@@ -386,6 +387,29 @@ function Paired({ view, token }: { view: View; token: string | null }) {
         ) : null}
 
         <div className="flex flex-1 flex-col justify-center">
+          {/* Above the passage, and the biggest thing on the wall while it is
+              there. This is the whole reason real dice belong on a television:
+              instead of four people looking down at four phones, the room looks
+              up and sees whose turn it is to throw. */}
+          {view.awaitingRolls.length > 0 ? (
+            <div className="mb-10 rounded-2xl border-2 border-moss-500/60 bg-moss-900/30 p-8">
+              <p className="text-xl uppercase tracking-widest text-moss-400 lg:text-2xl">
+                {view.awaitingRolls.length === 1 ? "Waiting on a roll" : "Everybody roll"}
+              </p>
+              <ul className="mt-4 space-y-3">
+                {view.awaitingRolls.map((roll, index) => (
+                  <li key={index}>
+                    <span className="font-display text-4xl text-hearth-50 lg:text-5xl">
+                      {roll.characterName}
+                    </span>
+                    <span className="ml-4 text-2xl text-hearth-400 lg:text-3xl">— {roll.intent}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 text-2xl text-moss-400/80">Roll a d20 and tell it what you got.</p>
+            </div>
+          ) : null}
+
           {latest ? (
             // Only the most recent paragraph, at a size that carries across a
             // room. A television is not for catching up on what you missed —

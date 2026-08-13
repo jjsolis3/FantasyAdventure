@@ -15,6 +15,8 @@ import { usePlayTab } from "./play-layout";
 import { TellMeToggle, useTurnAlerts } from "./turn-alerts";
 import { useNarrator } from "./use-narrator";
 import { UndoTurn } from "./undo-turn";
+import { RollPanel } from "./roll-panel";
+import type { AwaitedRoll } from "@/lib/game/table-dice";
 import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
 
@@ -43,6 +45,8 @@ type Phase =
   | { kind: "asking"; index: number }
   | { kind: "review" }
   | { kind: "running"; stage: string; dice: DiceDetail[] }
+  /** Stopped, with the storyteller waiting to be told what the dice said. */
+  | { kind: "rolling"; awaited: AwaitedRoll[]; error: string | null; busy: boolean }
   | { kind: "narrating"; text: string; dice: DiceDetail[] }
   | { kind: "failed"; message: string };
 
@@ -277,7 +281,9 @@ export function PlayClient({
    * same progress on screen and different things afterwards.
    */
   const stream = useCallback(
-    async (body: Record<string, unknown>): Promise<{ ok: boolean; failed: string | null }> => {
+    async (
+      body: Record<string, unknown>,
+    ): Promise<{ ok: boolean; failed: string | null; awaiting: AwaitedRoll[] }> => {
       setPhase({ kind: "running", stage: "adjudicating", dice: [] });
 
       const response = await fetch(`/api/campaigns/${campaignId}/turn`, {
@@ -289,12 +295,13 @@ export function PlayClient({
       // 409 is the ordinary outcome of two browsers reaching for the same
       // round; the caller decides whether that is worth mentioning.
       if (!response.ok) {
-        if (response.status === 409) return { ok: false, failed: null };
+        if (response.status === 409) return { ok: false, failed: null, awaiting: [] };
         throw new Error(`The server replied ${response.status}.`);
       }
 
       let dice: DiceDetail[] = [];
       let failed: string | null = null;
+      let awaiting: AwaitedRoll[] = [];
 
       await consumeEventStream(response, (event, data) => {
         if (event === "stage") {
@@ -307,6 +314,11 @@ export function PlayClient({
         } else if (event === "narration") {
           setPhase({ kind: "narrating", text: String(data.text), dice });
         } else if (event === "done") {
+          // The turn stopped rather than finished: the table is rolling its own
+          // dice and the storyteller is waiting to be told what they said.
+          if (Array.isArray(data.awaiting) && data.awaiting.length > 0) {
+            awaiting = data.awaiting as AwaitedRoll[];
+          }
           // The last act just closed. Said here rather than waiting for the
           // refresh, so the ending is not preceded by one more "what do you
           // do?" prompt.
@@ -316,7 +328,7 @@ export function PlayClient({
         }
       });
 
-      return { ok: failed === null, failed };
+      return { ok: failed === null, failed, awaiting };
     },
     [campaignId],
   );
@@ -324,9 +336,18 @@ export function PlayClient({
   const run = useCallback(
     async (body: Record<string, unknown>) => {
       try {
-        const { failed } = await stream(body);
+        const { failed, awaiting } = await stream(body);
         if (failed) {
           setPhase({ kind: "failed", message: failed });
+          return;
+        }
+
+        // Half a turn. Nothing has been committed and nothing is cleared —
+        // the drafts stay exactly where they are, because a die under the sofa
+        // must not cost anybody the sentence they wrote.
+        if (awaiting.length > 0) {
+          rollsAwaited.current = awaiting;
+          setPhase({ kind: "rolling", awaited: awaiting, error: null, busy: false });
           return;
         }
 
@@ -348,6 +369,104 @@ export function PlayClient({
     [router, stream],
   );
 
+  // A page opened — or reloaded, or a second phone joining — while the dice are
+  // on the table. The ask lives on the server precisely so this works: whoever
+  // wanders in halfway sees the same question everybody else is looking at.
+  useEffect(() => {
+    let live = true;
+
+    void fetch(`/api/campaigns/${campaignId}/rolls`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { awaiting?: AwaitedRoll[] } | null) => {
+        const awaiting = data?.awaiting ?? [];
+        if (!live || awaiting.length === 0) return;
+
+        rollsAwaited.current = awaiting;
+        // Only from a standing start. A browser mid-turn is already showing
+        // something truer than this reply, which was fetched before it began.
+        setPhase((current) => (current.kind === "idle" ? { kind: "rolling", awaited: awaiting, error: null, busy: false } : current));
+      })
+      .catch(() => {});
+
+    return () => {
+      live = false;
+    };
+  }, [campaignId]);
+
+  // Kept beside the phase rather than read out of it, because the phase moves
+  // to "running" the moment the numbers are sent — and if that run fails, the
+  // ask has to come back exactly as it was.
+  const rollsAwaited = useRef<AwaitedRoll[]>([]);
+
+  /** Sends what the table rolled, and lets the rest of the turn happen. */
+  const sendRolls = useCallback(
+    async (rolls: { index: number; value: number }[]) => {
+      setPhase((current) => (current.kind === "rolling" ? { ...current, busy: true, error: null } : current));
+
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/rolls`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rolls }),
+        });
+        if (!response.ok) throw new Error(`The server replied ${response.status}.`);
+
+        let dice: DiceDetail[] = [];
+        let failed: string | null = null;
+
+        await consumeEventStream(response, (event, data) => {
+          if (event === "stage") {
+            setPhase({ kind: "running", stage: String(data.stage), dice });
+          } else if (event === "dice") {
+            dice = (data.checks as DiceDetail[]) ?? [];
+            setPhase({ kind: "running", stage: "narrating", dice });
+          } else if (event === "narration") {
+            setPhase({ kind: "narrating", text: String(data.text), dice });
+          } else if (event === "done") {
+            if (data.campaignComplete === true) setFinished(true);
+          } else if (event === "error") {
+            failed = String(data.message);
+          }
+        });
+
+        if (failed) {
+          // Back to the dice rather than to a dead end: the numbers are still
+          // on the table and the ask is still on the server, so this is a
+          // retry rather than a lost turn.
+          setPhase((current) =>
+            current.kind === "running" || current.kind === "rolling"
+              ? { kind: "rolling", awaited: rollsAwaited.current, error: failed, busy: false }
+              : current,
+          );
+          return;
+        }
+
+        setDrafts({});
+        setMove(null);
+        setCorrection("");
+        setRetelling(false);
+        setTalking(false);
+        poke();
+        router.refresh();
+      } catch (error) {
+        setPhase({
+          kind: "rolling",
+          awaited: rollsAwaited.current,
+          error: error instanceof Error ? error.message : "Something went wrong.",
+          busy: false,
+        });
+      }
+    },
+    [campaignId, poke, router],
+  );
+
+  /** Puts the dice back down and hands the actions back to be rewritten. */
+  const dropRolls = useCallback(async () => {
+    await fetch(`/api/campaigns/${campaignId}/rolls`, { method: "DELETE" }).catch(() => {});
+    setPhase({ kind: "review" });
+    poke();
+  }, [campaignId, poke]);
+
   /**
    * Takes the round the party has been filling in, if this browser is the one
    * the server picks.
@@ -359,8 +478,16 @@ export function PlayClient({
   const takeTurn = useCallback(
     async (roundId: string) => {
       try {
-        const { ok } = await stream({ mode: "round", roundId });
+        const { ok, awaiting } = await stream({ mode: "round", roundId });
         poke();
+
+        // Half a turn, taken on behalf of a party answering from four phones.
+        // The round stays open and claimed; what happens next is dice.
+        if (awaiting.length > 0) {
+          rollsAwaited.current = awaiting;
+          setPhase({ kind: "rolling", awaited: awaiting, error: null, busy: false });
+          return;
+        }
 
         // Either another browser has it, or the turn failed and the round is
         // back to collecting with the reason on it. Both are the board's story
@@ -492,7 +619,17 @@ export function PlayClient({
           <p className="font-display mb-5 text-lg text-hearth-100">{whatNow}</p>
         ) : null}
 
-        {phase.kind === "running" ? (
+        {/* Ahead of every other phase, because when the dice are on the table
+            the dice are the only thing happening. */}
+        {phase.kind === "rolling" ? (
+          <RollPanel
+            awaited={phase.awaited}
+            busy={phase.busy}
+            error={phase.error}
+            onSubmit={sendRolls}
+            onCancel={dropRolls}
+          />
+        ) : phase.kind === "running" ? (
           <div className="space-y-4">
             <p className="flex items-center gap-3 text-hearth-300">
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-hearth-400" />

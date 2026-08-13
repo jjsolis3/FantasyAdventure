@@ -85,6 +85,7 @@ carrying it mean anything.
 | ✅ | **M12** Luck that bends the dice on every roll, not just its own checks |
 | ✅ | **M12** An act clock, so going in circles costs something and being stuck does not |
 | ✅ | **M12** Bonds from working together and from listening, not only from being looked after |
+| ✅ | **M12** The family's own dice: the story stops and asks, and they type in what they got |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1143,6 +1144,53 @@ worth more than a thing that appears without warning.
 The adjudication prompt lists the stats one per line with a *pick this when*
 for each. Seven options is harder for a small local model than four, and Luck
 and Grit are the least obvious of them.
+
+### The family's own dice
+
+The girls each own a set, and the app was rolling for them. Now the storyteller
+stops and asks: **"Mira, roll your d20."** Somebody picks it up, the whole table
+watches it land, and the number gets typed in.
+
+**What the app keeps is the arithmetic.** She rolls a 14 and types 14; the game
+adds her stat, her skill, her knacks, whatever a shared plan is worth, and then
+asks Luck. That is the right division of labour for a nine-year-old — she gets
+the part with the clatter, and nobody adds up seven modifiers while everyone
+waits.
+
+**Every roll in the game becomes theirs.** There are no storyteller-side rolls
+to keep back: no monster attacks, no saving throws, no initiative. Every roll
+this game has ever made came from something a player chose to try. The one
+exception is **Luck's nudge**, which stays hidden — it asks whether the *world*
+happened to oblige, and a girl rolling to find out whether she got lucky would
+know she got lucky.
+
+**The trade, stated plainly.** *"The server rolls, never the model"* is the
+oldest rule in this codebase and it exists so the fiction cannot cheat. Typed
+dice hand that to the players, who can. That is the correct trade for a family
+at one table: a physical die is a social contract enforced by everybody who can
+see it, which is a stronger guarantee than software has ever managed. So the
+number is entered in the open, shown to the table, and put on the television —
+exactly as it would be at any other game night. There is no timer, no "are you
+sure", and no clever guard against a number that looks too good.
+
+**How it works.** The pipeline is one long run — adjudicate, roll, narrate,
+extract — and real dice cut it in half. `adjudicateOnly` runs the first stage,
+the ask is persisted as a `PendingRoll`, and the rest of the turn happens when
+the numbers arrive, with `rollerFrom` feeding them through the pipeline's
+existing injectable roller. That last part is why this needed **no change at all
+to how a check resolves**: the dice do not care where a number came from.
+
+The ask lives on the server rather than in a browser, so a locked phone, a
+reload, or a second device joining halfway all see the same question. And a
+stopped turn **has not happened** — no experience, no bonds, no clock, nothing in
+the transcript — so a table that puts their phones down and goes to bed loses one
+model call, not an evening.
+
+On the television it is the biggest thing on the wall: **WAITING ON A ROLL —
+Mira**, so the room looks up instead of down at four phones.
+
+Set per adventure in its settings, and switchable mid-story. `SERVER` is the
+default and stays the behaviour when the dice are in another room.
 
 ### Bonds that count more than kindness
 

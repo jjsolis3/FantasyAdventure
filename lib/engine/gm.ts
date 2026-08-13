@@ -23,6 +23,7 @@ import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type
 import type { SignatureEffect } from "@/lib/game/character-options";
 import type { StatKey } from "@/lib/game/rules";
 import { knackBonusFor } from "@/lib/game/knacks";
+import type { AwaitedRoll } from "@/lib/game/table-dice";
 import {
   TOGETHER_BONUS,
   namesOf,
@@ -97,6 +98,16 @@ export type TurnInput = {
   }[];
   /** Set when player input tripped the safety screen. */
   deflectionNote?: string | null;
+  /**
+   * An adjudication already paid for, when a turn is being resumed.
+   *
+   * Real dice cut the pipeline in half: the storyteller works out what needs
+   * rolling, the table is asked, and the rest of the turn happens later. Handing
+   * the answer back rather than asking again is not only cheaper — asking twice
+   * could get a *different* answer, and the numbers on the table were thrown
+   * against the first one.
+   */
+  adjudication?: Adjudication;
 };
 
 /** Injected so the pipeline can be tested without a model server. */
@@ -108,7 +119,15 @@ export type ModelCalls = {
 /** Emitted as the pipeline advances, so a slow turn does not look like a hang. */
 export type TurnProgress =
   | { type: "stage"; stage: "adjudicating" | "rolling" | "narrating" | "extracting" }
-  | { type: "dice"; checks: CheckResult[] };
+  | { type: "dice"; checks: CheckResult[] }
+  /**
+   * The turn has stopped and the table is being asked to roll.
+   *
+   * A progress event rather than a return value because the phone is already
+   * listening to this stream: the ask arrives the same way the dice do, and the
+   * page does not need a second idea of how a turn talks to it.
+   */
+  | { type: "awaiting"; awaited: AwaitedRoll[] };
 
 export type TurnResult = {
   adjudication: Adjudication;
@@ -177,6 +196,70 @@ function togetherFor(
   return { together: { with: namesOf(others), bonus: TOGETHER_BONUS } };
 }
 
+/**
+ * Just the first stage: what needs rolling, and who is working with whom.
+ *
+ * Called on its own only when the table is throwing real dice, because that is
+ * the one case where the game has to stop and ask a question before it can
+ * finish. Shares every line of its logic with the full run by handing the
+ * result back to `runTurn` afterwards, so there is no second, subtly different
+ * idea of what a check is.
+ */
+export async function adjudicateOnly(
+  input: TurnInput,
+  calls: ModelCalls,
+  onProgress?: (event: TurnProgress) => void,
+): Promise<{ adjudication: Adjudication; plans: SharedPlan[]; fellBack: boolean; repairs: number }> {
+  const namedActions = input.actions.map((action) => ({
+    character: input.party.find((member) => member.id === action.characterId)?.name ?? "Someone",
+    text: action.text,
+  }));
+
+  onProgress?.({ type: "stage", stage: "adjudicating" });
+
+  try {
+    const result = await requestStructured({
+      call: (hint) =>
+        calls.json(
+          adjudicationPrompt({
+            correction: input.correction,
+            sceneText: input.sceneText,
+            party: input.party.map((member) => `- ${member.name}`).join("\n"),
+            actions: namedActions,
+          }),
+          hint,
+        ),
+      validate: validator(adjudicationSchema),
+    });
+
+    return {
+      adjudication: result.value,
+      plans: resolvePlans(
+        result.value.together ?? [],
+        input.party.map((member) => ({ characterId: member.id, name: member.name })),
+      ),
+      fellBack: false,
+      repairs: result.repairs,
+    };
+  } catch (error) {
+    if (!(error instanceof StructuredOutputError)) throw error;
+
+    // Same fallback as the full run: everything declared simply happens. Which
+    // means a table waiting to roll is told there is nothing to roll — better
+    // than being asked for a number the story has no use for.
+    return {
+      adjudication: {
+        checks: [],
+        automatic: namedActions.map((action) => ({ character: action.character, effect: action.text })),
+        together: [],
+      },
+      plans: [],
+      fellBack: true,
+      repairs: 0,
+    };
+  }
+}
+
 export async function runTurn(
   input: TurnInput,
   calls: ModelCalls,
@@ -197,6 +280,14 @@ export async function runTurn(
   }));
 
   // ---- 1. Adjudicate -------------------------------------------------------
+  //
+  // Skipped entirely when the caller already has one. That is the resumed half
+  // of a turn the table rolled real dice for, and re-asking would risk a
+  // different answer to a question the dice have already been thrown against.
+  if (input.adjudication) {
+    return finishTurn(input, input.adjudication, calls, diagnostics, namedActions, roller, onProgress);
+  }
+
   onProgress?.({ type: "stage", stage: "adjudicating" });
   let adjudication: Adjudication = { checks: [], automatic: [], together: [] };
   try {
@@ -229,6 +320,28 @@ export async function runTurn(
     };
   }
 
+  return finishTurn(input, adjudication, calls, diagnostics, namedActions, roller, onProgress);
+}
+
+/**
+ * Everything after the storyteller has decided what needs rolling.
+ *
+ * Split out so a turn can stop in the middle. When the family is throwing their
+ * own dice, `adjudicateOnly` runs the first half, the table is asked, and this
+ * runs the rest with a roller that hands out the numbers they typed — which is
+ * why real dice needed no change whatsoever to how a check resolves. Every
+ * modifier, skill, shared plan and lucky break applies exactly as before; the
+ * dice simply stopped caring where their numbers came from.
+ */
+async function finishTurn(
+  input: TurnInput,
+  adjudication: Adjudication,
+  calls: ModelCalls,
+  diagnostics: TurnResult["diagnostics"],
+  namedActions: { character: string; text: string }[],
+  roller?: () => number,
+  onProgress?: (event: TurnProgress) => void,
+): Promise<TurnResult> {
   // ---- 2. Roll -------------------------------------------------------------
   onProgress?.({ type: "stage", stage: "rolling" });
 

@@ -242,6 +242,14 @@ export type ScreenView = {
    * and the component draws nothing at 0.
    */
   pressure: { name: string; level: number; limit: number };
+  /**
+   * Whose dice the table is waiting on, when the family rolls its own.
+   *
+   * The single best reason for this feature to reach the television: instead of
+   * four people looking down at four phones, the room looks up and sees whose
+   * turn it is to throw. Empty on every other turn.
+   */
+  awaitingRolls: { characterName: string; intent: string }[];
   scene: {
     title: string;
     location: string | null;
@@ -303,6 +311,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       turnCounter: true,
       pacing: true,
       pressure: true,
+      pendingRoll: { select: { awaited: true } },
       storyline: { select: { title: true, slug: true, pressureName: true } },
       party: {
         select: {
@@ -405,6 +414,11 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       name: campaign.storyline.pressureName,
       ...pressureAt(campaign.pressure, pressureLimit(campaign.pacing)),
     },
+    awaitingRolls: (
+      (campaign.pendingRoll?.awaited as unknown as
+        | { characterName: string; intent: string }[]
+        | undefined) ?? []
+    ).map((roll) => ({ characterName: roll.characterName, intent: roll.intent })),
     scene: scene
       ? {
           title: scene.title,

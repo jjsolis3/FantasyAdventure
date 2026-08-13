@@ -78,6 +78,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           body.familyMove ?? null,
           body.correction ?? null,
         );
+
+        // Stopped rather than finished: the dice are on the table and the
+        // storyteller is waiting to be told what they said.
+        if ("awaiting" in result) {
+          send("done", { awaiting: result.awaiting });
+          return;
+        }
+
         send("narration", { text: result.narration });
         send("done", {
           checks: result.checks,
@@ -158,6 +166,15 @@ async function takeRound(campaignId: string, userId: string, roundId: string): P
         round.familyMove,
         round.correction,
       );
+      // The table is rolling its own dice, so the turn has stopped rather than
+      // finished. The round stays open and stays claimed: the phones are about
+      // to be asked for numbers, and a round that reopened here would invite
+      // everybody to retype the actions they have already sent.
+      if ("awaiting" in result) {
+        send("done", { awaiting: result.awaiting });
+        return;
+      }
+
       await finishRound(round.id);
       send("narration", { text: result.narration });
       send("done", {
