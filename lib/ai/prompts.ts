@@ -215,6 +215,14 @@ export function narrationPrompt(options: {
    * about a clock at all.
    */
   pressure?: string;
+  /**
+   * What is standing in front of them, when something is.
+   *
+   * Placed after the dice and before the instruction to narrate, like the act
+   * clock — but it does more work than the clock does. The clock changes the
+   * weather; this changes what the passage is *about*.
+   */
+  encounter?: string;
 }): string {
   return `${options.context}
 ${correctionBlock(options.correction)}
@@ -223,7 +231,7 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 
 WHAT THE DICE DECIDED (you must narrate these outcomes exactly as given):
 ${options.resolutions}
-${options.pressure ? `\n${options.pressure}\n` : ""}
+${options.encounter ? `\n${options.encounter}\n` : ""}${options.pressure ? `\n${options.pressure}\n` : ""}
 Narrate what happens next. Cover every character's action. Honour each dice
 outcome above — a COMPLICATION must genuinely not work, a CRITICAL must go
 better than expected. End with the party facing a new situation.
@@ -274,6 +282,7 @@ Reply with ONLY this JSON, no other text:
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "movedForward": true,
+  "encounterOpened": null,
   "actComplete": false,
   "sceneComplete": false
 }
@@ -312,6 +321,24 @@ Rules:
   something they already tried, or did something that has nothing to do with what
   is in front of them. Be honest — a false here is not a punishment, it is how
   the story knows to start pressing.
+- encounterOpened is for a situation that is now STANDING IN FRONT OF THEM and
+  will still be there next turn — somebody blocking the way who is already
+  cross, a room that has just locked, a thing that has to be worked out before
+  they can go on. Not a passing detail, not scenery, not somebody they merely
+  spoke to. Almost every turn is null, and null is the right answer unless the
+  passage genuinely leaves them facing something.
+  When there is one, fill it in like this:
+  {"name": "The Angry Customer", "want": "to be taken seriously",
+   "kind": "PERSON", "nerve": "TENSE",
+   "works": ["admitting it", "asking what actually happened"],
+   "backfires": ["a clever lie", "talking over him"],
+   "wayOut": "leave and accept that he tells the baker"}
+  - "want" is what it needs, never what it hates. Everything here is settled by
+    working out what somebody wants — nothing is defeated and nothing is fought.
+  - "wayOut" is always filled in. There is always a way to leave, and it always
+    costs something. A child who is frightened must be able to go.
+  - "nerve" is CALM for somebody merely put out, TENSE for a real problem,
+    FIERCE for the one big standoff of a chapter.
 - Use [] for empty lists, never null.`;
 }
 

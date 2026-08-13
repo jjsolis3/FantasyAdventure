@@ -44,6 +44,7 @@ export default async function CharactersPage() {
       id: character.id,
       xp: character.xp,
       stats: statsOf(character),
+      buildBudget: character.buildBudget,
       knackCount: character.knacks.length,
       chosenSkillCount: character.skills.filter((skill) => skill.chosenAtLevel !== null).length,
       level: character.level,

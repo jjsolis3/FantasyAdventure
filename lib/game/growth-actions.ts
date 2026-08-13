@@ -37,7 +37,7 @@ export async function raiseStatAction(formData: FormData): Promise<void> {
 
   // Both guards matter and they are different: one says she has earned a point,
   // the other says this particular stat has room for it.
-  if (statPointsUnspent(stats, character.xp) <= 0) return;
+  if (statPointsUnspent(stats, character.xp, character.buildBudget) <= 0) return;
   if (stats[stat] >= STAT_CEILING) return;
 
   await db.character.update({

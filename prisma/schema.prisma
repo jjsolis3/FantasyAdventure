@@ -13,6 +13,24 @@ datasource db {
   provider = "postgresql"
 }
 
+/// What kind of thing the party has run into. See lib/game/encounters.ts.
+enum EncounterKind {
+  /// Somebody who wants something. Most of them.
+  PERSON
+  /// A predicament — a locked cellar, a rising tide, a room with no handle.
+  TRAP
+  /// A thing to be worked out rather than talked to.
+  PUZZLE
+}
+
+/// How an encounter finished. Neither is a loss.
+enum EncounterEnding {
+  /// They talked, tricked, charmed or thought their way clear.
+  THROUGH
+  /// It turned, and the story carries on from somewhere worse.
+  TURNED
+}
+
 /// Who throws the dice.
 enum DiceMode {
   /// The app rolls. Right when the dice are in another room, or nobody owns any.
@@ -183,6 +201,16 @@ model Character {
   grace Int @default(3)
   luck  Int @default(3)
   grit  Int @default(3)
+
+  /// What this adventurer was built with, in points.
+  ///
+  /// Recorded rather than assumed, because the build budget has now changed
+  /// twice. Growth is measured as how far her stats have risen above what she
+  /// started with — so reading that off a global constant means every character
+  /// already in the house silently loses points the day the constant moves.
+  /// Existing rows are set to 21 by the migration; new ones take the current
+  /// rule.
+  buildBudget Int @default(19)
 
   /// Earned through play. Level is derived from xp, never set directly.
   xp    Int @default(0)
@@ -643,6 +671,7 @@ model Campaign {
   familyMoveUses FamilyMoveUse[]
   listeningBonds ListeningBond[]
   pendingRoll    PendingRoll?
+  encounters     Encounter[]
   quests   Quest[]
   keepsakes Keepsake[]
   memories Memory[]
@@ -1120,6 +1149,69 @@ model PendingRoll {
   awaited Json
 
   createdAt DateTime @default(now())
+}
+
+/**
+ * Something standing in front of the party, until they deal with it.
+ *
+ * The first thing in this game with a life longer than one turn. Everything
+ * else is asked and answered inside a single exchange; an encounter persists,
+ * pushes back, and has to be got out of — which is what makes a door opened on
+ * an angry customer into a scene rather than a sentence.
+ *
+ * There is no combat here and nothing has hit points. `ground` runs from −3 to
+ * +3: their successes push it up, its own roll pushes it down, and both ends
+ * are an ending. See lib/game/encounters.ts for why it is shaped like the act
+ * clock the girls already know how to read.
+ */
+model Encounter {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// The scene it belongs to. An encounter does not follow the party out of the
+  /// room — leaving is one of the ways through it.
+  sceneId String
+
+  name String
+  /// What it wants. The hinge of the whole design: every encounter is settled by
+  /// working out what somebody needs, never by defeating them.
+  want String
+  kind EncounterKind @default(PERSON)
+
+  /// What tends to work on it, and what makes it worse. Written by the
+  /// storyteller when it opens, and handed back to it on every later turn so the
+  /// angry customer stays the same angry customer.
+  works     String[]
+  backfires String[]
+  /// How to leave, and what leaving costs. Every encounter has one: a child who
+  /// is frightened must always be able to go.
+  wayOut    String
+
+  /// How it is going. −3 to +3, starting at nothing.
+  ground Int @default(0)
+
+  /// How many rounds it has run. A standoff that could go on forever is not
+  /// tense, it is a treadmill — see ENCOUNTER_PATIENCE.
+  rounds Int @default(0)
+
+  /// How hard it pushes back, from lib/game/encounters.ts NERVE.
+  nerve Int @default(11)
+
+  /// Set when somebody said out loud that she was taking this one on herself:
+  /// double experience to her, no bond, and none of the help she turned down.
+  soloCharacterId String?
+
+  /// Everybody who has actually done something about it, so the payout knows
+  /// who to split between.
+  helperIds String[]
+
+  ending      EncounterEnding?
+  resolvedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([campaignId, sceneId])
 }
 
 enum AiProviderKind {

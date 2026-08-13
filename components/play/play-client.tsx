@@ -16,6 +16,7 @@ import { TellMeToggle, useTurnAlerts } from "./turn-alerts";
 import { useNarrator } from "./use-narrator";
 import { UndoTurn } from "./undo-turn";
 import { RollPanel } from "./roll-panel";
+import { EncounterPanel, GoingAlone, type EncounterView } from "./encounter-panel";
 import type { AwaitedRoll } from "@/lib/game/table-dice";
 import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
@@ -109,6 +110,7 @@ export function PlayClient({
   yourCharacterIds,
   initialRound,
   whatNow,
+  encounter,
 }: {
   campaignId: string;
   campaignTitle: string;
@@ -132,6 +134,8 @@ export function PlayClient({
    * person. Grown-ups hesitated and children waited to be told.
    */
   whatNow: string | null;
+  /** What is standing in front of them, if anything. */
+  encounter: EncounterView | null;
 }) {
   const router = useRouter();
   const apart = inputMode === "OWN_DEVICE";
@@ -139,6 +143,10 @@ export function PlayClient({
   const [entries, setEntries] = useState<TranscriptEntry[]>(initialEntries);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Who, if anybody, has said she is taking the encounter on herself. One at a
+  // time: two girls both going it alone is just two girls not helping each
+  // other, which is not a thing this game should have a button for.
+  const [alone, setAlone] = useState<string | null>(null);
   // What each character is spending this turn. Chosen while she is being asked
   // rather than at review, so the person typing decides per character rather
   // than once for the table.
@@ -354,6 +362,7 @@ export function PlayClient({
         // The server has already committed everything; refreshing pulls the
         // authoritative transcript rather than trusting what was streamed.
         setDrafts({});
+        setAlone(null);
         setMove(null);
         setCorrection("");
         setRetelling(false);
@@ -442,6 +451,7 @@ export function PlayClient({
         }
 
         setDrafts({});
+        setAlone(null);
         setMove(null);
         setCorrection("");
         setRetelling(false);
@@ -527,6 +537,7 @@ export function PlayClient({
       characterId: character.id,
       text: (drafts[character.id] ?? "").trim(),
       abilityKey: spends[character.id] ?? null,
+      alone: alone === character.id,
     }))
     .filter((action) => action.text.length > 0);
 
@@ -617,6 +628,15 @@ export function PlayClient({
             nothing at all. */}
         {whatNow && phase.kind === "idle" && hasBegun && !finished && status !== "PAUSED" ? (
           <p className="font-display mb-5 text-lg text-hearth-100">{whatNow}</p>
+        ) : null}
+
+        {/* Above everything, because while one of these is open it is what the
+            turn is about. Shown in every phase — she needs to read what it
+            wants while she is deciding what to type. */}
+        {encounter ? (
+          <div className="mb-5">
+            <EncounterPanel encounter={encounter} />
+          </div>
         ) : null}
 
         {/* Ahead of every other phase, because when the dice are on the table
@@ -736,6 +756,12 @@ export function PlayClient({
             onSpend={(key) =>
               setSpends((current) => ({ ...current, [party[phase.index].id]: key }))
             }
+            // Only offered while something is actually standing in front of
+            // them. "I've got this" with nothing to have is a sentence rather
+            // than a wager.
+            encounterName={encounter && !encounter.soloName ? encounter.name : null}
+            alone={alone === party[phase.index].id}
+            onAlone={(next) => setAlone(next ? party[phase.index].id : null)}
             onNext={() => advance(phase.index)}
             onBack={
               phase.index > 0 ? () => setPhase({ kind: "asking", index: phase.index - 1 }) : undefined
@@ -1024,6 +1050,9 @@ function AskCharacter({
   onNext,
   onBack,
   inputRef,
+  encounterName,
+  alone,
+  onAlone,
 }: {
   campaignId: string;
   talking: boolean;
@@ -1037,6 +1066,10 @@ function AskCharacter({
   onNext: () => void;
   onBack?: () => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  /** Set while something is standing there and nobody has claimed it yet. */
+  encounterName: string | null;
+  alone: boolean;
+  onAlone: (next: boolean) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -1074,6 +1107,12 @@ function AskCharacter({
         }
         className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
       />
+
+      {/* Under the box rather than above it, so she writes what she is doing
+          first and then decides how much of it is hers. */}
+      {!talking && encounterName ? (
+        <GoingAlone checked={alone} onChange={onAlone} />
+      ) : null}
 
       {/* Not offered while the table is only talking it over: nothing is being
           attempted, so a once-a-scene move has nothing to land on. */}

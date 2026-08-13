@@ -6,6 +6,7 @@ import {
   STAT_INFO,
   STAT_MAX,
   STAT_MIN,
+  POINTS_TO_SPEND,
   LUCK_NUDGE_NOTE,
   luckOdds,
   type StatBlock,
@@ -35,12 +36,16 @@ export function StatAllocator({
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between">
-        <span className="text-sm font-medium text-hearth-200">Spread the points</span>
+        <span className="text-sm font-medium text-hearth-200">
+          {POINTS_TO_SPEND} points to spend
+        </span>
         <span
           className={`text-sm font-medium ${remaining === 0 ? "text-moss-400" : "text-hearth-300"}`}
           aria-live="polite"
         >
-          {remaining === 0 ? "All points spent" : `${remaining} point${remaining === 1 ? "" : "s"} left`}
+          {remaining === 0
+            ? "All spent"
+            : `${remaining} point${remaining === 1 ? "" : "s"} left`}
         </span>
       </div>
 

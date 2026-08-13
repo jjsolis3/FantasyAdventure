@@ -54,6 +54,16 @@ import {
 import { pacingGuidance } from "@/lib/game/pacing";
 import { pairsIn } from "@/lib/game/together";
 import {
+  ENCOUNTER_XP,
+  NERVE,
+  encounterAt,
+  encounterGuidance,
+  endingNote,
+  groundAfter,
+  payoutFor,
+  worldRoll,
+} from "@/lib/game/encounters";
+import {
   advance,
   pressureAt,
   pressureGuidance,
@@ -730,7 +740,22 @@ async function fetchWhatNow(
  * spend it, and on a shared screen the person typing decides per character
  * rather than once for the table.
  */
-export type PlayerAction = { characterId: string; text: string; abilityKey?: string | null };
+export type PlayerAction = {
+  characterId: string;
+  text: string;
+  abilityKey?: string | null;
+  /**
+   * She has said she is taking the encounter on by herself.
+   *
+   * Declared with the action rather than settled afterwards, and that ordering
+   * is the whole of its fairness: it is chosen before anybody knows how the
+   * dice went, in the open, on the answer everybody can see. Worked out
+   * retroactively — "only one of them acted, so she was solo" — it would hand
+   * the bigger prize to whoever happened to answer quickest, and turn a shared
+   * game into a race.
+   */
+  alone?: boolean;
+};
 
 /** A Family Move the table wants to spend this turn. */
 export type FamilyMoveChoice = { key: string; helperId: string; targetId: string };
@@ -921,6 +946,40 @@ export async function playTurn(
   // read.
   const clock = pressureAt(campaign.pressure, pressureLimit(campaign.pacing));
 
+  // She said she has it. Recorded before the dice, and only while an encounter
+  // is actually open — "I've got this" with nothing in front of her is a
+  // sentence, not a wager.
+  const claimingSolo = accepted.find((action) => action.alone)?.characterId ?? null;
+
+  // What is standing in front of them, if anything. Read before the turn so the
+  // storyteller writes the passage knowing it is there, and rolled for below so
+  // it pushes back rather than waiting politely.
+  const standing = await db.encounter.findFirst({
+    where: { campaignId: campaign.id, sceneId: scene.id, resolvedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // The world's own die. Server-side even when the family throws their own —
+  // their die is theirs, and this one is nobody's. A parent rolling for the
+  // angry customer would be playing against their own children.
+  const world = standing ? worldRoll(standing.nerve) : null;
+
+  // First claim stands. A second girl saying it after the fact does not take it
+  // off the first, and neither does saying it twice.
+  if (standing && claimingSolo && !standing.soloCharacterId) {
+    if (campaign.party.some((entry) => entry.characterId === claimingSolo)) {
+      standing.soloCharacterId = claimingSolo;
+      await db.encounter.update({
+        where: { id: standing.id },
+        data: { soloCharacterId: claimingSolo },
+      });
+    }
+  }
+
+  const soloName = standing?.soloCharacterId
+    ? (campaign.party.find((m) => m.characterId === standing.soloCharacterId)?.character.name ?? null)
+    : null;
+
   const turnInput = {
       context: built.text,
       tone: campaign.tone as ToneKey,
@@ -942,6 +1001,20 @@ export async function playTurn(
         name: campaign.storyline.pressureName,
         ...clock,
       }),
+      encounter: standing
+        ? encounterGuidance({
+            name: standing.name,
+            want: standing.want,
+            kind: standing.kind,
+            works: standing.works,
+            backfires: standing.backfires,
+            wayOut: standing.wayOut,
+            ground: standing.ground,
+            soloName,
+          })
+        : undefined,
+      worldRoll: world,
+      encounterName: standing?.name,
       pacing: pacingGuidance({
         pacing: campaign.pacing,
         // Scenes already played in this act, including the one in progress.
@@ -1338,6 +1411,81 @@ export async function playTurn(
       await deepen(aId, bId);
     };
 
+    // ---- The encounter, if one is standing ---------------------------------
+    //
+    // Their successes minus what it pressed, which is the whole arithmetic and
+    // is meant to be sayable out loud: we got two, it took one, we are one up.
+    if (standing && world) {
+      // Everybody who did anything this turn, not only those who rolled.
+      //
+      // Found by watching a run: Rowan wrote "I stand beside her and back her
+      // up", the adjudicator quite rightly decided that needed no dice, and he
+      // was paid nothing at all. Counting only the people who rolled means the
+      // quiet supportive action earns less than the showy one — which is exactly
+      // backwards for a game that spent a whole feature learning to reward
+      // listening.
+      //
+      // Erring toward including people is deliberate and matches the act clock's
+      // rule that one real attempt covers the whole turn. While something is
+      // standing in front of the party, everybody in the room is in it.
+      const acted = new Set(standing.helperIds);
+      for (const action of accepted) acted.add(action.characterId);
+
+      const ground = groundAfter({
+        ground: standing.ground,
+        outcomes: result.checks.map((check) => check.outcome),
+        pressed: world.pressed,
+      });
+      const rounds = standing.rounds + 1;
+      const state = encounterAt(ground, rounds);
+
+      await tx.encounter.update({
+        where: { id: standing.id },
+        data: {
+          ground,
+          rounds,
+          helperIds: [...acted],
+          ...(state.over
+            ? { ending: state.over as "THROUGH" | "TURNED", resolvedAt: new Date() }
+            : {}),
+        },
+      });
+
+      if (state.over) {
+        milestones.push(endingNote(standing.name, state.over));
+
+        // Paid only for getting through. An encounter that turned cost them
+        // something already, and charging them experience on top would be the
+        // second punishment for one bad evening — which this game does not do
+        // anywhere else and should not start here.
+        if (state.over === "THROUGH") {
+          const payout = payoutFor({
+            helpers: [...acted],
+            solo: standing.soloCharacterId !== null,
+            soloCharacterId: standing.soloCharacterId,
+          });
+
+          for (const share of payout.shares) {
+            const member = campaign.party.find((entry) => entry.characterId === share.characterId);
+            if (!member) continue;
+
+            await tx.character.update({
+              where: { id: share.characterId },
+              data: { xp: { increment: share.xp } },
+            });
+            milestones.push(
+              `${member.character.name} ${payout.note || "got through it"} — ${share.xp} experience.`,
+            );
+          }
+
+          // The other half of her bargain. A girl who said she had it does not
+          // get a bond out of it, and one who asked for help gets one with
+          // everybody who came.
+          for (const [a, b] of payout.bondPairs) await deepenOnce(a, b);
+        }
+      }
+    }
+
     // Bonds, from moments the extraction identified.
     for (const moment of result.extraction.bondMoments) {
       const from = campaign.party.find((member) => member.character.name === moment.from)?.characterId;
@@ -1352,6 +1500,27 @@ export async function playTurn(
     // one of them being kind, and until now it was worth nothing at all.
     for (const plan of result.plans) {
       for (const [a, b] of pairsIn(plan)) await deepenOnce(a, b);
+    }
+
+    // Something the passage put in front of them, standing there until dealt
+    // with. Opened after everything else in the turn, so an encounter created by
+    // this passage cannot be rolled against in the same passage that made it.
+    const opened = result.extraction.encounterOpened;
+    if (opened && !standing) {
+      await tx.encounter.create({
+        data: {
+          campaignId: campaign.id,
+          sceneId: scene.id,
+          name: opened.name,
+          want: opened.want,
+          kind: opened.kind,
+          works: opened.works,
+          backfires: opened.backfires,
+          wayOut: opened.wayOut,
+          nerve: NERVE[opened.nerve],
+        },
+      });
+      milestones.push(`${opened.name} is in front of them now.`);
     }
 
     // Items the party is now carrying.

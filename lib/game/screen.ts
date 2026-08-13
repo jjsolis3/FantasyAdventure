@@ -23,6 +23,7 @@ import { db } from "@/lib/db";
 import { generateScreenCode } from "@/lib/auth/invite-code";
 import { scenePicture } from "@/lib/game/scene-picture";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
+import { ENCOUNTER_REACH } from "@/lib/game/encounters";
 
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * MINUTE_MS;
@@ -250,6 +251,20 @@ export type ScreenView = {
    * turn it is to throw. Empty on every other turn.
    */
   awaitingRolls: { characterName: string; intent: string }[];
+  /**
+   * What is standing in front of them, if anything.
+   *
+   * Belongs on the television more than most things do: an encounter is the one
+   * part of this game where everybody is looking at the same problem at the same
+   * time, and what it *wants* is the clue they are all trying to read.
+   */
+  encounter: {
+    name: string;
+    want: string;
+    ground: number;
+    reach: number;
+    soloName: string | null;
+  } | null;
   scene: {
     title: string;
     location: string | null;
@@ -312,6 +327,12 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       pacing: true,
       pressure: true,
       pendingRoll: { select: { awaited: true } },
+      encounters: {
+        where: { resolvedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { name: true, want: true, ground: true, soloCharacterId: true },
+      },
       storyline: { select: { title: true, slug: true, pressureName: true } },
       party: {
         select: {
@@ -414,6 +435,18 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       name: campaign.storyline.pressureName,
       ...pressureAt(campaign.pressure, pressureLimit(campaign.pacing)),
     },
+    encounter: campaign.encounters[0]
+      ? {
+          name: campaign.encounters[0].name,
+          want: campaign.encounters[0].want,
+          ground: campaign.encounters[0].ground,
+          reach: ENCOUNTER_REACH,
+          soloName:
+            campaign.party.find(
+              (member) => member.characterId === campaign.encounters[0].soloCharacterId,
+            )?.character.name ?? null,
+        }
+      : null,
     awaitingRolls: (
       (campaign.pendingRoll?.awaited as unknown as
         | { characterName: string; intent: string }[]

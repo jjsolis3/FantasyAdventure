@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { NEUTRAL_STAT, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, canRaise, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
+import { NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, STAT_MIN, XP_PER_STAT_POINT, canRaise, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
 import {
   ATTEMPTS_TO_LEARN,
   MAX_SKILLS,
@@ -13,7 +13,19 @@ import {
 } from "../lib/game/practice.ts";
 import { ARCHETYPES, signaturesFor } from "../lib/game/character-options.ts";
 
-const built: StatBlock = statBlock({ might: 3, wits: 3, heart: 3, spark: 3 });
+// A legal freshly-built sheet under today's rule: floor everywhere, twelve
+// points spent. It used to be four threes and nothing else said, back when the
+// builder handed out three in every stat — which is exactly the assumption this
+// whole change removed.
+const built: StatBlock = statBlock({
+  might: 3,
+  wits: 3,
+  heart: 3,
+  spark: 3,
+  grace: 3,
+  luck: 2,
+  grit: 2,
+});
 
 // ---- Stats that grow --------------------------------------------------------
 
@@ -58,12 +70,20 @@ test("growth: nothing can be raised without a point to spend", () => {
 });
 
 test("growth: the sheet fills far past where it was built", () => {
-  // Twenty at the outset; forty-eight at the far end of a long career.
-  assert.equal(STAT_MAX * 4, 20);
-  assert.equal(STAT_CEILING * 4, 48);
+  // The whole reason growth exists. A built sheet is nineteen points; a filled
+  // one is eighty-four, which takes hundreds of experience and is meant to.
+  assert.equal(STAT_BUDGET, 19);
+  assert.equal(STAT_CEILING * STATS.length, 84);
   assert.ok(STAT_CEILING > STAT_MAX);
-  // A relationship, not a literal — see the note in rules.test.ts.
-  assert.equal(STAT_BUDGET, STATS.length * NEUTRAL_STAT);
+
+  // Stated as a relationship rather than a literal — see the note in
+  // rules.test.ts. This is the second time the budget has moved, and both times
+  // it was the literal that made it dangerous.
+  assert.equal(STAT_BUDGET, STATS.length * STAT_MIN + POINTS_TO_SPEND);
+
+  // And an average new adventurer now starts *below* the value that rolls at
+  // +0, which is the point: competence is something play pays for.
+  assert.ok(STAT_BUDGET / STATS.length < NEUTRAL_STAT);
 });
 
 // ---- The curve --------------------------------------------------------------
@@ -260,4 +280,29 @@ test("growth: a grown sheet is not something the builder's rule can describe", (
 
   assert.equal(validateStats(grown).ok, false, "the build rule rejects it, correctly");
   assert.equal(statPointsUnspent(grown, 30), 0, "and she has spent exactly what she earned");
+});
+
+test("growth: an adventurer built under the old rule keeps every point she earned", () => {
+  // The trap this whole `buildBudget` column exists to avoid.
+  //
+  // The build budget moved from 21 to 19. Growth is measured as how far a sheet
+  // has risen above what it *started* at — so reading that off today's constant
+  // would have told every adventurer already in the house that she had spent
+  // two points she never spent. Silently. With no message. Taking two earned
+  // growth points off a child who had played for them.
+  const OLD_BUDGET = 21;
+  const oldStyle: StatBlock = statBlock({}); // seven threes, exactly the old rule
+
+  assert.equal(STATS.reduce((sum, stat) => sum + oldStyle[stat], 0), OLD_BUDGET);
+
+  // Thirty experience earns three points, and she has spent none of them.
+  assert.equal(statPointsUnspent(oldStyle, 30, OLD_BUDGET), 3);
+
+  // Measured against today's rule instead, she would be two short.
+  assert.equal(statPointsUnspent(oldStyle, 30), 1);
+});
+
+test("growth: a new adventurer is measured against the rule she was built with", () => {
+  assert.equal(statPointsUnspent(built, 30, STAT_BUDGET), 3);
+  assert.equal(statPointsUnspent(built, 0, STAT_BUDGET), 0);
 });

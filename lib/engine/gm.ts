@@ -68,6 +68,18 @@ export type TurnInput = {
    */
   pressure?: string;
   /**
+   * What is standing in front of them, and how it is going.
+   *
+   * Reaches narration, and — unlike the act clock — the dice as well, because
+   * the world rolls its own die while one of these is open. See
+   * `lib/game/encounters.ts`.
+   */
+  encounter?: string;
+  /** What the encounter rolled this round, already resolved. */
+  worldRoll?: { roll: number; nerve: number; pressed: number; note: string } | null;
+  /** Its name, for the line the storyteller is handed about that roll. */
+  encounterName?: string;
+  /**
    * Objectives on the quest board that are not about carrying something, so the
    * extraction can report which of them the passage just finished rather than
    * inventing achievements.
@@ -425,7 +437,22 @@ async function finishTurn(
 
   const shared = togetherGuidance(plans);
 
+  // The world's own roll, told as a thing that happened rather than a number.
+  // Ahead of the party's results because it is what they were rolling against,
+  // and a passage that describes her success and then remembers the customer
+  // was shouting has the order backwards.
+  const world = input.worldRoll
+    ? [
+        `${input.encounterName ?? "It"} rolls ${input.worldRoll.roll} against them. ` +
+          `${input.worldRoll.note} ` +
+          (input.worldRoll.pressed > 0
+            ? "Show it pushing back in this passage — it is not waiting politely."
+            : "It falters for a beat, and they get a chance to use."),
+      ]
+    : [];
+
   const resolutions = [
+    ...world,
     // Ahead of the individual results, because it changes how all of them
     // should be read. A passage told "Mira rolled well" and then "they were
     // working together" writes the success first and remembers the sister
@@ -443,6 +470,7 @@ async function finishTurn(
     actions: namedActions,
     resolutions: resolutions || "Nothing needed a dice roll this turn.",
     pressure: input.pressure,
+    encounter: input.encounter,
   });
 
   let narration = await calls.prose(

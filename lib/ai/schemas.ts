@@ -179,6 +179,26 @@ export const extractionSchema = z.object({
   whatNow: z.string().max(160).nullish(),
 
   /**
+   * Something the passage put in front of them, standing there until dealt with.
+   *
+   * Null on almost every turn, and the prompt says so twice. An encounter is a
+   * scene-sized event — a door opened on somebody already angry, a cellar that
+   * locks — and a storyteller that opened one every turn would turn an adventure
+   * into a corridor of obstacles.
+   */
+  encounterOpened: z
+    .object({
+      name: z.string().min(1).max(80),
+      want: z.string().min(1).max(200),
+      kind: z.enum(["PERSON", "TRAP", "PUZZLE"]).default("PERSON"),
+      nerve: z.enum(["CALM", "TENSE", "FIERCE"]).default("TENSE"),
+      works: z.array(z.string().max(120)).max(4).default([]),
+      backfires: z.array(z.string().max(120)).max(4).default([]),
+      wayOut: z.string().min(1).max(200),
+    })
+    .nullish(),
+
+  /**
    * Whether the party got anywhere at all this turn.
    *
    * Defaults to **true**, which is the whole point of the default. This is the

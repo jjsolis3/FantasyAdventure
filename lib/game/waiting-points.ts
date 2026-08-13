@@ -23,6 +23,8 @@ export type CharacterState = {
   id: string;
   xp: number;
   stats: StatBlock;
+  /** What she was built with, so growth is measured from the right place. */
+  buildBudget: number;
   level: number;
   knackCount: number;
   /** Skills bought with a level-up pick, not earned by practising. */
@@ -80,7 +82,7 @@ export async function waitingPointsFor(
 
     // Growth she has earned and not spent. Both kinds are shown as one pill,
     // because the destination is the same sheet either way.
-    const statPoints = statPointsUnspent(character.stats, character.xp);
+    const statPoints = statPointsUnspent(character.stats, character.xp, character.buildBudget);
     const knacks = knacksUnspent(character.level, character.knackCount);
     const skills = skillPicksUnspent({
       level: character.level,

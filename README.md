@@ -86,6 +86,7 @@ carrying it mean anything.
 | ✅ | **M12** An act clock, so going in circles costs something and being stuck does not |
 | ✅ | **M12** Bonds from working together and from listening, not only from being looked after |
 | ✅ | **M12** The family's own dice: the story stops and asks, and they type in what they got |
+| ✅ | **M12** Encounters — something standing in front of them, settled with words rather than weapons |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -126,9 +127,14 @@ Once anyone has registered, bootstrap codes stop being generated.
 Build everyone at `/characters` — you choose who actually travels when an
 adventure begins, so it is fine to add the whole household.
 
-**Seven stats, twenty-one points.** Might, Wits, Heart, **Spark**, Grace, Luck
-and Grit. Each runs 1–5 at the builder and the budget averages 3, so a character
-is competent everywhere unless you deliberately specialise. `Heart` is a
+**Seven stats, twelve points to spend.** Might, Wits, Heart, **Spark**, Grace,
+Luck and Grit. Everything starts at 1 and she has **12 points** to place where
+she likes — so a new adventurer is genuinely good at two or three things and
+ordinary-to-poor at the rest, with somewhere to grow into.
+
+The builder used to open with 3 already in every stat, which made the only
+interesting move *taking points away* from things and handed a child somebody
+already competent at all seven before she had done anything. `Heart` is a
 first-class stat, not a throwaway — comforting someone is as valid a way through
 a scene as lifting a gate. Luck is the odd one out and has its own section
 below: it bends every roll, not only the ones the storyteller aims at it. The
@@ -1144,6 +1150,76 @@ worth more than a thing that appears without warning.
 The adjudication prompt lists the stats one per line with a *pick this when*
 for each. Seven options is harder for a small local model than four, and Luck
 and Grit are the least obvious of them.
+
+### Encounters
+
+The one D&D shape the game was missing, and it fits because the engine already
+refuses violence. Everything else here answers a question the players asked; an
+encounter is the world asking one back. She opens a door, and somebody behind it
+is already cross.
+
+**Nothing has hit points.** An encounter is a person or a predicament with a
+**want**, and the whole of it is working out what that want is and what to do
+about it: admit it, ask what happened, offer something, be funny, tell the truth
+when a lie would be easier. Or leave — **every encounter has a way out**, always
+filled in, always costing something. A child who is frightened must be able to
+go, and going is a decision rather than a defeat.
+
+**One track, two directions.** Deliberately the act clock at a smaller scale,
+because the girls have already learned to read one:
+
+```
+  it turns  ◄──────────●──────────►  they're through
+              −3       0       +3
+```
+
+Their successes push right, its own roll pushes left. Both ends are an ending
+and **neither is a loss** — the left one means the situation *turns* and the
+story carries on from somewhere worse.
+
+**The world's own roll.** Each round, after the girls', the server rolls for the
+encounter. Not an attack, a reaction: does the customer get angrier, does the
+trap tighten? Kept server-side even when the family throws their own dice —
+their die is theirs and this one is nobody's — but **shown**, because a visible
+roll landing against them is the whole drama of an opposed check with nothing
+being attacked.
+
+Net movement is their successes minus what it pressed, which is meant to be
+sayable out loud: *we got two, it took one, we're one up.* A critical is worth
+two — the only place in this game where a natural 20 does arithmetic rather than
+narrative, and it earns it.
+
+**It cannot go on forever.** Found by driving one end to end: with the party
+gaining about a success a round and the encounter pressing about as often, the
+track sat between −1 and +1 for nine rounds with no sign of stopping. After five
+rounds it settles toward whoever is ahead, ties going to the party.
+
+### Alone, or asking for help
+
+The decision the whole feature is built around, and it has to be a real fork
+rather than a right answer with a decoy beside it.
+
+| | Experience | Bond | Odds |
+|---|---|---|---|
+| **"I've got this"** | double, to her | none | worse — no shared-plan +1 |
+| **Together** | split between everybody who was in it | one per pair | better |
+
+**Independence is a short-term gain; teamwork is a long-term one.** Bonds compound
+into Family Moves; experience is just experience. The girl who always goes it
+alone levels faster and has a thinner sheet at level 8. The one who always calls
+for help levels slower and unlocks *Since We Were Small*. Neither is wrong, both
+are visibly good, and the game never once says which to be.
+
+Two rules keep it honest. She declares it **on her own answer, before the roll**
+— worked out afterwards it would hand the bigger prize to whoever answered
+quickest. And **acting alone is not the same as saying you would**: a girl who
+simply happened to be the only one who spoke gets the ordinary share.
+
+Everybody who did *anything* that round counts as helping, not only those who
+rolled. Found the same way: a brother wrote "I stand beside her and back her up",
+the adjudicator quite rightly wanted no dice for it, and he was paid nothing —
+which is exactly backwards for a game that just spent a feature learning to
+reward listening.
 
 ### The family's own dice
 

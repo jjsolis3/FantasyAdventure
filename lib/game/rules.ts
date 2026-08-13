@@ -47,21 +47,31 @@ export const STAT_MAX = 5;
 export const NEUTRAL_STAT = 3;
 
 /**
- * Every stat starts at MIN and the player distributes the rest.
+ * How many points a new adventurer has to spend.
  *
- * Derived rather than written down, and this matters more than it looks. The
- * budget used to be a literal 12, which was exactly three per stat across four
- * stats — so an average character rolled at +0. Adding three stats without
- * moving that number would have left the average at 1.7 and made every
- * character in the game quietly worse at everything, which is the sort of change
- * nobody notices until the dice have been unkind for an evening.
+ * Twelve, on top of a floor of one in everything. The previous rule handed out
+ * three in every stat and asked the player to shuffle them about, which meant a
+ * builder where the interesting move was taking points *away* from things — and
+ * an adventurer who was already competent at all seven before she had done
+ * anything at all.
  *
- * Tying it to the count means that can never happen again, and it is also what
- * made the migration exact: an existing character on twelve points across four
- * stats, given three new stats at the neutral value, lands on twenty-one across
- * seven — precisely the new budget, with nothing gained and nothing lost.
+ * Starting at the floor makes the builder a series of decisions rather than a
+ * set of sliders, and it leaves somewhere to grow into: an average stat now
+ * sits below the value that rolls at +0, and climbing above it is something
+ * play pays for.
  */
-export const STAT_BUDGET = STATS.length * NEUTRAL_STAT;
+export const POINTS_TO_SPEND = 12;
+
+/**
+ * What a whole freshly-built stat block adds up to.
+ *
+ * Floor everywhere, plus the points. Derived rather than written down, because
+ * the last time this was a literal it was 12 across four stats — exactly three
+ * each, so an average character rolled at +0 — and adding three stats without
+ * moving it would have made every character in the game quietly worse at
+ * everything.
+ */
+export const STAT_BUDGET = STATS.length * STAT_MIN + POINTS_TO_SPEND;
 
 /**
  * The highest a stat can ever reach, through play.
@@ -95,17 +105,36 @@ export function statPointsEarned(xp: number): number {
 /**
  * How many she has left to spend.
  *
- * Derived rather than stored: what she has spent is simply how far her stats
- * have risen above the budget she was built with. No column to drift out of
- * step with the stats themselves, and no migration to invent one.
+ * What she has spent is how far her stats have risen above the budget she was
+ * *built* with — which is why that number has to be passed in rather than read
+ * off the current constant.
+ *
+ * It did read off the constant, and that was fine right up until the build
+ * budget changed. Twenty-one became nineteen, and every adventurer already in
+ * the house would have appeared to have spent two points she never spent:
+ * silently, with no message, taking two growth points off a child who had
+ * earned them. `Character.buildBudget` records what each one actually started
+ * with, so the old ones keep their arithmetic and the new ones get the new
+ * rule.
+ *
+ * This is the second time this budget has moved. It will not be the last.
  */
-export function statPointsUnspent(stats: StatBlock, xp: number): number {
-  return Math.max(0, statPointsEarned(xp) - (totalSpent(stats) - STAT_BUDGET));
+export function statPointsUnspent(
+  stats: StatBlock,
+  xp: number,
+  builtWith: number = STAT_BUDGET,
+): number {
+  return Math.max(0, statPointsEarned(xp) - (totalSpent(stats) - builtWith));
 }
 
 /** Whether one more point may go into this stat. */
-export function canRaise(stats: StatBlock, xp: number, stat: StatKey): boolean {
-  return statPointsUnspent(stats, xp) > 0 && stats[stat] < STAT_CEILING;
+export function canRaise(
+  stats: StatBlock,
+  xp: number,
+  stat: StatKey,
+  builtWith: number = STAT_BUDGET,
+): boolean {
+  return statPointsUnspent(stats, xp, builtWith) > 0 && stats[stat] < STAT_CEILING;
 }
 
 export const SKILLS_PER_CHARACTER = 2;
@@ -156,13 +185,22 @@ export type StatBlock = Record<StatKey, number>;
 /**
  * A whole stat block from however much of one you have.
  *
- * Anything unnamed comes back at the neutral value, which is also what the
- * budget is built from — so `statBlock({})` is a legal, fully-spent build and
- * `statBlock({ might: 5 })` is that build with two points moved into Might.
+ * Anything unnamed comes back at the **neutral** value — so this reads as "a
+ * character who is unremarkable at everything you did not mention", which is
+ * what every caller actually wants from it.
  *
- * Worth having beyond tests: it is what the builder opens on, and it means a
- * partial block from anywhere is completed the same way every time rather than
- * by each caller remembering to fill the gaps.
+ * It used to be more than that: while every stat began at three, `statBlock({})`
+ * was also a legal fully-spent build. That stopped being true when a new
+ * adventurer started at the floor with twelve points in hand, and the claim has
+ * been removed rather than the behaviour changed — filling at the floor instead
+ * would quietly turn every "ordinary character" in the tests into somebody who
+ * rolls at −2 in three stats.
+ *
+ * What the builder opens on is a separate thing, and lives with the builder.
+ *
+ * Worth having beyond tests: a partial block from anywhere is completed the
+ * same way every time rather than by each caller remembering to fill the gaps,
+ * and forgetting a stat is how a stat goes missing.
  */
 export function statBlock(partial: Partial<StatBlock> = {}): StatBlock {
   return Object.fromEntries(

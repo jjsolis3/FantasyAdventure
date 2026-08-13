@@ -226,6 +226,8 @@ export async function resetCharacter(characterId: string, build: StatBlock): Pro
         xp: 0,
         level: 1,
         ...statColumns(build),
+        // Rebuilt under today's rules, so she is measured against them too.
+        buildBudget: STAT_BUDGET,
       },
     });
   });
