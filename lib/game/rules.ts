@@ -243,9 +243,98 @@ export function validateStats(stats: StatBlock): StatValidation {
  * than she was yesterday.
  */
 export function statModifier(value: number): number {
+  // A stat that never arrived counts as an ordinary one.
+  //
+  // Not defensive programming for its own sake — this is a bug that actually
+  // happened. Two places in the turn pipeline built a party's stats as a
+  // four-key literal with a cast, and when the game went to seven stats those
+  // literals stayed as they were. Grace, Luck and Grit reached this function as
+  // `undefined`, `undefined - 3` is NaN, and every comparison against NaN is
+  // false — so a Grace check was a guaranteed complication however well the girl
+  // rolled, all evening, with nothing anywhere saying why.
+  //
+  // The callers are fixed and go through `statsOf` now. This is here because the
+  // failure was silent and landed on a nine-year-old: whatever goes wrong next,
+  // an ordinary roll is a far better place to land than a cursed one.
+  if (!Number.isFinite(value)) return 0;
+
   if (value <= 5) return value - 3;
   return 2 + Math.ceil((value - 5) / 2);
 }
+
+// ---- Luck ------------------------------------------------------------------
+
+/**
+ * How much of a chance one point of Luck buys, in percent.
+ *
+ * Eight, which puts a built character who favours Luck at one lucky break in
+ * six failed rolls and a character at the far ceiling at not quite one in two.
+ * Tuned to be *noticed* without being relied on: often enough that a girl who
+ * spent her points on Luck sees it happen most evenings, rare enough that the
+ * rest of her sheet still decides how the night goes.
+ */
+export const LUCK_NUDGE_STEP = 8;
+
+/**
+ * How often fortune steps in on a roll that was about to go badly.
+ *
+ * Luck was a plain stat for a long while, and a plain stat is the one thing
+ * Luck cannot be. The other six answer "how good are you at this?", which is a
+ * question the storyteller asks by picking one of them. Luck answers "did it
+ * happen to go your way?" — and something that only counts when it is *chosen*
+ * is not luck at all, it is a talent for rummaging.
+ *
+ * So Luck now bends the dice on every check, whichever stat was rolled.
+ *
+ * Derived from `statModifier` rather than given a curve of its own, which is
+ * the whole trick here and worth spelling out:
+ *
+ *   - **Neutral Luck does nothing.** `statModifier(3)` is 0, so a character who
+ *     spread her points evenly has ordinary luck and no hidden thumb on the
+ *     scale. That is the same hinge every other stat turns on.
+ *   - **Low Luck is never punished.** Clamped at zero, so an unlucky adventurer
+ *     simply gets no help — the dice are not additionally cruel to a child who
+ *     put her points somewhere else.
+ *   - **It flattens where rolls flatten.** Past 5 the modifier curve slows, and
+ *     the nudge slows with it for free, so the far end of a long career cannot
+ *     turn into a character who never really fails.
+ *
+ * The one thing it must never be is a flat bonus on every roll. Luck helps with
+ * everything and the other six help with one thing each, so a bonus would make
+ * it strictly the best stat on the sheet — and a nine-year-old works that out in
+ * one evening, after which every adventurer in the house is a Luck adventurer.
+ * A chance to lift a roll that already failed cannot be aimed, cannot be counted
+ * on, and never turns a good roll into a better one. See `resolveCheck`.
+ */
+export function luckChance(luck: number): number {
+  return Math.max(0, statModifier(luck)) * LUCK_NUDGE_STEP;
+}
+
+/**
+ * The same thing said the way a child reads it — "about 1 roll in 6".
+ *
+ * Printed beside Luck wherever a point can be spent, because "16%" is a number
+ * a ten-year-old can read and not a number she can *feel*, and the entire point
+ * of putting a point into Luck is knowing what it bought.
+ */
+export function luckOdds(luck: number): string {
+  const chance = luckChance(luck);
+  if (chance <= 0) return "ordinary luck — nothing bends";
+  return `fortune steps in about 1 time in ${Math.round(100 / chance)}`;
+}
+
+/**
+ * What Luck does that the other six do not, in one sentence for a nine-year-old.
+ *
+ * Kept out of `STAT_INFO.luck.blurb` on purpose. That blurb is read by two very
+ * different audiences — a child looking at her sheet, and the adjudicator
+ * deciding which stat a check is about — and the adjudicator has no business
+ * knowing about the nudge. It never chooses it, the server applies it, and a
+ * model told that Luck quietly helps with everything will start reaching for
+ * Luck on checks that are plainly about climbing a wall.
+ */
+export const LUCK_NUDGE_NOTE =
+  "Luck bends every other roll too: a check that was going badly sometimes turns out better than it should.";
 
 // ---- Relationships ---------------------------------------------------------
 

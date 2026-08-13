@@ -82,6 +82,7 @@ carrying it mean anything.
 | ✅ | **M12** Seven stats — Grace, Luck and Grit — on a derived budget |
 | ✅ | **M12** 56 skills, and a new one to choose at every level after the second |
 | ✅ | **M12** A second signature move for every calling, at level 5 |
+| ✅ | **M12** Luck that bends the dice on every roll, not just its own checks |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -122,11 +123,13 @@ Once anyone has registered, bootstrap codes stop being generated.
 Build everyone at `/characters` — you choose who actually travels when an
 adventure begins, so it is fine to add the whole household.
 
-**Four stats, twelve points.** Might, Wits, Heart and **Spark**. Each runs 1–5
-and the twelve-point budget averages 3, so a character is competent everywhere
-unless you deliberately specialise. `Heart` is a first-class stat, not a
-throwaway — comforting someone is as valid a way through a scene as lifting a
-gate. The budget is enforced server-side, not just in the builder.
+**Seven stats, twenty-one points.** Might, Wits, Heart, **Spark**, Grace, Luck
+and Grit. Each runs 1–5 at the builder and the budget averages 3, so a character
+is competent everywhere unless you deliberately specialise. `Heart` is a
+first-class stat, not a throwaway — comforting someone is as valid a way through
+a scene as lifting a gate. Luck is the odd one out and has its own section
+below: it bends every roll, not only the ones the storyteller aims at it. The
+budget is enforced server-side, not just in the builder.
 
 **Race and calling are free text.** The lists are suggestions with a stat
 affinity attached; a child who wants to be a Cloud Baker can be one, and the
@@ -1138,6 +1141,53 @@ worth more than a thing that appears without warning.
 The adjudication prompt lists the stats one per line with a *pick this when*
 for each. Seven options is harder for a small local model than four, and Luck
 and Grit are the least obvious of them.
+
+### What Luck actually does
+
+Luck shipped as a plain stat, and a plain stat is the one thing Luck cannot be.
+The other six answer *how good are you at this?* — a question the storyteller
+asks by picking one of them. Luck answers *did it happen to go your way?*, and
+something that only counts when it is chosen is not luck, it is a talent for
+rummaging.
+
+So Luck now bends every check, whichever stat was rolled. On a result that was
+going to disappoint, fortune sometimes steps in and lifts it one step:
+a complication becomes a partial, a near miss becomes a success.
+
+**Never a flat bonus.** Luck helps with everything and the other six help with
+one thing each, so a bonus would make it strictly the best stat on the sheet —
+and a nine-year-old works that out in one evening, after which every adventurer
+in the house is a Luck adventurer. A chance to lift a roll that already failed
+cannot be aimed, cannot be counted on, and never turns a good roll into a better
+one.
+
+The chance is `max(0, statModifier(luck)) × 8` percent, derived from the same
+curve every other stat rolls on rather than given one of its own. Three
+consequences fall out of that for free: neutral Luck does nothing, low Luck is
+never punished, and the nudge flattens exactly where rolls flatten, so the far
+end of a long career cannot become a character who never really fails.
+
+| Luck | Chance | Lifted, of all checks | Succeeds |
+|---|---|---|---|
+| 3 (neutral) | 0% | 0% | 44.9% |
+| 5 (build cap) | 16% | 8.1% | 46.6% |
+| 12 (ceiling) | 48% | 24.0% | 49.7% |
+
+Measured over 200,000 rolls at NORMAL. The success column is the point: most
+lifts turn a complication into a partial, which is *not* a success — so Luck at
+the build cap moves how often things work by under two points, while visibly
+happening about once a chapter. It softens the evening without deciding it.
+
+Three rules the dice keep. A natural 1 is never lifted — *nothing saves a 1* is
+a rule a table learns in one evening and enjoys. Luck never hands out a
+critical; that word belongs to the die. And it applies last, after Family Moves
+and spent abilities, so a girl who has been saving her signature move all
+evening is never told afterwards that she got lucky instead.
+
+The storyteller is told when it happened and instructed to narrate the *world*
+turning out kindly rather than the girl being clever — the branch held, the
+guard looked the other way. The dice card says so too, because the numbers on it
+still show a miss.
 
 ### Once a scene, once a chapter
 

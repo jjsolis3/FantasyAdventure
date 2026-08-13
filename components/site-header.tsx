@@ -27,7 +27,7 @@ export async function SiteHeader() {
 
   return (
     <header className="print-hide sticky top-0 z-40 border-b border-hearth-800/50 bg-hearth-950/80 backdrop-blur">
-      <nav className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-3">
+      <nav className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 sm:gap-4 sm:px-6">
         <Link
           href="/"
           className="font-display shrink-0 text-lg text-hearth-100 transition-colors hover:text-hearth-50"

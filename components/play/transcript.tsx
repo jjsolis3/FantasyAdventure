@@ -30,6 +30,8 @@ export type DiceDetail = {
   skillName?: string;
   /** Present when a Family Move altered this check. */
   move?: { moveName: string; note: string } | null;
+  /** Present when her Luck lifted this check. */
+  luck?: { from: string; note: string } | null;
 };
 
 const OUTCOME_STYLE: Record<DiceDetail["outcome"], { label: string; className: string }> = {
@@ -82,6 +84,17 @@ export function DiceCard({ dice, animate = false }: { dice: DiceDetail; animate?
         </span>
       </div>
       <p className="mt-1.5 text-sm opacity-80">{dice.intent}</p>
+
+      {/* Above the Family Move line, in the order the two actually happened.
+          Worth showing at all because the numbers on this card contradict the
+          result: the total is under the target and the card says Success, and a
+          child who spots that deserves the reason rather than a bug. */}
+      {dice.luck ? (
+        <p className="mt-2 border-t border-current/20 pt-2 text-sm">
+          <span className="font-medium">Lucky</span>
+          <span className="opacity-80"> — {dice.luck.note}</span>
+        </p>
+      ) : null}
 
       {dice.move ? (
         <p className="mt-2 border-t border-current/20 pt-2 text-sm">

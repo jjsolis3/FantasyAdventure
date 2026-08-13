@@ -1,6 +1,16 @@
 "use client";
 
-import { STATS, STAT_BUDGET, STAT_INFO, STAT_MAX, STAT_MIN, type StatBlock, type StatKey } from "@/lib/game/rules";
+import {
+  STATS,
+  STAT_BUDGET,
+  STAT_INFO,
+  STAT_MAX,
+  STAT_MIN,
+  LUCK_NUDGE_NOTE,
+  luckOdds,
+  type StatBlock,
+  type StatKey,
+} from "@/lib/game/rules";
 
 export function StatAllocator({
   stats,
@@ -46,8 +56,16 @@ export function StatAllocator({
                 isAffinity ? "border-moss-600/50 bg-moss-800/20" : "border-hearth-800/60 bg-hearth-950/40"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
+              {/* The words get their own line on a phone.
+                  The stepper is a fixed 200 pixels — two buttons, five spheres
+                  and the value — and the form column on a phone is 268, which
+                  left 54 for the name and the blurb: "Force. / Lifting, /
+                  shoving," one word to a line, seven times down the page. Seven
+                  stats is what did it; at four it was merely tight. Wrapping
+                  gives the text the full width and drops the stepper beneath
+                  it, and from a tablet up they share a row as before. */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1 basis-full sm:basis-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-hearth-100">{STAT_INFO[stat].label}</span>
                     {isAffinity ? (
@@ -57,9 +75,17 @@ export function StatAllocator({
                     ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-hearth-400">{STAT_INFO[stat].blurb}</p>
+                  {/* Updates as the buttons move, so a girl deciding between a
+                      fourth point in Luck and a fourth in Might can watch the
+                      odds change rather than take the blurb's word for it. */}
+                  {stat === "luck" ? (
+                    <p className="mt-0.5 text-xs text-moss-400/80" aria-live="polite">
+                      {LUCK_NUDGE_NOTE} Right now, {luckOdds(value)}.
+                    </p>
+                  ) : null}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="ml-auto flex shrink-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => adjust(stat, -1)}

@@ -15,6 +15,15 @@ import { usePathname } from "next/navigation";
  * The second is labelled "Characters" here. The app calls them adventurers
  * everywhere else and will go on doing so, but a navigation bar is the one
  * place where being unmistakable beats being in voice.
+ *
+ * On a phone the words come off and the icons stay. Both labels plus the
+ * wordmark plus the account button came to about 500 pixels, which is more than
+ * a phone has — so every signed-in page scrolled sideways, and every centred
+ * column on it was squeezed to fit a document wider than the screen. The
+ * stat blurbs in the character builder were coming out one word per line
+ * because of this. The icons carry it alone precisely because they were added
+ * to tell these two apart in the first place, and the label survives for
+ * screen readers, where there is no width to run out of.
  */
 export function NavLinks() {
   const pathname = usePathname();
@@ -69,7 +78,9 @@ function NavLink({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+      aria-label={label}
+      title={label}
+      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors sm:px-3 ${
         active
           ? "bg-hearth-800/60 text-hearth-50"
           : "text-hearth-300 hover:bg-hearth-800/30 hover:text-hearth-100"
@@ -78,7 +89,7 @@ function NavLink({
       <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0" aria-hidden>
         {children}
       </svg>
-      {label}
+      <span className="hidden sm:inline">{label}</span>
     </Link>
   );
 }
