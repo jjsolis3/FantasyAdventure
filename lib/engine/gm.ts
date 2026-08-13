@@ -51,6 +51,14 @@ export type TurnInput = {
   /** Where the story is and how long this family likes an act to run. */
   pacing?: string;
   /**
+   * What the act's clock is doing, when it has started moving.
+   *
+   * Reaches narration only. The dice must not know about it — a clock that
+   * quietly made checks harder would be a punishment nobody could see, and the
+   * point of this one is that it is visible.
+   */
+  pressure?: string;
+  /**
    * Objectives on the quest board that are not about carrying something, so the
    * extraction can report which of them the passage just finished rather than
    * inventing achievements.
@@ -266,6 +274,7 @@ export async function runTurn(
     context: input.context,
     actions: namedActions,
     resolutions: resolutions || "Nothing needed a dice roll this turn.",
+    pressure: input.pressure,
   });
 
   let narration = await calls.prose(
@@ -297,6 +306,10 @@ export async function runTurn(
     deedsDone: [],
     questsOpened: [],
     whatNow: null,
+    // True, like the schema's default and for the same reason: this is the
+    // shape used when extraction failed outright, and a turn the game could not
+    // read is not one the party should be charged for.
+    movedForward: true,
     actComplete: false,
     sceneComplete: false,
   };

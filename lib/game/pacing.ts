@@ -84,10 +84,17 @@ export function pacingGuidance(options: {
   }
 
   if (options.sceneInAct >= scenesPerAct * 2) {
+    // This used to read "look for an honest way to finish it soon", which was
+    // an invitation to the one thing that ruins the game: handed a stuck party,
+    // the cheapest honest-looking exit is to hand them the answer, and children
+    // work that pattern out in about two evenings. An overrunning act is now a
+    // reason to press harder, never a reason to solve it for them.
     return (
-      `${position} This act has run well past that. Look for an honest way to ` +
-      `finish it soon and set "actComplete" when you find one — but do not cut ` +
-      `off something that is still mid-moment.`
+      `${position} This act has run well past that. Raise the pressure rather ` +
+      `than the curtain: bring the deadline closer, make the cost of dithering ` +
+      `visible, let the thing they are racing get ahead of them. Set ` +
+      `"actComplete" when the act's goal is genuinely met — never merely ` +
+      `because it has taken a while, and never by giving the party the answer.`
     );
   }
 

@@ -83,6 +83,7 @@ carrying it mean anything.
 | ✅ | **M12** 56 skills, and a new one to choose at every level after the second |
 | ✅ | **M12** A second signature move for every calling, at level 5 |
 | ✅ | **M12** Luck that bends the dice on every roll, not just its own checks |
+| ✅ | **M12** An act clock, so going in circles costs something and being stuck does not |
 
 Ten starter adventures are seeded, each with a three-act spine the AI
 improvises inside of.
@@ -1141,6 +1142,69 @@ worth more than a thing that appears without warning.
 The adjudication prompt lists the stats one per line with a *pick this when*
 for each. Seven options is harder for a small local model than four, and Luck
 and Grit are the least obvious of them.
+
+### The act clock
+
+Nothing was ever refused. An action with nothing to do with the story got
+narrated as warmly as one that cracked it open, and the game's only response to
+a table going in circles was more pleasant prose. Two things followed, and the
+second is the dangerous one:
+
+1. An evening could be spent going nowhere with no signal it was happening.
+   Pacing counts *scenes*, and a scene only ends when the party moves — so ten
+   turns in one kitchen is still scene one.
+2. When an act overran, the storyteller was told to *"look for an honest way to
+   finish it soon"*. Handed a stuck party, the cheapest honest-looking way out is
+   to hand them the answer. Children work that pattern out in about two
+   evenings, and once they have there is no reason left to think about anything.
+
+**The rule is the one the game already believed, extended one step.** A failed
+roll never stops the story, it complicates it — and now an unfocused *idea* is
+treated the same way. It is never refused. It **costs**.
+
+Each act carries a clock named in the story's own words: *The fog*, *The stars
+going out*, *Days until the festival*. It fills on a turn where the party got
+nowhere, and the girls can see it move.
+
+**The fairness line is the whole design:**
+
+| | |
+|---|---|
+| She tried the right thing and the dice said no | **nothing moves** |
+| She did something that was not really anything | **the clock moves** |
+
+Charging her twice for one bad roll is how a game teaches a child not to try.
+
+**A wasted turn is computed, not judged.** The pipeline already reports
+`deedsDone`, `itemsGained`, `questsOpened`, the outcome of every check, and
+whether a scene or act closed — so a turn that produced none of those and had no
+successful roll is definitionally one where nothing moved. On top of that the
+extraction now answers `movedForward`, which exists to catch the one kind of
+turn the hard signals cannot see: asking an innkeeper who else was at the fair
+finishes no objective and fills no pocket, and is exactly the thinking this
+feature is meant to protect. **Both must agree** before anything ticks, and the
+field defaults to `true` — an unfair tick is felt at once by a nine-year-old and
+a missed one is invisible.
+
+**Nobody rolled anything** is the third condition. A roll means somebody
+committed to an attempt the game thought could fail, and that is engagement
+whatever the die said.
+
+**A full clock is a debt, not an event.** A passage is written before it can be
+read, so the turn that fills the clock cannot also show the consequence — the
+next one collects. And what it collects is never a loss: what the party was
+trying to prevent partly happens, the story carries on from a worse position,
+and the storyteller is told in as many words that nobody is hurt, the adventure
+is not over, and it must not scold anybody.
+
+The limit is `scenesPerAct + 2`, so it means the same thing in a brisk act as in
+a leisurely one — four notches for *one evening*, nine for *take our time*.
+
+Two prompt changes back it up. The core contract now carries **never hand the
+players the answer because they are stuck — give them a new way to look, never
+the thing itself**, on every single call rather than only when the clock is
+running. And the pacing overrun line was rewritten from "finish it soon" to
+*raise the pressure rather than the curtain*.
 
 ### What Luck actually does
 

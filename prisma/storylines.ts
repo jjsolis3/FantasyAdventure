@@ -55,6 +55,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 12,
+    pressureName: "The stars going out",
     acts: [
       {
         index: 1,
@@ -119,6 +120,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 12,
+    pressureName: "Days until the festival",
     acts: [
       {
         index: 1,
@@ -181,6 +183,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 12,
+    pressureName: "The fog",
     acts: [
       {
         index: 1,
@@ -238,6 +241,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 4,
     estimatedScenes: 16,
+    pressureName: "What the house is forgetting",
     acts: [
       {
         index: 1,
@@ -294,6 +298,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 14,
+    pressureName: "How much of her is left",
     acts: [
       {
         index: 1,
@@ -348,6 +353,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 12,
+    pressureName: "How awake the house is",
     acts: [
       {
         index: 1,
@@ -405,6 +411,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 15,
+    pressureName: "What is building itself tonight",
     acts: [
       {
         index: 1,
@@ -475,6 +482,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 14,
+    pressureName: "How close the signal is",
     acts: [
       {
         index: 1,
@@ -534,6 +542,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 4,
     estimatedScenes: 12,
+    pressureName: "How near it has come",
     acts: [
       {
         index: 1,
@@ -593,6 +602,7 @@ export const storylines = [
     minPlayers: 2,
     maxPlayers: 5,
     estimatedScenes: 14,
+    pressureName: "How high the water is",
     acts: [
       {
         index: 1,

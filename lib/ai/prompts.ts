@@ -79,7 +79,8 @@ HOW TO WRITE:
 - Never write dialogue or decisions for the players' characters. They speak for themselves.
 - Give every named character a want and a voice. Let them be funny, stubborn, dramatic, suspicious — never furniture.
 - A failed roll never stops the story. It complicates it: the ladder holds but the chickens scream, the lie works on the wrong person.
-- End every turn on something moving — a discovery, a complication, a choice with teeth.`;
+- End every turn on something moving — a discovery, a complication, a choice with teeth.
+- NEVER hand the players the answer because they are stuck. Give them a new way to look — a sound, a smell, somebody who knows something, a door nobody has tried. Never the thing itself. Solving it for them is the one way to spoil this game.`;
 
 export function systemPrompt(options: {
   tone: ToneKey;
@@ -188,6 +189,15 @@ export function narrationPrompt(options: {
   resolutions: string;
   /** The table saying what the previous telling got wrong. */
   correction?: string;
+  /**
+   * The act's clock, when it has started moving.
+   *
+   * Placed after the dice and before the instruction to narrate, because it
+   * changes the weather of the passage rather than the outcome of anything in
+   * it. Empty for most turns — a party that is getting somewhere is never told
+   * about a clock at all.
+   */
+  pressure?: string;
 }): string {
   return `${options.context}
 ${correctionBlock(options.correction)}
@@ -196,7 +206,7 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 
 WHAT THE DICE DECIDED (you must narrate these outcomes exactly as given):
 ${options.resolutions}
-
+${options.pressure ? `\n${options.pressure}\n` : ""}
 Narrate what happens next. Cover every character's action. Honour each dice
 outcome above — a COMPLICATION must genuinely not work, a CRITICAL must go
 better than expected. End with the party facing a new situation.
@@ -246,6 +256,7 @@ Reply with ONLY this JSON, no other text:
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
+  "movedForward": true,
   "actComplete": false,
   "sceneComplete": false
 }
@@ -277,6 +288,13 @@ Rules:
   Point at something the passage actually put in front of them. Never suggest
   what they should do, never offer a menu of options, and never ask more than
   one thing. Under fifteen words.
+- movedForward is whether the party GOT ANYWHERE this turn. True if they learned
+  something real, reached somewhere, got hold of something, changed a person's
+  mind, or made a problem better or worse on purpose. Asking somebody a question
+  and getting a real answer counts. False if they wandered, joked, repeated
+  something they already tried, or did something that has nothing to do with what
+  is in front of them. Be honest — a false here is not a punishment, it is how
+  the story knows to start pressing.
 - Use [] for empty lists, never null.`;
 }
 

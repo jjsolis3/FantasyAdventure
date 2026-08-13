@@ -43,6 +43,13 @@ import {
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
 import {
+  advance,
+  pressureAt,
+  pressureGuidance,
+  pressureLimit,
+  shouldTick,
+} from "@/lib/game/pressure";
+import {
   abilityUnlockedAt,
   hasRequirement,
   learnedMessage,
@@ -853,6 +860,12 @@ export async function playTurn(
     })
   ).map((objective) => objective.text);
 
+  // Where the act's clock stands as this turn begins — read before the turn,
+  // because it describes the weather the passage is written in. Whether *this*
+  // turn moves it can only be known afterwards, once there is a passage to
+  // read.
+  const clock = pressureAt(campaign.pressure, pressureLimit(campaign.pacing));
+
   const result = await runTurn(
     {
       context: built.text,
@@ -871,6 +884,10 @@ export async function playTurn(
       })),
       actions: accepted,
       correction: correction?.trim() || undefined,
+      pressure: pressureGuidance({
+        name: campaign.storyline.pressureName,
+        ...clock,
+      }),
       pacing: pacingGuidance({
         pacing: campaign.pacing,
         // Scenes already played in this act, including the one in progress.
@@ -1372,11 +1389,33 @@ export async function playTurn(
       }
     }
 
+    // Did this turn get anywhere?
+    //
+    // Hard signals first and the storyteller's own reading only as a tiebreak —
+    // see lib/game/pressure.ts for why both have to agree before anything moves.
+    // A new act starts the clock at nothing: a fresh problem should not open
+    // with the fog already at the door because of how the last one went.
+    const nextPressure = advancesAct
+      ? 0
+      : advance(
+          clock,
+          shouldTick({
+            outcomes: result.checks.map((check) => check.outcome),
+            deedsDone: result.extraction.deedsDone.length,
+            itemsGained: result.extraction.itemsGained.length,
+            questsOpened: result.extraction.questsOpened.length,
+            sceneComplete: result.extraction.sceneComplete,
+            actComplete: result.extraction.actComplete,
+            storytellerSaysMoved: result.extraction.movedForward,
+          }),
+        );
+
     await tx.campaign.update({
       where: { id: campaign.id },
       data: {
         turnCounter,
         lastPlayedAt: new Date(),
+        pressure: nextPressure,
         ...(advancesAct ? { currentActIndex: campaign.currentActIndex + 1 } : {}),
         ...(finishes ? { status: "COMPLETE" as const, completedAt: new Date() } : {}),
       },

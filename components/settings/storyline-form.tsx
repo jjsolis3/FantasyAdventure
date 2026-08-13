@@ -26,6 +26,7 @@ export type StorylineDraft = {
   minPlayers: number;
   maxPlayers: number;
   estimatedScenes: number;
+  pressureName: string;
   isActive: boolean;
   acts: ActDraft[];
 };
@@ -149,6 +150,18 @@ export function StorylineForm({ initial }: { initial: StorylineDraft }) {
             hint="Only a hint for pacing."
           />
         </div>
+
+        <Field
+          label="What gets worse while they dither"
+          name="pressureName"
+          defaultValue={initial.pressureName}
+          error={state?.fieldErrors?.pressureName}
+          hint={
+            "The name of this adventure's clock, shown to the table as it fills. " +
+            "\u201cThe fog\u201d, \u201cDays until the festival\u201d, \u201cHow high the water is\u201d. " +
+            "It moves on a turn that goes nowhere \u2014 never on a bad roll."
+          }
+        />
 
         <label className="flex items-start gap-3">
           <input type="checkbox" name="isActive" defaultChecked={initial.isActive} className="mt-1" />

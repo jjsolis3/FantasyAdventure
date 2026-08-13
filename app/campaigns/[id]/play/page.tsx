@@ -17,6 +17,8 @@ import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
 import { scenePicture } from "@/lib/game/scene-picture";
+import { PressureClock } from "@/components/play/pressure-clock";
+import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 
@@ -327,6 +329,16 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                 />
               </div>
             ) : null}
+
+            {/* Above the recap and below the picture, where the eye lands on
+                the way to the story. Renders nothing until it has moved, so a
+                party getting on with it never sees a clock at all. */}
+            <div className="mb-6">
+              <PressureClock
+                name={campaign.storyline.pressureName}
+                {...pressureAt(campaign.pressure, pressureLimit(campaign.pacing))}
+              />
+            </div>
 
             {recap.length > 0 ? (
               <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">

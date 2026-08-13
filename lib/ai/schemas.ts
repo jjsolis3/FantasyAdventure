@@ -152,6 +152,18 @@ export const extractionSchema = z.object({
    */
   whatNow: z.string().max(160).nullish(),
 
+  /**
+   * Whether the party got anywhere at all this turn.
+   *
+   * Defaults to **true**, which is the whole point of the default. This is the
+   * second opinion behind the act clock, and the clock only moves when nothing
+   * measurable happened *and* this is false. A model that omits the field, or
+   * emits something unparseable, therefore lands on "they got somewhere" and
+   * costs the party nothing — an unfair tick is felt immediately by a child,
+   * and a missed one is invisible.
+   */
+  movedForward: z.coerce.boolean().default(true),
+
   /** True when the party has clearly finished what this act was about. */
   actComplete: z.coerce.boolean().default(false),
   /** True when the scene has changed place or time enough to close it. */

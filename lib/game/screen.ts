@@ -22,6 +22,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { generateScreenCode } from "@/lib/auth/invite-code";
 import { scenePicture } from "@/lib/game/scene-picture";
+import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * MINUTE_MS;
@@ -232,6 +233,15 @@ export type ScreenView = {
   tone: string;
   status: string;
   actIndex: number;
+  /**
+   * The act's clock, for the whole table at once.
+   *
+   * Belongs on the television more than anywhere: the girls are looking at it
+   * while they argue about what to do, which is the moment the clock is
+   * supposed to be part of the argument. `level` is 0 until it starts moving,
+   * and the component draws nothing at 0.
+   */
+  pressure: { name: string; level: number; limit: number };
   scene: {
     title: string;
     location: string | null;
@@ -291,7 +301,9 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       status: true,
       currentActIndex: true,
       turnCounter: true,
-      storyline: { select: { title: true, slug: true } },
+      pacing: true,
+      pressure: true,
+      storyline: { select: { title: true, slug: true, pressureName: true } },
       party: {
         select: {
           characterId: true,
@@ -389,6 +401,10 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
     tone: campaign.tone,
     status: campaign.status,
     actIndex: campaign.currentActIndex,
+    pressure: {
+      name: campaign.storyline.pressureName,
+      ...pressureAt(campaign.pressure, pressureLimit(campaign.pacing)),
+    },
     scene: scene
       ? {
           title: scene.title,

@@ -609,6 +609,15 @@ model Campaign {
   /// 1-based; tracks which act of the storyline the party is working through.
   currentActIndex Int            @default(1)
 
+  /// How far the act's clock has run — see lib/game/pressure.ts.
+  ///
+  /// Rises on a turn where the party got nowhere and nobody even rolled, and
+  /// stays put when they tried something and the dice were unkind. Zeroed when
+  /// it fills and the story turns, and again whenever an act ends: a new act is
+  /// a new problem, and carrying a full clock into it would punish a party for
+  /// something they already paid for.
+  pressure        Int            @default(0)
+
   /// Durable facts the Game Master accumulates — locations, NPCs meets, plot
   /// threads. Empty until the engine lands in M4.
   worldState Json @default("{}")
@@ -1116,6 +1125,16 @@ model Storyline {
   minPlayers      Int            @default(2)
   maxPlayers      Int            @default(5)
   estimatedScenes Int            @default(12)
+
+  /// What this adventure's clock is called, in the story's own words.
+  ///
+  /// "The fog", "The stars going out", "Three days to the festival". Shown to
+  /// the table as it fills and handed to the storyteller as the name of the
+  /// thing that gets worse when nobody is getting anywhere. Named per adventure
+  /// rather than generically because "pressure: 4/8" teaches a child a rule,
+  /// and "the fog has reached the bakery" teaches her a story.
+  pressureName    String         @default("The clock")
+
   isActive        Boolean        @default(true)
 
   /// True once a person has written or edited this adventure in the app.
