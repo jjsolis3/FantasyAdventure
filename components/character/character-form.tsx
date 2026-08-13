@@ -13,7 +13,7 @@ import {
   skillGroupsFor,
 } from "@/lib/game/character-options";
 import {
-  NEUTRAL_STAT,
+  STAT_MIN,
   SKILLS_PER_CHARACTER,
   STATS,
   type StatBlock,
@@ -47,10 +47,14 @@ export const BLANK_CHARACTER: CharacterDraft = {
   pronouns: "they/them",
   ageBand: "GROWNUP",
   description: "",
-  // Every stat at the neutral value, which is also exactly the budget — so the
-  // builder opens on a legal spread with nothing left to spend, and a child who
-  // wants to change nothing can simply carry on.
-  stats: Object.fromEntries(STATS.map((stat) => [stat, NEUTRAL_STAT])) as StatBlock,
+  // Everything at the floor, with all twelve points still to spend.
+  //
+  // It used to open on three in every stat — the whole budget already
+  // allocated — which made the builder a set of sliders where the interesting
+  // move was taking points *away* from things, and handed a child an adventurer
+  // who was already competent at all seven before she had done anything. Now
+  // she starts with nothing and decides what she is.
+  stats: Object.fromEntries(STATS.map((stat) => [stat, STAT_MIN])) as StatBlock,
   skills: [],
 };
 

@@ -152,7 +152,7 @@ export default async function SummaryPage({ params }: { params: Promise<{ id: st
             (quest) => quest.kind === "PERSONAL" && quest.secretForCharacterId === character.id,
           );
 
-          const pointsWaiting = statPointsUnspent(stats, character.xp);
+          const pointsWaiting = statPointsUnspent(stats, character.xp, character.buildBudget);
           const knackWaiting = knacksUnspent(character.level, character.knacks.length);
           const brought = character.inventory.filter((item) => item.brought);
           const found = character.inventory.filter((item) => !item.brought);

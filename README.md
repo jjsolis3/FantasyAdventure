@@ -127,9 +127,14 @@ Once anyone has registered, bootstrap codes stop being generated.
 Build everyone at `/characters` — you choose who actually travels when an
 adventure begins, so it is fine to add the whole household.
 
-**Seven stats, twenty-one points.** Might, Wits, Heart, **Spark**, Grace, Luck
-and Grit. Each runs 1–5 at the builder and the budget averages 3, so a character
-is competent everywhere unless you deliberately specialise. `Heart` is a
+**Seven stats, twelve points to spend.** Might, Wits, Heart, **Spark**, Grace,
+Luck and Grit. Everything starts at 1 and she has **12 points** to place where
+she likes — so a new adventurer is genuinely good at two or three things and
+ordinary-to-poor at the rest, with somewhere to grow into.
+
+The builder used to open with 3 already in every stat, which made the only
+interesting move *taking points away* from things and handed a child somebody
+already competent at all seven before she had done anything. `Heart` is a
 first-class stat, not a throwaway — comforting someone is as valid a way through
 a scene as lifting a gate. Luck is the odd one out and has its own section
 below: it bends every roll, not only the ones the storyteller aims at it. The

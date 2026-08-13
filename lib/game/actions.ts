@@ -13,6 +13,7 @@ import {
   STATS,
   canonicalPair,
   statColumns,
+  STAT_BUDGET,
   statsOf,
   validateStats,
   type RelationshipKind,
@@ -93,6 +94,10 @@ export async function createCharacterAction(_prev: FormState, formData: FormData
       pronouns,
       ageBand,
       ...statColumns(stats),
+      // Recorded at the moment she is built, so growth is always measured from
+      // what she actually started with rather than from whatever the constant
+      // happens to be years later. See statPointsUnspent.
+      buildBudget: STAT_BUDGET,
       gender: gender || null,
       description: description || null,
       userId: user.id,

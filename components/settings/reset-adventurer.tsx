@@ -2,7 +2,15 @@
 
 import { useActionState, useState } from "react";
 import { resetCharacterAction, type ResetFormState } from "@/lib/game/reset-actions";
-import { STATS, STAT_BUDGET, STAT_INFO, STAT_MAX, STAT_MIN, type StatBlock } from "@/lib/game/rules";
+import {
+  STATS,
+  STAT_BUDGET,
+  STAT_INFO,
+  STAT_MAX,
+  STAT_MIN,
+  POINTS_TO_SPEND,
+  type StatBlock,
+} from "@/lib/game/rules";
 
 /**
  * The form that starts an adventurer again.
@@ -46,7 +54,7 @@ export function ResetAdventurer({
         <p className="mb-4 text-sm text-hearth-300/80">
           These are set when an adventurer is built and only ever go up afterwards, so the game
           knows how many points {name} earned but not which numbers they went into. Below is a
-          best guess — if you remember how she was built, put it right. {STAT_BUDGET} points,
+          best guess — if you remember how she was built, put it right. {POINTS_TO_SPEND} points to spend,
           none below {STAT_MIN} or above {STAT_MAX}.
         </p>
 
@@ -76,7 +84,7 @@ export function ResetAdventurer({
           }`}
         >
           {left === 0
-            ? `${STAT_BUDGET} points, exactly right.`
+            ? `All ${POINTS_TO_SPEND} spent, exactly right.`
             : left > 0
               ? `${left} point${left === 1 ? "" : "s"} still to spend.`
               : `${-left} point${left === -1 ? "" : "s"} too many.`}

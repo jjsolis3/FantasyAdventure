@@ -78,7 +78,16 @@ test("reset: a stat over the build ceiling comes down even when the total is rig
 });
 
 test("reset: a character already at budget is left alone", () => {
-  const built = statBlock({ might: 5, wits: 4, heart: 2, spark: 1 });
+  // Nineteen exactly: floor everywhere plus the twelve she had to spend.
+  const built = statBlock({
+    might: 5,
+    wits: 4,
+    heart: 3,
+    spark: 2,
+    grace: 2,
+    luck: 2,
+    grit: 1,
+  });
   assert.deepEqual(suggestedBuild(built), built);
 });
 

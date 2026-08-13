@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAX_LEVEL, NEUTRAL_STAT, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
+import { MAX_LEVEL, NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_MIN, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
 import { KNACKS, extraSkillRoom, knacksEarned } from "../lib/game/knacks.ts";
 import { MAX_SKILLS } from "../lib/game/practice.ts";
 
-const balanced: StatBlock = statBlock({ might: 3, wits: 3, heart: 3, spark: 3 });
+/** An even spread of the twelve: floor everywhere, then two or three each. */
+const balanced: StatBlock = statBlock({
+  might: 3,
+  wits: 3,
+  heart: 3,
+  spark: 3,
+  grace: 3,
+  luck: 2,
+  grit: 2,
+});
 
 test("a balanced spread spends exactly the budget", () => {
   assert.equal(pointsRemaining(balanced), 0);
@@ -12,7 +21,17 @@ test("a balanced spread spends exactly the budget", () => {
 });
 
 test("a specialist spread is legal if it totals the budget", () => {
-  const specialist: StatBlock = statBlock({ might: 5, wits: 4, heart: 2, spark: 1 });
+  // Three things she is very good at and four she is not, which is now a build
+  // a child can actually make: twelve points buys three stats at the cap.
+  const specialist: StatBlock = statBlock({
+    might: 5,
+    wits: 5,
+    heart: 5,
+    spark: 1,
+    grace: 1,
+    luck: 1,
+    grit: 1,
+  });
   assert.deepEqual(validateStats(specialist), { ok: true });
 });
 
@@ -53,13 +72,30 @@ test("stat modifiers centre on the average", () => {
   assert.equal(statModifier(1), -2);
 });
 
-test("the budget is reachable with every stat inside its bounds", () => {
-  // Asserted as a relationship rather than a number. The budget is three points
-  // per stat because three is what rolls at +0 — pin the literal instead and
-  // adding a stat quietly makes every character worse at everything, which is
-  // the exact failure this whole change was designed around.
-  assert.equal(STAT_BUDGET, STATS.length * NEUTRAL_STAT);
-  assert.deepEqual(validateStats(statBlock({ might: 5, wits: 5, heart: 1, spark: 1 })), { ok: true });
+test("the budget is the floor everywhere plus the points she gets to spend", () => {
+  // Asserted as a relationship rather than a number, so the two can never drift
+  // apart. Pin the literal instead and the next change to either one silently
+  // makes every character in the game better or worse at everything — which is
+  // exactly what happened the last time this was a literal.
+  assert.equal(STAT_BUDGET, STATS.length * STAT_MIN + POINTS_TO_SPEND);
+
+  // And the shape it buys: three stats at the cap, or a spread, and nothing in
+  // between is out of reach.
+  assert.deepEqual(
+    validateStats(statBlock({ might: 5, wits: 5, heart: 5, spark: 1, grace: 1, luck: 1, grit: 1 })),
+    { ok: true },
+  );
+});
+
+test("a freshly opened builder has all twelve still to spend", () => {
+  // What the girls actually see when they start. The floor in everything, and
+  // nothing allocated — the builder used to open with the whole budget already
+  // spread across seven stats, which made the only interesting move taking
+  // points away from things.
+  const untouched = Object.fromEntries(STATS.map((stat) => [stat, STAT_MIN])) as StatBlock;
+
+  assert.equal(pointsRemaining(untouched), POINTS_TO_SPEND);
+  assert.equal(validateStats(untouched).ok, false);
 });
 
 // ---- Relationships ---------------------------------------------------------

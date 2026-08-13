@@ -202,6 +202,16 @@ model Character {
   luck  Int @default(3)
   grit  Int @default(3)
 
+  /// What this adventurer was built with, in points.
+  ///
+  /// Recorded rather than assumed, because the build budget has now changed
+  /// twice. Growth is measured as how far her stats have risen above what she
+  /// started with — so reading that off a global constant means every character
+  /// already in the house silently loses points the day the constant moves.
+  /// Existing rows are set to 21 by the migration; new ones take the current
+  /// rule.
+  buildBudget Int @default(19)
+
   /// Earned through play. Level is derived from xp, never set directly.
   xp    Int @default(0)
   level Int @default(1)

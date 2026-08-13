@@ -60,7 +60,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
   if (!character) notFound();
 
   const stats: StatBlock = statsOf(character);
-  const unspent = statPointsUnspent(stats, character.xp);
+  const unspent = statPointsUnspent(stats, character.xp, character.buildBudget);
   const signatures = signaturesFor(character.archetype, character.level);
   // Named on the sheet before she has it, because a thing you are working
   // towards is worth more than a thing that appears without warning.
