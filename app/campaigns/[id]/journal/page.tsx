@@ -7,6 +7,7 @@ import { STATS, STAT_INFO, RELATIONSHIP_LABELS, kindFromPerspective } from "@/li
 import { PrintButton } from "@/components/campaign/print-button";
 import { questBoard } from "@/lib/game/quests";
 import { journeyFrom, placesVisited } from "@/lib/game/journey";
+import { CONFIRMED_TIES } from "@/lib/game/ties";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,14 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
               portrait: { select: { version: true } },
               skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
-              relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
-              relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+              relationshipsA: {
+                where: CONFIRMED_TIES,
+                include: { characterB: { select: { id: true, name: true } } },
+              },
+              relationshipsB: {
+                where: CONFIRMED_TIES,
+                include: { characterA: { select: { id: true, name: true } } },
+              },
             },
           },
         },

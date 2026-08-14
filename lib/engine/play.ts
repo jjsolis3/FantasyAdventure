@@ -103,6 +103,7 @@ import {
   statsOf,
   type StatKey,
 } from "@/lib/game/rules";
+import { CONFIRMED_TIES, isConfirmed } from "@/lib/game/ties";
 
 /** How many recent turns are offered to the context builder before trimming. */
 const RECENT_TURN_WINDOW = 12;
@@ -242,8 +243,14 @@ async function loadCampaign(campaignId: string, userId: string) {
               skills: true,
               knacks: { select: { key: true } },
               inventory: true,
-              relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
-              relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+              relationshipsA: {
+                where: CONFIRMED_TIES,
+                include: { characterB: { select: { id: true, name: true } } },
+              },
+              relationshipsB: {
+                where: CONFIRMED_TIES,
+                include: { characterA: { select: { id: true, name: true } } },
+              },
             },
           },
         },
@@ -826,7 +833,11 @@ async function validateFamilyMove(
   const relationship = await db.relationship.findUnique({
     where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
   });
-  if (!relationship || relationship.bondLevel < move.requires) return null;
+  // A tie the other household has not agreed to yet unlocks nothing. It cannot
+  // in practice — nothing unlocks below bond 1 and a pending tie is at 0 — but
+  // the rule belongs where the payout is, not in an arithmetic coincidence.
+  if (!relationship || !isConfirmed(relationship)) return null;
+  if (relationship.bondLevel < move.requires) return null;
 
   // Flavoured from the helper's side, which is the side that matters: what the
   // storyteller is handed should be what the girl pressing the button read.
@@ -1425,8 +1436,10 @@ export async function playTurn(
         where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
       });
       // Only deepens ties the family already declared; the Game Master does not
-      // get to invent relatives.
-      if (!existing) return false;
+      // get to invent relatives. And only ties both households have agreed to —
+      // a proposal earns nothing while it is waiting, which is what keeps
+      // "your character is my sister" from being worth anything unilaterally.
+      if (!existing || !isConfirmed(existing)) return false;
 
       const bondXp = existing.bondXp + 1;
       const bondLevel = bondLevelFor(bondXp);
@@ -2093,7 +2106,8 @@ export async function talkTurn(
       const relationship = await tx.relationship.findUnique({
         where: { characterAId_characterBId: { characterAId: a, characterBId: b } },
       });
-      if (!relationship) continue;
+      // Same rule as `deepen`: a tie nobody has agreed to yet pays nothing.
+      if (!relationship || !isConfirmed(relationship)) continue;
 
       // `createMany` with skipDuplicates, and the reason matters: the obvious
       // version of this was a plain `create` with `.catch(() => null)` around

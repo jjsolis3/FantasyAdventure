@@ -98,6 +98,7 @@ model User {
   inviteRedeemed InviteCode?   @relation("InviteRedeemer")
   roundAnswers   RoundAnswer[]
   partyInvitesSent PartyInvite[] @relation("PartyInviter")
+  tiesProposed     Relationship[] @relation("TieProposer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -577,11 +578,29 @@ model Relationship {
   bondLevel Int @default(0)
   bondXp    Int @default(0)
 
+  /// Which household asked. Null on rows written before ties were confirmed.
+  proposedById String?
+  proposedBy   User?   @relation("TieProposer", fields: [proposedById], references: [id], onDelete: SetNull)
+
+  /// When the other household agreed — and null while it has not.
+  ///
+  /// "Rowan is Mira's sister" is a claim about somebody else's adventurer, and
+  /// it pays out in bond levels and Family Moves, so once people outside the
+  /// house join a party it cannot be one-sided. A tie between two adventurers
+  /// that already answer to the same account is confirmed the moment it is
+  /// made; anything else waits. See `lib/game/ties.ts`.
+  ///
+  /// Every row that existed before this column was added is stamped confirmed
+  /// by the migration: a family already playing must not find their bonds
+  /// switched off by a deploy.
+  confirmedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([characterAId, characterBId])
   @@index([characterBId])
+  @@index([proposedById])
 }
 
 /// How long the family wants an adventure to run. Advice to the storyteller

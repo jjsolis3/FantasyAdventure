@@ -12,6 +12,7 @@ import {
 import { AGE_BANDS } from "@/lib/game/character-options";
 import { LevelBadge } from "@/components/character/level-badge";
 import { waitingPointsFor } from "@/lib/game/waiting-points";
+import { CONFIRMED_TIES } from "@/lib/game/ties";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,14 @@ export default async function CharactersPage() {
     include: {
       skills: true,
       knacks: { select: { id: true } },
-      relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
-      relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+      relationshipsA: {
+        where: CONFIRMED_TIES,
+        include: { characterB: { select: { id: true, name: true } } },
+      },
+      relationshipsB: {
+        where: CONFIRMED_TIES,
+        include: { characterA: { select: { id: true, name: true } } },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -42,6 +49,7 @@ export default async function CharactersPage() {
   const waiting = await waitingPointsFor(
     characters.map((character) => ({
       id: character.id,
+      userId: character.userId,
       xp: character.xp,
       stats: statsOf(character),
       buildBudget: character.buildBudget,

@@ -1268,6 +1268,66 @@ Mira**, so the room looks up instead of down at four phones.
 Set per adventure in its settings, and switchable mid-story. `SERVER` is the
 default and stays the behaviour when the dice are in another room.
 
+### Saying who is who
+
+A tie — *"Orin is the parent of Wren"*, *"Mira is the sibling of Bramble"* — is
+declared by the family, never invented by the storyteller, and it is the thing
+everything else in this section hangs off. `deepen` in `lib/engine/play.ts` only
+ever raises a bond on a tie somebody declared, so **two adventurers with nothing
+said about them earn nothing all evening**, however kind they are to each other.
+
+That made a scoping bug expensive. Reach used to be "somebody this *character*
+has already shared a campaign with", which is a chicken-and-egg: a newly made
+adventurer has shared nothing, so the dropdown came back empty at exactly the
+moment a family wants to say who he is. The case that found it — a father handed
+his old character to his daughters, made a new one, and could not say he was
+their father. Reach is now the **table**: your own adventurers, plus anybody in
+an adventure you own or are travelling in (`lib/game/ties.ts`). Not one step
+wider; this must never become a way to browse the whole app.
+
+The kinds have always included `FRIEND` and `PET` alongside the family ones, so
+best friends need nothing added — they needed somebody reachable to apply them
+to.
+
+**One end of a tie is always an adventurer you answer for.** That single
+invariant is what stops anybody arranging other people's families, and it is
+checked in the action rather than only in the form.
+
+#### Ties that touch another household
+
+One-sided declaration was fine while every character in the house belonged to
+one account. It stops being fine the moment somebody outside the house joins a
+party, because *"your child is my character's sister"* is a claim about somebody
+else's adventurer and it pays out in bond levels and Family Moves.
+
+So: a tie between two adventurers that already answer to you is confirmed on the
+spot — asking a household to agree with itself is ceremony for nobody. Anything
+else is **stored waiting**. It shows on both sheets, says plainly that nothing
+is being earned, and appears on the other household's list as *"1 tie to agree
+to"*, because nobody would ever go looking for it. Until somebody says yes it
+earns no bond, unlocks no moves, and is not mentioned to the storyteller.
+
+Either side may agree, and either side may remove — but the household that
+proposed cannot answer for the one being asked, or the whole thing would be two
+clicks by the same person.
+
+Every tie that existed before this was stamped confirmed by the migration. A
+family mid-adventure must not come back after a deploy to find their sisters
+unrelated.
+
+#### Asked at the moment it is obvious
+
+The character sheet has always had the editor and nobody found it — you go there
+to look at an adventurer, not to think about the party. So the campaign setup
+page now names any pair in the party with nothing declared and offers the
+sentence right there, along with the reason: bonds only grow between adventurers
+who have said how they are related.
+
+Where *neither* adventurer is yours — two children on two sign-ins — the pair is
+named but not offered, because one end of a tie must be somebody you answer for.
+Whoever is running the evening can say it out loud, which at a kitchen table is
+faster than any button.
+
 ### Bonds that count more than kindness
 
 Bonds only ever rose from one thing: a `bondMoment`, which the storyteller is
@@ -1865,6 +1925,8 @@ tests/
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter
   briefing.test.ts    What the table is told, and the nudges that are not scripts
   briefing.e2e.mts    The same through the pipeline, onto the phone and the wall
+  ties.test.ts        Who you can be related to, and who has to agree
+  ties.e2e.mts        Two households, a tie waiting, and the bond it unlocks
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

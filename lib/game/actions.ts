@@ -19,6 +19,7 @@ import {
   type RelationshipKind,
   type StatBlock,
 } from "@/lib/game/rules";
+import { needsConsent, reachableCharacterWhere } from "@/lib/game/ties";
 
 const characterSchema = z.object({
   name: z.string().trim().min(1, "Every adventurer needs a name.").max(60, "That name is very long."),
@@ -233,26 +234,26 @@ export async function setRelationshipAction(_prev: FormState, formData: FormData
   const { fromId, toId, kind } = parsed.data;
   if (fromId === toId) return { error: "A character cannot be related to themselves." };
 
-  // The tie is declared from an adventurer you answer for…
+  // The tie is always declared FROM an adventurer you answer for. This is the
+  // invariant that stops anybody arranging other people's families: whoever you
+  // can reach, one end of the row is always yours.
   const from = await db.character.findFirst({ where: { id: fromId, userId: user.id } });
   if (!from) return { error: "Character not found." };
 
-  // …to one of yours, or to somebody you are actually adventuring with. Once a
-  // household hands a child their own adventurer, "Rowan is Mira's sibling" is
-  // a tie between two accounts, and it has to stay declarable — but only to
-  // people you share a story with, so this cannot reach across the whole app.
+  // …to anybody at your table — see `reachableCharacterWhere`. Scoped to the
+  // table rather than to `from`, because a newly made adventurer has been
+  // nowhere yet, and that is exactly when a family wants to say who he is.
   const to = await db.character.findFirst({
-    where: {
-      id: toId,
-      OR: [
-        { userId: user.id },
-        { partyMemberships: { some: { campaign: { party: { some: { characterId: fromId } } } } } },
-      ],
-    },
+    where: { id: toId, ...reachableCharacterWhere(user.id) },
+    select: { id: true, userId: true },
   });
-  if (!to) return { error: "Character not found." };
+  if (!to) return { error: "That adventurer is not at your table." };
 
   const pair = canonicalPair(fromId, toId, kind as RelationshipKind);
+  // Yours to say on your own, or a claim about somebody else's adventurer that
+  // they get to answer. Confirmed on the spot in the first case: asking a
+  // household to agree with itself is ceremony for nobody.
+  const confirmedAt = needsConsent(user.id, to.userId) ? null : new Date();
 
   await db.relationship.upsert({
     where: {
@@ -261,9 +262,12 @@ export async function setRelationshipAction(_prev: FormState, formData: FormData
         characterBId: pair.characterBId,
       },
     },
-    create: pair,
+    create: { ...pair, proposedById: user.id, confirmedAt },
     // Re-declaring an existing relationship updates its kind but preserves the
-    // bond that has already been earned between these two.
+    // bond that has already been earned between these two — and does NOT
+    // re-open a tie the other household has already agreed to. Changing
+    // "sibling" to "cousin" between two people who have already said yes is a
+    // correction, not a new claim.
     update: { aToB: pair.aToB },
   });
 
@@ -271,6 +275,41 @@ export async function setRelationshipAction(_prev: FormState, formData: FormData
   revalidatePath(`/characters/${toId}`);
   revalidatePath("/characters");
   return { error: "" };
+}
+
+/**
+ * The other household says yes.
+ *
+ * Either side may confirm, which sounds loose and is not: a tie you proposed is
+ * already confirmed if it needed nothing, and if it is waiting then the only
+ * accounts that can reach this row are the two it is about. What matters is
+ * that nobody outside those two can, and that is what the ownership check does.
+ */
+export async function confirmRelationshipAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = formData.get("relationshipId");
+  if (typeof id !== "string") return;
+
+  const relationship = await db.relationship.findUnique({
+    where: { id },
+    include: {
+      characterA: { select: { userId: true } },
+      characterB: { select: { userId: true } },
+    },
+  });
+  if (!relationship || relationship.confirmedAt) return;
+
+  const sides = [relationship.characterA.userId, relationship.characterB.userId];
+  if (!sides.includes(user.id)) return;
+  // The household that asked cannot answer for the one being asked. Without
+  // this, proposing and confirming would be two clicks by the same person.
+  if (relationship.proposedById === user.id) return;
+
+  await db.relationship.update({ where: { id }, data: { confirmedAt: new Date() } });
+
+  revalidatePath(`/characters/${relationship.characterAId}`);
+  revalidatePath(`/characters/${relationship.characterBId}`);
+  revalidatePath("/characters");
 }
 
 export async function removeRelationshipAction(formData: FormData): Promise<void> {

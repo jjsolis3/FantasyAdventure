@@ -6,10 +6,14 @@
  * weeks and the only way to find out was to open her sheet and notice the
  * spheres were lit.
  *
- * Deliberately only these two. A list where everything is flagged is a list
+ * Since ties began needing the other household's agreement there is a third,
+ * and it earns its place by the same test: a tie waiting on you is not a chore
+ * to discover while playing, it is something that is silently earning nothing
+ * until somebody presses a button. Nobody would ever go looking for it.
+ *
+ * Deliberately only these three. A list where everything is flagged is a list
  * where nothing is, and every other state — a quest half done, an item she
- * cannot use yet — is something to discover while playing rather than a chore
- * queued up on a menu.
+ * cannot use yet — is something to discover while playing.
  */
 
 import { db } from "@/lib/db";
@@ -21,6 +25,8 @@ export type WaitingPoint = { label: string; href: string };
 
 export type CharacterState = {
   id: string;
+  /** Which household answers for her, so her own proposals are not shown back. */
+  userId: string;
   xp: number;
   stats: StatBlock;
   /** What she was built with, so growth is measured from the right place. */
@@ -63,6 +69,17 @@ export async function waitingPointsFor(
     select: { characterId: true, campaignId: true },
   });
 
+  // Ties somebody else proposed and this household has not answered. Both
+  // directions of the stored pair, because which side a character landed on is
+  // an artefact of sorting two ids.
+  const unanswered = await db.relationship.findMany({
+    where: {
+      confirmedAt: null,
+      OR: [{ characterAId: { in: ids } }, { characterBId: { in: ids } }],
+    },
+    select: { characterAId: true, characterBId: true, proposedById: true },
+  });
+
   for (const character of characters) {
     const found: WaitingPoint[] = [];
 
@@ -96,6 +113,22 @@ export async function waitingPointsFor(
         knacks > 0 ? `${knacks} knack${knacks === 1 ? "" : "s"} to choose` : null,
       ].filter(Boolean);
       found.push({ label: parts.join(" · "), href: `/characters/${character.id}` });
+    }
+
+    // Only when somebody else did the asking. Your own outstanding proposal is
+    // on their list, not yours, and pestering you about it would be telling you
+    // to wait for yourself.
+    const toAnswer = unanswered.filter(
+      (tie) =>
+        (tie.characterAId === character.id || tie.characterBId === character.id) &&
+        tie.proposedById !== character.userId,
+    ).length;
+
+    if (toAnswer > 0) {
+      found.push({
+        label: `${toAnswer} tie${toAnswer === 1 ? "" : "s"} to agree to`,
+        href: `/characters/${character.id}`,
+      });
     }
 
     if (found.length > 0) points.set(character.id, found);

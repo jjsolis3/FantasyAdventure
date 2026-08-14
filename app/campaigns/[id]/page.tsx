@@ -10,6 +10,7 @@ import { cancelInviteAction, inviteCharacterAction } from "@/lib/game/invite-act
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { CampaignSettingsForm, PartyEditor } from "@/components/campaign/campaign-settings";
+import { PartyTies, type UntiedPair } from "@/components/campaign/party-ties";
 import { JoinCode } from "@/components/campaign/join-code";
 import { SendToScreen } from "@/components/campaign/send-to-screen";
 import { screensFor } from "@/lib/game/screen";
@@ -24,6 +25,7 @@ import {
   TONE_LABELS,
 } from "@/components/campaign/options";
 import { STATS, STAT_INFO, RELATIONSHIP_LABELS, kindFromPerspective } from "@/lib/game/rules";
+import { CONFIRMED_TIES } from "@/lib/game/ties";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +47,14 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               skills: { orderBy: { name: "asc" } },
               inventory: { orderBy: { name: "asc" } },
               knacks: { select: { key: true } },
-              relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
-              relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+              relationshipsA: {
+                where: CONFIRMED_TIES,
+                include: { characterB: { select: { id: true, name: true } } },
+              },
+              relationshipsB: {
+                where: CONFIRMED_TIES,
+                include: { characterA: { select: { id: true, name: true } } },
+              },
             },
           },
         },
@@ -113,6 +121,66 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         exclude: [...partyIds, ...pendingInvites.map((invite) => invite.characterId)],
       })
     : [];
+
+  // Pairs in this party with nothing said about them at all.
+  //
+  // Asked here because this is the moment it is obvious — you are already
+  // thinking about who is travelling with whom — and because it is the last
+  // moment before it starts costing something: bonds only grow between
+  // adventurers who have declared a tie, so an undeclared pair spends a whole
+  // adventure earning nothing. Read unfiltered on purpose: a tie waiting on the
+  // other household is not declared *yet*, but it has been asked, and asking
+  // twice is not the prompt anybody needs.
+  const declared = await db.relationship.findMany({
+    where: { characterAId: { in: partyIds }, characterBId: { in: partyIds } },
+    select: { characterAId: true, characterBId: true },
+  });
+  const declaredKeys = new Set(
+    declared.map((tie) => `${tie.characterAId}:${tie.characterBId}`),
+  );
+
+  const untiedPairs: UntiedPair[] = [];
+  const othersToIntroduce: { names: string[]; households: string[] }[] = [];
+  for (let i = 0; i < campaign.party.length; i += 1) {
+    for (let j = i + 1; j < campaign.party.length; j += 1) {
+      const one = campaign.party[i];
+      const two = campaign.party[j];
+      const [a, b] =
+        one.characterId < two.characterId ? [one, two] : [two, one];
+      if (declaredKeys.has(`${a.characterId}:${b.characterId}`)) continue;
+
+      // One end must be an adventurer you answer for — that is the invariant
+      // that stops anybody arranging other people's families, and it is checked
+      // again in the action. Where both are yours, either end will do.
+      const mine = [one, two].find((member) => member.character.userId === user.id);
+
+      if (!mine) {
+        // Two adventurers, neither of them yours. Common the moment each child
+        // has her own sign-in: nobody but those two households can say they are
+        // sisters, and left silent it is a bond that never starts. Named rather
+        // than acted on, so whoever is running the evening can say it out loud.
+        othersToIntroduce.push({
+          names: [one.character.name, two.character.name],
+          households: [
+            one.character.user.displayName,
+            two.character.user.displayName,
+          ],
+        });
+        continue;
+      }
+
+      const other = mine === one ? two : one;
+
+      untiedPairs.push({
+        fromId: mine.characterId,
+        fromName: mine.character.name,
+        toId: other.characterId,
+        toName: other.character.name,
+        toPlayedBy:
+          other.character.userId === user.id ? null : other.character.user.displayName,
+      });
+    }
+  }
 
   // Bonds that exist between two characters who are both travelling. Ties to
   // someone left at home are real but cannot come up in this adventure.
@@ -246,6 +314,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               </ul>
             </>
           ) : null}
+
+          <PartyTies pairs={untiedPairs} elsewhere={othersToIntroduce} />
         </Card>
 
         <Card>
