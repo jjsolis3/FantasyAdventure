@@ -21,6 +21,7 @@ import { PressureClock } from "@/components/play/pressure-clock";
 import type { EncounterView } from "@/components/play/encounter-panel";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
+import { knownFacts, tableFrom } from "@/lib/game/briefing";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 
 export const dynamic = "force-dynamic";
@@ -125,20 +126,15 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     if (entry.dice && entry.actorName) entry.dice.characterName = entry.actorName;
   }
 
-  // The question the story is currently waiting on. Read back off the passage
-  // that raised it rather than held in campaign state, so a page opened
-  // tomorrow — or on a second phone — asks the same thing as the one that was
-  // there at the time.
-  //
-  // The most recent passage *that asked something*, not simply the most recent
-  // passage: a round spent talking to each other writes a passage of its own
-  // and moves nothing on, so the question from before the conversation is still
-  // the one on the table.
-  const whatNow =
-    [...turns]
-      .reverse()
-      .map((turn) => (turn.metadata as { whatNow?: string } | null)?.whatNow?.trim())
-      .find((question) => Boolean(question)) ?? null;
+  // The question the story is currently waiting on, and the things the passage
+  // put within reach. See `lib/game/briefing.ts` for why they are read back off
+  // the passage rather than held in campaign state.
+  const { whatNow, onTheTable } = tableFrom(turns);
+
+  // What they have actually learned, so far. Extraction has been collecting
+  // this since the first turn and, until now, showing it to nobody but the
+  // storyteller.
+  const known = await knownFacts(campaign.id);
 
   // Which Family Moves the party can spend right now: unlocked by bond level,
   // between two travellers, and not already used in this scene.
@@ -420,6 +416,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               initialRound={round}
               encounter={encounter}
               whatNow={whatNow}
+              briefing={{ onTheTable, known }}
             />
           </>
         }

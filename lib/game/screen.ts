@@ -24,6 +24,15 @@ import { generateScreenCode } from "@/lib/auth/invite-code";
 import { scenePicture } from "@/lib/game/scene-picture";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { ENCOUNTER_REACH } from "@/lib/game/encounters";
+import {
+  knownFacts,
+  neededObjectives,
+  recentRolls,
+  tableFrom,
+  type KnownFact,
+  type NeededObjective,
+  type RecentRoll,
+} from "@/lib/game/briefing";
 
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * MINUTE_MS;
@@ -265,6 +274,27 @@ export type ScreenView = {
     reach: number;
     soloName: string | null;
   } | null;
+  /**
+   * The question the story is waiting on, and the things it put within reach.
+   *
+   * The television's whole job, arguably. A passage on a wall is read once and
+   * then it is scenery; the question and the three nouns under it are what the
+   * room keeps looking back at while it argues.
+   */
+  whatNow: string | null;
+  onTheTable: string[];
+  /** What the party has learned, for the moment somebody says "wait, who?". */
+  known: KnownFact[];
+  /** What is still outstanding, in the players' own words. Shared quests only. */
+  needed: NeededObjective[];
+  /**
+   * The last few dice.
+   *
+   * The most public thing that happens in an evening and, until now, the most
+   * privately displayed: a roll landed in one girl's transcript and was gone.
+   * On a wall it is the thing everybody leans in for.
+   */
+  rolls: RecentRoll[];
   scene: {
     title: string;
     location: string | null;
@@ -364,10 +394,22 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
         where: { type: "NARRATION" },
         orderBy: { createdAt: "desc" },
         take: RECENT_TURNS,
-        select: { id: true, content: true },
+        select: { id: true, content: true, metadata: true },
       },
     },
   });
+
+  const namesById = new Map(
+    campaign.party.map((member) => [member.characterId, member.character.name]),
+  );
+
+  // Fetched newest first; `tableFrom` reads a scene in the order it happened.
+  const { whatNow, onTheTable } = tableFrom((scene?.turns ?? []).slice().reverse());
+  const [known, needed, rolls] = await Promise.all([
+    knownFacts(campaignId),
+    neededObjectives(campaignId),
+    recentRolls(scene?.id ?? null, namesById),
+  ]);
 
   // Shared quests only — see the note above about what a television is for.
   // A picture the family drew beats one a machine made, everywhere. It is the
@@ -452,6 +494,11 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
         | { characterName: string; intent: string }[]
         | undefined) ?? []
     ).map((roll) => ({ characterName: roll.characterName, intent: roll.intent })),
+    whatNow,
+    onTheTable,
+    known,
+    needed,
+    rolls,
     scene: scene
       ? {
           title: scene.title,
@@ -483,6 +530,12 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       faces.map((face) => `${face.pictureId}:${face.version}`).join(","),
       quests.map((quest) => `${quest.id}${quest.status}`).join(","),
       party.filter((member) => member.waitingOn).length,
+      // An objective ticked off and a die thrown both change the dashboard
+      // without necessarily changing anything above them — a roll is written
+      // before the passage it belongs to, so for a few seconds the newest thing
+      // on the television is a number.
+      needed.map((objective) => objective.id).join(","),
+      rolls.map((roll) => roll.id).join(","),
     ].join(":"),
   };
 }

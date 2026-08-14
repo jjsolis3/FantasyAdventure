@@ -179,6 +179,25 @@ export const extractionSchema = z.object({
   whatNow: z.string().max(160).nullish(),
 
   /**
+   * The handful of things the passage actually put within reach.
+   *
+   * Born from watching the girls play: a long passage would go by, the question
+   * at the end would land, and they would start shouting guesses — a door that
+   * was never mentioned, a person who was not there — because by the end of a
+   * paragraph the middle of it is gone. The hints button became the way out of
+   * that, which is a clue used while the escape room is still running.
+   *
+   * These are nouns, not suggestions. "The locked shutter", "Bram, who is
+   * lying", "the smell of smoke from upstairs". Naming what is present is not
+   * telling them what to do with it, and it is the difference between a table
+   * that is stuck and a table that is deciding.
+   *
+   * Empty is allowed and costs nothing; three is the most that fits on a screen
+   * a child reads from across a room.
+   */
+  onTheTable: z.array(z.string().min(1).max(80)).max(3).default([]),
+
+  /**
    * Something the passage put in front of them, standing there until dealt with.
    *
    * Null on almost every turn, and the prompt says so twice. An encounter is a
@@ -228,6 +247,8 @@ export type Extraction = z.infer<typeof extractionSchema>;
  */
 export const nudgeSchema = z.object({
   whatNow: z.string().min(1).max(160),
+  /** Same as extraction's, for the one passage extraction never sees. */
+  onTheTable: z.array(z.string().min(1).max(80)).max(3).default([]),
 });
 
 /**

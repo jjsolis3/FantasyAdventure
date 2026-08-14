@@ -20,6 +20,8 @@ import { EncounterPanel, GoingAlone, type EncounterView } from "./encounter-pane
 import type { AwaitedRoll } from "@/lib/game/table-dice";
 import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
+import { WhatsHere } from "./whats-here";
+import type { TableBriefing } from "@/lib/game/briefing";
 
 export type PlayCharacter = {
   id: string;
@@ -110,6 +112,7 @@ export function PlayClient({
   yourCharacterIds,
   initialRound,
   whatNow,
+  briefing,
   encounter,
 }: {
   campaignId: string;
@@ -134,6 +137,8 @@ export function PlayClient({
    * person. Grown-ups hesitated and children waited to be told.
    */
   whatNow: string | null;
+  /** What the table already knows — see `lib/game/briefing.ts`. */
+  briefing: TableBriefing;
   /** What is standing in front of them, if anything. */
   encounter: EncounterView | null;
 }) {
@@ -626,8 +631,15 @@ export function PlayClient({
             table is idle: mid-turn this is last turn's question, and answering
             a question the story has moved past is worse than being asked
             nothing at all. */}
-        {whatNow && phase.kind === "idle" && hasBegun && !finished && status !== "PAUSED" ? (
-          <p className="font-display mb-5 text-lg text-hearth-100">{whatNow}</p>
+        {phase.kind === "idle" && hasBegun && !finished && status !== "PAUSED" ? (
+          <>
+            {whatNow ? (
+              <p className="font-display mb-5 text-lg text-hearth-100">{whatNow}</p>
+            ) : null}
+            {/* Under the question rather than over it. The question is the
+                prompt; this is what she looks at while answering it. */}
+            <WhatsHere onTheTable={briefing.onTheTable} known={briefing.known} />
+          </>
         ) : null}
 
         {/* Above everything, because while one of these is open it is what the
@@ -736,6 +748,7 @@ export function PlayClient({
             round={round}
             availableMoves={availableMoves}
             busy={telling}
+            briefing={briefing}
             onRound={applyRound}
             onTakeTurn={takeTurn}
             poke={poke}
@@ -744,6 +757,7 @@ export function PlayClient({
           <AskCharacter
             campaignId={campaignId}
             talking={talking}
+            briefing={briefing}
             character={party[phase.index]}
             index={phase.index}
             total={party.length}
@@ -1040,6 +1054,7 @@ function countTurnEntries(entries: TranscriptEntry[]): number {
 function AskCharacter({
   campaignId,
   talking,
+  briefing,
   character,
   index,
   total,
@@ -1056,6 +1071,8 @@ function AskCharacter({
 }: {
   campaignId: string;
   talking: boolean;
+  /** What the table already knows — see `lib/game/briefing.ts`. */
+  briefing: TableBriefing;
   character: PlayCharacter;
   index: number;
   total: number;
@@ -1128,10 +1145,8 @@ function AskCharacter({
         <IdeaHints
           campaignId={campaignId}
           characterId={character.id}
-          onPick={(idea) => {
-            onChange(idea);
-            inputRef.current?.focus();
-          }}
+          onTheTable={briefing.onTheTable}
+          known={briefing.known}
         />
       )}
 
