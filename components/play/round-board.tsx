@@ -5,6 +5,7 @@ import { Alert } from "@/components/ui";
 import { AbilityPicker } from "@/components/play/ability-picker";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
+import type { TableBriefing } from "@/lib/game/briefing";
 import type { PlayCharacter } from "./play-client";
 import type { RoundView } from "@/lib/game/rounds";
 
@@ -26,6 +27,7 @@ export function RoundBoard({
   round,
   availableMoves,
   busy,
+  briefing,
   onRound,
   onTakeTurn,
   poke,
@@ -37,6 +39,8 @@ export function RoundBoard({
   availableMoves: AvailableMove[];
   /** True while this browser is the one running the turn. */
   busy: boolean;
+  /** What the table already knows — see `lib/game/briefing.ts`. */
+  briefing: TableBriefing;
   onRound: (round: RoundView | null) => void;
   onTakeTurn: (roundId: string) => void;
   poke: () => void;
@@ -243,6 +247,7 @@ export function RoundBoard({
                   campaignId={campaignId}
                   character={character}
                   talking={talking}
+                  briefing={briefing}
                   value={drafts[character.id] ?? ""}
                   spending={spends[character.id] ?? null}
                   sending={sending}
@@ -355,6 +360,7 @@ function YourAnswer({
   campaignId,
   character,
   talking,
+  briefing,
   value,
   spending,
   sending,
@@ -366,6 +372,7 @@ function YourAnswer({
   campaignId: string;
   character: PlayCharacter;
   talking: boolean;
+  briefing: TableBriefing;
   value: string;
   spending: string | null;
   sending: boolean;
@@ -395,7 +402,12 @@ function YourAnswer({
       />
 
       {talking ? null : (
-        <IdeaHints campaignId={campaignId} characterId={character.id} onPick={onChange} />
+        <IdeaHints
+          campaignId={campaignId}
+          characterId={character.id}
+          onTheTable={briefing.onTheTable}
+          known={briefing.known}
+        />
       )}
 
       {/* Not offered while the table is only talking it over: nothing is being

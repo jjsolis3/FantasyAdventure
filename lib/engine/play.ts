@@ -586,7 +586,7 @@ export async function beginCampaign(
       )
     : [];
 
-  const whatNow = await fetchWhatNow(
+  const nudge = await fetchWhatNow(
     calls,
     narration,
     campaign.party.map((member) => member.character.name),
@@ -608,7 +608,14 @@ export async function beginCampaign(
         ordinal: 1,
         type: "NARRATION",
         content: narration.trim(),
-        ...(whatNow ? { metadata: { whatNow } } : {}),
+        ...(nudge.whatNow || nudge.onTheTable.length
+          ? {
+              metadata: {
+                ...(nudge.whatNow ? { whatNow: nudge.whatNow } : {}),
+                ...(nudge.onTheTable.length ? { onTheTable: nudge.onTheTable } : {}),
+              },
+            }
+          : {}),
       },
     });
 
@@ -718,16 +725,48 @@ async function fetchWhatNow(
   calls: ModelCalls,
   narration: string,
   partyNames: string[],
-): Promise<string | null> {
+): Promise<{ whatNow: string | null; onTheTable: string[] }> {
   try {
     const result = await requestStructured({
       call: (hint) => calls.json(nudgePrompt({ narration, partyNames }), hint),
       validate: validator(nudgeSchema),
     });
-    return result.value.whatNow.trim() || null;
+    return {
+      whatNow: result.value.whatNow.trim() || null,
+      onTheTable: cleanTable(result.value.onTheTable),
+    };
   } catch {
-    return null;
+    return { whatNow: null, onTheTable: [] };
   }
+}
+
+/**
+ * Tidy the list of things in front of the party before it is stored.
+ *
+ * A local model asked for nouns will sometimes hand back a sentence of advice
+ * anyway — "you could try the shutter" — and that is the exact thing this whole
+ * feature exists to avoid. Rather than ask again and cost the table half a
+ * minute, the obvious openers are trimmed off the front and anything still
+ * addressing the players directly is dropped. Blanks and duplicates go too.
+ */
+export function cleanTable(entries: string[]): string[] {
+  const opener = /^(you\s+(could|can|might|should)\s+|try\s+(to\s+)?|maybe\s+|perhaps\s+)/i;
+  const out: string[] = [];
+  for (const entry of entries) {
+    // Looped, because they stack: "You could try the shutter" is two openers.
+    let text = entry.trim();
+    for (let pass = 0; pass < 3 && opener.test(text); pass += 1) {
+      text = text.replace(opener, "").trim();
+    }
+    if (!text) continue;
+    // Still talking to them after the trim: that is a hint wearing a hat.
+    if (/\byou\b/i.test(text) && /\b(could|should|might|must|need to)\b/i.test(text)) continue;
+    text = text.replace(/[.]+$/, "");
+    if (out.some((seen) => seen.toLowerCase() === text.toLowerCase())) continue;
+    out.push(text);
+    if (out.length === 3) break;
+  }
+  return out;
 }
 
 /**
@@ -1226,12 +1265,21 @@ export async function playTurn(
         ordinal: ordinal++,
         type: "NARRATION",
         content: result.narration.trim(),
-        // The question the passage leaves the table with, kept beside the
-        // passage that raised it so a page opened tomorrow still knows what
-        // everybody was in the middle of.
-        ...(result.extraction.whatNow?.trim()
-          ? { metadata: { whatNow: result.extraction.whatNow.trim() } }
-          : {}),
+        // The question the passage leaves the table with, and the things it put
+        // within reach, kept beside the passage that raised them so a page
+        // opened tomorrow still knows what everybody was in the middle of.
+        ...(() => {
+          const whatNow = result.extraction.whatNow?.trim();
+          const onTheTable = cleanTable(result.extraction.onTheTable);
+          return whatNow || onTheTable.length
+            ? {
+                metadata: {
+                  ...(whatNow ? { whatNow } : {}),
+                  ...(onTheTable.length ? { onTheTable } : {}),
+                },
+              }
+            : {};
+        })(),
       },
     });
 

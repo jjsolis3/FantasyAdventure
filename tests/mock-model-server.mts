@@ -137,11 +137,14 @@ const server = createServer((request, response) => {
 
     let content: string;
 
-    if (prompt.includes("Suggest three different things")) {
+    if (prompt.includes("Give them three nudges")) {
+      // Nudges, not actions. These used to be first-person sentences a child
+      // could tap straight into the box, which turned the button into the
+      // fastest route through the game.
       content =
-        '{"suggestions":["I creep closer and hold out my hand.",' +
-        '"I call out to it, loud and friendly.",' +
-        '"I look for what frightened it in the first place."]}';
+        '{"suggestions":["The barley is moving against the wind, not with it.",' +
+        '"Nobody has asked Rowan what he heard from the gate.",' +
+        '"The blackthorn in the hedge is broken outward, not inward."]}';
     } else if (prompt.includes("WHAT THE CHARACTERS SAY TO EACH OTHER")) {
       content =
         "The barley shifts while you talk, and whatever is in there goes very still, as though " +
@@ -179,6 +182,12 @@ const server = createServer((request, response) => {
         '"bondMoments":[{"from":"Rowan","to":"Mira","why":"stood between her and the noise"}],' +
         '"itemsGained":[{"character":"Mira","name":"a smooth grey stone","description":"warm to the touch"}],' +
         '"whatNow":"The barley is still moving. Do you go in after it?",' +
+        // Three things the passage put within reach — and one of them written
+        // as advice on purpose, because a 7B model does that however plainly
+        // the prompt forbids it, and the trimming in `cleanTable` is meant to
+        // catch it before it reaches a child.
+        '"onTheTable":["the flattened track through the barley",' +
+        '"You could try the gap in the hedge","Rowan, still holding the lamp"],' +
         (encounter && encountersOpened++ === 0
           ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
             '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +
@@ -189,7 +198,9 @@ const server = createServer((request, response) => {
     } else if (prompt.includes('{"whatNow":')) {
       // The opening passage's own question. Asked on its own because the
       // opening runs no extraction to fold it into.
-      content = '{"whatNow":"Something is moving in the barley. What do you do?"}';
+      content =
+        '{"whatNow":"Something is moving in the barley. What do you do?",' +
+        '"onTheTable":["the barley, moving against the wind","the lamp Rowan is carrying"]}';
     } else if (prompt.includes("aim of their own")) {
       // One per character, echoed back from the names in the request, so the
       // test exercises the real matching rather than a hard-coded party.

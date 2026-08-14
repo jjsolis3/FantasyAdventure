@@ -1506,6 +1506,82 @@ Three limits define what a paired screen is, and all three live in
 Unpairing takes effect on the next poll, a few seconds later, and deleting an
 adventure releases every screen showing it.
 
+#### What is actually on it
+
+It began as one very large paragraph and the quest list underneath, and that had
+the two faults a wall display can have: the passage was often taller than the
+screen — and a television cannot be scrolled — and everything the game already
+knew was on a phone or nowhere. It is now a dashboard.
+
+Down the left: **the passage**, fitted to its box rather than allowed to run off
+it; **the question** it left them with; and **the things it put within reach**.
+Down the right: the chapter's picture, **what we need** (the open objectives, in
+the players' own words), **what we know** (the facts extraction has been
+collecting all along), and **the last rolls** — the most public thing that
+happens in an evening, and until now the most privately displayed. The party runs
+along the bottom, with whoever the story is waiting on lit up. A roll to be
+thrown, or something standing in front of them, takes the top of the left column
+while it is happening, because in those moments that is the only thing the room
+is looking at.
+
+The fitting is worth a word, because it is the part that had to be got right.
+The passage is measured against its box and the type sized by ratio — down when
+it is too tall, back up when a paragraph has been dropped and given its space
+away. Only when it is still too tall at the smallest readable size does it start
+dropping paragraphs, oldest first, and it says `…earlier in this scene` when it
+does. Shrinking a little beats hiding anything, and hiding the beginning beats
+hiding the end, because the end is what they are answering. There is a hard pass
+budget behind it all: the first version stepped down two pixels at a time and
+tripped React's update-depth limit, which on a television means a blank screen.
+
+### What the table is told
+
+Two complaints, one cause. The girls were shouting out guesses rather than
+deciding — a door that was never mentioned, a person who was not there — and
+*I don't know what to do* had become the way out of that, which is a clue used
+while the escape room is still running.
+
+The storyteller was only half the problem. Every turn the game extracts
+memories, opens objectives and rolls dice, and then showed the players a passage
+and a text box. So the fix is in two halves.
+
+**The storyteller says what is there.** `CORE_CONTRACT` in `lib/ai/prompts.ts`
+now opens with it, because it was the most misunderstood rule in the file: be
+*generous* with information and stingy only about what to **do** about it. A
+player confused about the situation is a failure of the telling; a player unsure
+what to try is the game working. The never-hand-them-the-answer rule is about
+the solution and nothing else, and is never a reason to be vague.
+
+Extraction is asked for `onTheTable` alongside the closing question: up to three
+things the passage put within reach, written as things and never as advice —
+"the shutter, nailed shut", "Bram, who will not look at you". A local model will
+write "you could try the shutter" however plainly the prompt forbids it, so
+`cleanTable` in `lib/engine/play.ts` trims the opener and drops anything still
+addressing the players. They are shown as chips under the question, on the phone
+and on the television.
+
+**What they already know is now on screen.** `lib/game/briefing.ts` collects it:
+the question and the things in reach, the facts the party has collected, the
+outstanding objectives, and the last few rolls. Shared quests only — a personal
+aim is hers until she says it.
+
+Nothing here is a hint. Every field is something they were already told. Telling
+a nine-year-old what she already learned is not giving her the answer.
+
+#### The stuck button, in two rungs
+
+*I don't know what to do* used to fetch three ready-made first-person actions and
+drop the chosen one straight into the box. Now:
+
+1. **Here is where you are** — free, instant, no model call. The things in reach
+   and the facts, restated. Most of the time being stuck is only having lost the
+   thread of a long passage, and this is the whole cure.
+2. **Still stuck — give me a nudge** — three things somebody noticed, and
+   nothing more. "The lamp in the upstairs window has not moved all evening."
+   Never an action, never in the first person, never a verb aimed at her.
+
+And the nudges are text, not buttons. Nothing fills the box for her any more.
+
 ### A note on exposing your AI
 
 Do **not** port-forward Ollama to the internet, and do not leave it listening on
@@ -1787,6 +1863,8 @@ tests/
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter
+  briefing.test.ts    What the table is told, and the nudges that are not scripts
+  briefing.e2e.mts    The same through the pipeline, onto the phone and the wall
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

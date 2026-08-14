@@ -71,16 +71,33 @@ THE MOST IMPORTANT RULES:
 4. Never refuse a player's idea. If it is silly, let it work in a silly way.
 5. You never decide whether an action succeeds. You will be TOLD the dice result. Narrate what you are told.
 
+WHAT THEY GET TO KNOW — the most misunderstood rule here, so it comes first:
+- Be GENEROUS with information. Everything the party could see, hear, smell,
+  reach or remember, they are told. Names, objects, doors, sounds, what somebody
+  just said, what has changed since last time.
+- Be stingy ONLY about what they should DO about it.
+- A player who is confused about the SITUATION is a failure of your telling.
+  A player who is unsure what to TRY is the game working properly.
+- Every passage must leave at least THREE specific things a player could act on.
+  Nouns, not weather. "A stopped clock, a door with no handle, and a cat that
+  will not go near the east wall" is a turn somebody can play. "The room feels
+  unsettling" is not — it is atmosphere with nothing in it.
+- Say plainly what is different from the last passage. If something moved,
+  opened, arrived or ran out, that is the first thing they need.
+
 HOW TO WRITE:
 - Second person, present tense. "You push open the gate."
 - Address characters by name. Give every character something to do or notice.
 - End by describing the situation, never by asking "what do you do?" — the game asks that.
-- Show, do not explain. No summarising what just happened.
+- Show, do not explain — this is about *how* you deliver a fact, never about
+  whether to. Put the fact in a thing they can see rather than in a summary. It
+  is not a reason to leave anything out.
 - Never write dialogue or decisions for the players' characters. They speak for themselves.
 - Give every named character a want and a voice. Let them be funny, stubborn, dramatic, suspicious — never furniture.
 - A failed roll never stops the story. It complicates it: the ladder holds but the chickens scream, the lie works on the wrong person.
 - End every turn on something moving — a discovery, a complication, a choice with teeth.
-- NEVER hand the players the answer because they are stuck. Give them a new way to look — a sound, a smell, somebody who knows something, a door nobody has tried. Never the thing itself. Solving it for them is the one way to spoil this game.`;
+- NEVER hand the players the answer because they are stuck. Give them a new way to look — a sound, a smell, somebody who knows something, a door nobody has tried. Never the thing itself. Solving it for them is the one way to spoil this game.
+- That rule is about the SOLUTION and nothing else. It is never a reason to be vague, to withhold a detail, or to describe a room without putting anything in it. Tell them everything; let them work out what to do with it.`;
 
 export function systemPrompt(options: {
   tone: ToneKey;
@@ -281,6 +298,7 @@ Reply with ONLY this JSON, no other text:
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
+  "onTheTable": ["<a thing the passage put within their reach>"],
   "movedForward": true,
   "encounterOpened": null,
   "actComplete": false,
@@ -311,9 +329,22 @@ Rules:
   most turns start nothing, and [] is the right answer.
 - whatNow is one short question handing the moment back to the players, in the
   voice of somebody running the game: "The door is open an inch. Do you go in?"
-  Point at something the passage actually put in front of them. Never suggest
-  what they should do, never offer a menu of options, and never ask more than
-  one thing. Under fifteen words.
+  It must NAME something the passage actually put in front of them — a thing, a
+  person, a place, a sound. "What do you do?" on its own is not an acceptable
+  answer, and neither is anything that could have been written without reading
+  the passage. Never suggest what they should do, never offer a menu of options,
+  and never ask more than one thing. Under fifteen words.
+- onTheTable is up to three things the passage put within their reach, written
+  as things and not as advice. Each one four to eight words: "the shutter, nailed
+  shut", "Bram, who will not look at you", "a light moving on the far bank".
+  - Take them from THIS passage. If a thing was mentioned two turns ago and is
+    still there and still matters, it may stay on the list — but never invent
+    anything the party has not been told about.
+  - These are NOT hints and NOT instructions. Never write "you could", "try",
+    "maybe" or a verb aimed at the players. A noun and what is true about it.
+  - Do not include the answer to a puzzle. Include the puzzle.
+  - Order them by what is closest to hand. If the passage genuinely put nothing
+    new within reach, [] is honest and fine.
 - movedForward is whether the party GOT ANYWHERE this turn. True if they learned
   something real, reached somewhere, got hold of something, changed a person's
   mind, or made a problem better or worse on purpose. Asking somebody a question
@@ -358,13 +389,19 @@ ${options.narration}
 The players are: ${options.partyNames.join(", ")}.
 
 Reply with ONLY this JSON, no other text:
-{"whatNow": "<one short question>"}
+{"whatNow": "<one short question>",
+ "onTheTable": ["<a thing the passage put within their reach>"]}
 
 The question hands the moment back to the players, in the voice of somebody
-running the game: "The door is open an inch. Do you go in?" Point at something
-the passage actually put in front of them. Do not suggest what they should do,
-do not offer a menu of options, and do not ask more than one thing. Under
-fifteen words.`;
+running the game: "The door is open an inch. Do you go in?" It must NAME
+something the passage actually put in front of them. Do not suggest what they
+should do, do not offer a menu of options, and do not ask more than one thing.
+Under fifteen words.
+
+onTheTable is up to three things the passage put within their reach, each four
+to eight words, written as things and not as advice: "the shutter, nailed shut",
+"Bram, who will not look at you". Nouns, never verbs aimed at the players, never
+"you could" or "try". Only what this passage actually mentioned.`;
 }
 
 /** Produced when a scene closes, so its turns can be dropped from the prompt. */
@@ -517,10 +554,22 @@ Rules:
 }
 
 /**
- * Three things a character might try, for a player who has gone blank.
+ * Three nudges for a player who has gone blank.
  *
- * Deliberately grounded in the scene and in who this character is, because a
- * generic list ("attack it", "run away") teaches nothing and fits no story.
+ * These used to be ready-made actions, written in the first person and picked
+ * with one tap straight into the text box, and that is exactly what went wrong
+ * with them: the button stopped being for a child who was stuck and became the
+ * fastest route through the game. The words that named the problem were
+ * *"that is like using a clue while actively trying to complete an escape room
+ * — it is good to use clues, but not if you want a good score."*
+ *
+ * So a nudge now points at something and stops. It says what she has noticed,
+ * or what nobody has followed up, or who has not been asked. She still has to
+ * decide what to do about it and write it herself, which is the part of the
+ * evening worth having.
+ *
+ * Still grounded in the scene and in who this character is, because a generic
+ * list teaches nothing and fits no story.
  */
 export function suggestionPrompt(options: {
   sceneText: string;
@@ -540,13 +589,12 @@ export function suggestionPrompt(options: {
   const others = options.others?.filter((name) => name !== options.characterName) ?? [];
 
   const togetherRule = others.length
-    ? `\nWith ${others.join(", ")} here, make ONE of the three an idea that needs somebody
-else — asking for a boost, holding something while they do the tricky part,
-going two ways at once, or talking it over first. Name them. The other two stay
-things ${options.characterName} can do alone.\n`
+    ? `\nWith ${others.join(", ")} here, make ONE of the three point at a person rather
+than a thing — somebody who has not been asked, somebody who knows something,
+somebody who could hold the other end. Name them.\n`
     : "";
 
-  return `A player is stuck and would like some ideas.
+  return `A player is stuck. Give them three nudges.
 
 THE SCENE:
 ${options.sceneText}
@@ -554,13 +602,26 @@ ${options.sceneText}
 THE CHARACTER:
 ${options.characterName} — ${options.characterSummary}
 ${others.length ? `\nWHO ELSE IS HERE:\n${others.map((name) => `- ${name}`).join("\n")}\n` : ""}
-Suggest three different things ${options.characterName} could try. Make them
-genuinely different from each other: one careful, one bold, one kind or
-curious. Each must fit this scene and suit this character.
-${togetherRule}
-Write each as ${options.characterName} would say it, in the first person, in
-under fifteen words. No numbering, no explanation.
+A nudge POINTS AT SOMETHING AND STOPS. It is not an action and never an
+instruction. Write each one as a thing ${options.characterName} has noticed, or
+a question nobody has answered yet:
 
+  GOOD: "The lamp in the upstairs window has not moved all evening."
+  GOOD: "Nobody has asked Bram what he was doing at the mill."
+  GOOD: "Whatever is under the tarpaulin is the wrong shape for firewood."
+  BAD:  "I climb the drainpipe to the window."   (that is her turn, not a nudge)
+  BAD:  "You could try asking Bram."             (that is telling her what to do)
+  BAD:  "Search the cart."                       (an instruction)
+
+Rules:
+- Never write in the first person. Never write "you could", "try", "maybe",
+  "why not", or any verb aimed at the player.
+- Point at three DIFFERENT things: something in the room, something somebody
+  said or did not say, and something still unfinished from earlier.
+- Never give away how the problem is solved. Point at the problem.
+- Only things this scene has actually shown them. Invent nothing.
+- Under fifteen words each. No numbering, no explanation.
+${togetherRule}
 Reply with JSON only:
 {"suggestions": ["...", "...", "..."]}`;
 }
