@@ -162,9 +162,18 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         lead={`${character.race} ${character.archetype} · ${character.pronouns}`}
       />
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2">
         <Link href="/characters" className="text-sm text-hearth-300 underline hover:text-hearth-200">
           ← All adventurers
+        </Link>
+        {/* The sheet is who she is now; the road is everything she has done.
+            Kept apart on purpose — a page that is both is a page a child
+            scrolls past looking for the buttons. */}
+        <Link
+          href={`/characters/${character.id}/story`}
+          className="text-sm text-hearth-300 underline hover:text-hearth-200"
+        >
+          The long road →
         </Link>
       </div>
 

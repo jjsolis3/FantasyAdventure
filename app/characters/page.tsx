@@ -142,6 +142,12 @@ export default async function CharactersPage() {
                           {ageLabel(character.ageBand)} {character.race} {character.archetype}
                         </span>
                         <span className="text-xs text-hearth-400">{character.pronouns}</span>
+                        <Link
+                          href={`/characters/${character.id}/story`}
+                          className="text-sm text-hearth-400 underline underline-offset-4 hover:text-hearth-200"
+                        >
+                          the long road
+                        </Link>
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-3">

@@ -220,6 +220,7 @@ model Character {
   skills        CharacterSkill[]
   knacks        CharacterKnack[]
   acquaintances Acquaintance[]
+  road          RoadEntry[]
   practices     Practice[]
   inventory     InventoryItem[]
   keepsakes     Keepsake[]
@@ -365,6 +366,51 @@ model CharacterSkill {
 /// who watched their find silently disappear from their sheet has been robbed,
 /// not rewarded. So the item leaves the inventory and arrives here, naming what
 /// it was for. Nothing anybody earned ever just vanishes.
+/// One finished adventure, kept where deleting the adventure cannot reach it.
+///
+/// Everything on the long road is derived — the same figures `lib/game/summary.ts`
+/// works out for an ending, read across every campaign — and derived is the
+/// right default, because it cannot drift and it stays true if a turn is taken
+/// back. But deleting an adventure cascades, and a trophy room that quietly
+/// forgets five evenings because somebody tidied up is worse than no trophy
+/// room. `Acquaintance` hit exactly this and solved it the same way: keep the
+/// title alongside the id, because the id goes when the campaign does and the
+/// memory should not.
+///
+/// Written once, when an adventure completes — the only moment the numbers have
+/// stopped moving, which is what makes a snapshot safe here and nowhere else.
+/// A live adventure is never read from this table.
+model RoadEntry {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  /// Kept as text as well as an id, for the same reason Acquaintance does.
+  campaignTitle  String
+  storylineTitle String
+
+  finishedAt DateTime
+
+  chapters    Int  @default(0)
+  errands     Int  @default(0)
+  ownAims     Int  @default(0)
+  xpEarned    Int  @default(0)
+  rollsThrown Int  @default(0)
+  rollsLanded Int  @default(0)
+  /// Best margin over a target on this adventure, or null if she never landed one.
+  bestRoll    Int?
+
+  createdAt DateTime @default(now())
+
+  /// One per adventurer per adventure. Finishing twice — undo, then finish
+  /// again — updates the row rather than writing a second.
+  @@unique([characterId, campaignId])
+  @@index([characterId])
+  @@index([campaignId])
+}
+
 model Keepsake {
   id          String    @id @default(cuid())
   characterId String
@@ -693,6 +739,7 @@ model Campaign {
   encounters     Encounter[]
   quests   Quest[]
   keepsakes Keepsake[]
+  road      RoadEntry[]
   memories Memory[]
   aiCalls  AiCall[]
   rounds   TurnRound[]

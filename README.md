@@ -1268,6 +1268,64 @@ Mira**, so the room looks up instead of down at four phones.
 Set per adventure in its settings, and switchable mid-story. `SERVER` is the
 default and stays the behaviour when the dice are in another room.
 
+### The long road
+
+Every adventurer has a room at `/characters/[id]/story` holding everything she
+has ever done. Per character rather than per account, deliberately: a household
+holds several adventurers over the years — one handed on, one started again —
+and the trophies belong to whoever earned them.
+
+The interesting part is how little of it is new. The game had been recording
+nearly all of this since the first evening and showing it nowhere:
+
+| Already recorded | Read again, before this |
+|---|---|
+| Who found what (`QuestObjective.foundByCharacterId`) | never |
+| How an encounter ended, and who took it on alone | never, once resolved |
+| How often two adventurers actually spent a Family Move (`FamilyMoveUse`) | never |
+| Times one took up the other's idea (`ListeningBond`) | never |
+| Every roll she has thrown | the transcript, then gone |
+| How one adventure went | `/campaigns/[id]/summary` — that one only |
+
+So `lib/game/chronicle.ts` is a reading problem, not a collecting one, and it
+**calls** `lib/game/summary.ts` rather than reimplementing it — a trophy room
+and an ending can never disagree about what an evening was worth.
+
+The room has: four big numbers, the adventures newest first with their own
+figures, **what she found**, **what she stood up to**, **who she has**, the
+people she knows, what it cost, and pictures. Written as sentences —
+*"the brass key, green at the teeth"* — because the audience is nine and
+`objectives_completed: 4` is not a thing to be proud of.
+
+Two rules carry over unchanged: a personal aim stays hers until she finishes it,
+and a tie counts only once the other household has agreed to it.
+
+#### Who she has
+
+The part nobody could see before. Per other adventurer: the tie, the bond, which
+moves it unlocked, **how many times they have actually spent one**, adventures
+shared, and how often one took up the other's idea. Every number there had been
+counted for months and shown to nobody.
+
+#### One thing is stored, and only one
+
+Everything above is derived, which is the right default — it cannot drift, and
+it stays true if a turn is taken back. But deleting an adventure cascades, and a
+trophy room that forgets five evenings because somebody tidied up is worse than
+none.
+
+So `RoadEntry` writes one row per adventurer when an adventure **completes** —
+title, storyline, date, and the counts — with `ON DELETE SET NULL` rather than
+cascade. That is the whole point of the table: the adventure can go and the fact
+that she finished it stays, with the title kept as text beside the id. Exactly
+what `Acquaintance` already does, and for the same reason.
+
+Written at completion because that is the only moment the numbers have stopped
+moving, which is what makes a snapshot safe here and nowhere else. A live
+adventure is never read from that table. On her road, an adventure whose
+campaign has gone is still listed and still counted — it just has no journal
+left to link to, and says so.
+
 ### Saying who is who
 
 A tie — *"Orin is the parent of Wren"*, *"Mira is the sibling of Bramble"* — is
@@ -1927,6 +1985,8 @@ tests/
   briefing.e2e.mts    The same through the pipeline, onto the phone and the wall
   ties.test.ts        Who you can be related to, and who has to agree
   ties.e2e.mts        Two households, a tie waiting, and the bond it unlocks
+  chronicle.test.ts   The dice over a lifetime, and what a finished adventure was worth
+  chronicle.e2e.mts   An adventure finished, then deleted — and still on her road
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

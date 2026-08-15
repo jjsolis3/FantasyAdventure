@@ -104,6 +104,7 @@ import {
   type StatKey,
 } from "@/lib/game/rules";
 import { CONFIRMED_TIES, isConfirmed } from "@/lib/game/ties";
+import { recordRoad } from "@/lib/game/chronicle";
 
 /** How many recent turns are offered to the context builder before trimming. */
 const RECENT_TURN_WINDOW = 12;
@@ -1787,6 +1788,18 @@ export async function playTurn(
           },
         });
       }
+
+      // What everybody got, written down where deleting the adventure cannot
+      // reach it. Inside this transaction on purpose: either the story finished
+      // and the road remembers it, or neither happened. See
+      // `lib/game/chronicle.ts` for why this one thing is stored when the rest
+      // of the long road is derived.
+      await recordRoad(tx, {
+        id: campaign.id,
+        title: campaign.title,
+        storylineTitle: campaign.storyline.title,
+        partyCharacterIds: campaign.party.map((member) => member.characterId),
+      });
     }
 
     // Did this turn get anywhere?
