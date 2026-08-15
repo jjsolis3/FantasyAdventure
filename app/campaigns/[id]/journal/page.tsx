@@ -188,7 +188,10 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
 
                 {member.character.inventory.filter((item) => !item.brought).length > 0 ? (
                   <p className="mt-1 text-sm text-hearth-200/70">
-                    Came home with:{" "}
+                    {/* Only "came home" once they actually have. A journal read
+                        mid-adventure was telling a family what they came home
+                        with while the story was still going on. */}
+                    {campaign.status === "COMPLETE" ? "Came home with" : "Carrying"}:{" "}
                     {member.character.inventory
                       .filter((item) => !item.brought)
                       .map((item) => (item.quantity > 1 ? `${item.name} ×${item.quantity}` : item.name))

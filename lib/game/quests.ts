@@ -24,6 +24,7 @@
 import type { Prisma, QuestKind } from "@/generated/prisma/client.ts";
 import { looksLikeTheSameThing } from "@/lib/game/finds";
 import { QUEST_XP, levelFor } from "@/lib/game/rules";
+import { pronounsOf } from "@/lib/game/pronouns";
 
 /** The transaction handle the turn pipeline hands around. */
 type Tx = Prisma.TransactionClient;
@@ -147,7 +148,13 @@ export type SpentItem = { itemName: string; foundByName: string };
  * buried in a transaction.
  */
 export function completionMessages(
-  quest: { title: string; kind: QuestKind; secretForName?: string | null },
+  quest: {
+    title: string;
+    kind: QuestKind;
+    secretForName?: string | null;
+    /** Hers, his or theirs — see below. */
+    secretForPronouns?: string | null;
+  },
   spent: SpentItem[],
   xp: number,
 ): string[] {
@@ -155,9 +162,15 @@ export function completionMessages(
 
   // A personal quest is announced as a reveal, because until this moment nobody
   // else knew she was carrying it. That is most of the pleasure of it.
+  // "of her own" was hardcoded, and a real evening caught it: the line came out
+  // as "Orin had something of her own to do" for a father with he/him on his
+  // sheet. Every other surface in the game reads pronouns off the character;
+  // this one sentence was guessing, and guessing wrong is worse here than
+  // anywhere else, because it lands in the middle of somebody's proudest moment.
+  const theirs = pronounsOf(quest.secretForPronouns).possessive;
   const opening =
     quest.kind === "PERSONAL" && quest.secretForName
-      ? `${quest.secretForName} had something of her own to do: ${quest.title} — done.`
+      ? `${quest.secretForName} had something of ${theirs} own to do: ${quest.title} — done.`
       : `${quest.title} — done.`;
 
   if (spent.length === 0) {
@@ -451,16 +464,18 @@ async function completeQuest(
       ? [quest.secretForCharacterId]
       : partyCharacterIds;
 
-  const secretForName = quest.secretForCharacterId
-    ? ((
-        await tx.character.findUnique({
-          where: { id: quest.secretForCharacterId },
-          select: { name: true },
-        })
-      )?.name ?? null)
+  const secretFor = quest.secretForCharacterId
+    ? await tx.character.findUnique({
+        where: { id: quest.secretForCharacterId },
+        select: { name: true, pronouns: true },
+      })
     : null;
 
-  const messages = completionMessages({ ...quest, secretForName }, spent, xp);
+  const messages = completionMessages(
+    { ...quest, secretForName: secretFor?.name ?? null, secretForPronouns: secretFor?.pronouns },
+    spent,
+    xp,
+  );
 
   for (const characterId of paid) {
     const character = await tx.character.findUnique({

@@ -156,7 +156,12 @@ test("quests: a list of things that contain commas stays readable", () => {
 test("quests: a personal quest is announced with her name on it", () => {
   // Nobody else knew she was carrying this, so the announcement is a reveal.
   const messages = completionMessages(
-    { title: "Make friends with the dog", kind: "PERSONAL", secretForName: "Wren" },
+    {
+      title: "Make friends with the dog",
+      kind: "PERSONAL",
+      secretForName: "Wren",
+      secretForPronouns: "she/her",
+    },
     [],
     6,
   );
@@ -179,7 +184,12 @@ test("quests: a personal quest pays her, not the party", () => {
 
 test("quests: a personal quest that cost her something still says so", () => {
   const messages = completionMessages(
-    { title: "Pay the toll", kind: "PERSONAL", secretForName: "Wren" },
+    {
+      title: "Pay the toll",
+      kind: "PERSONAL",
+      secretForName: "Wren",
+      secretForPronouns: "she/her",
+    },
     [{ itemName: "the copper coin", foundByName: "Wren" }],
     6,
   );
@@ -188,6 +198,34 @@ test("quests: a personal quest that cost her something still says so", () => {
     messages[0],
     "Wren had something of her own to do: Pay the toll — done. Wren gave up the copper coin.",
   );
+});
+
+test("quests: the announcement uses his pronouns when they are his", () => {
+  // Found in a real transcript: "Orin had something of her own to do", for a
+  // father with he/him on his sheet. "her" was hardcoded, and it landed in the
+  // middle of the proudest sentence the game writes.
+  const messages = completionMessages(
+    {
+      title: "The Perfect Brew",
+      kind: "PERSONAL",
+      secretForName: "Orin",
+      secretForPronouns: "he/him",
+    },
+    [],
+    6,
+  );
+
+  assert.equal(messages[0], "Orin had something of his own to do: The Perfect Brew — done.");
+});
+
+test("quests: and falls back to theirs rather than guessing", () => {
+  const messages = completionMessages(
+    { title: "Find the fox", kind: "PERSONAL", secretForName: "Rowan" },
+    [],
+    6,
+  );
+
+  assert.equal(messages[0], "Rowan had something of their own to do: Find the fox — done.");
 });
 
 test("quests: a party quest is never attributed to one girl", () => {

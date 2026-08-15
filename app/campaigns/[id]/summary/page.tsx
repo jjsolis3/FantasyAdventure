@@ -214,7 +214,11 @@ export default async function SummaryPage({ params }: { params: Promise<{ id: st
                 <p className="mt-4 text-sm text-hearth-200/70">
                   {found.length > 0 ? (
                     <>
-                      <span className="text-hearth-400">Came home with</span>{" "}
+                      {/* The page already knows whether they are home — its own
+                          title switches on it. This sentence was not. */}
+                      <span className="text-hearth-400">
+                        {finished ? "Came home with" : "Carrying"}
+                      </span>{" "}
                       {found.map((item) => item.name).join(", ")}.{" "}
                     </>
                   ) : null}
