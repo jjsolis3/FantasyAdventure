@@ -1268,6 +1268,124 @@ Mira**, so the room looks up instead of down at four phones.
 Set per adventure in its settings, and switchable mid-story. `SERVER` is the
 default and stays the behaviour when the dice are in another room.
 
+### The long road
+
+Every adventurer has a room at `/characters/[id]/story` holding everything she
+has ever done. Per character rather than per account, deliberately: a household
+holds several adventurers over the years — one handed on, one started again —
+and the trophies belong to whoever earned them.
+
+The interesting part is how little of it is new. The game had been recording
+nearly all of this since the first evening and showing it nowhere:
+
+| Already recorded | Read again, before this |
+|---|---|
+| Who found what (`QuestObjective.foundByCharacterId`) | never |
+| How an encounter ended, and who took it on alone | never, once resolved |
+| How often two adventurers actually spent a Family Move (`FamilyMoveUse`) | never |
+| Times one took up the other's idea (`ListeningBond`) | never |
+| Every roll she has thrown | the transcript, then gone |
+| How one adventure went | `/campaigns/[id]/summary` — that one only |
+
+So `lib/game/chronicle.ts` is a reading problem, not a collecting one, and it
+**calls** `lib/game/summary.ts` rather than reimplementing it — a trophy room
+and an ending can never disagree about what an evening was worth.
+
+The room has: four big numbers, the adventures newest first with their own
+figures, **what she found**, **what she stood up to**, **who she has**, the
+people she knows, what it cost, and pictures. Written as sentences —
+*"the brass key, green at the teeth"* — because the audience is nine and
+`objectives_completed: 4` is not a thing to be proud of.
+
+Two rules carry over unchanged: a personal aim stays hers until she finishes it,
+and a tie counts only once the other household has agreed to it.
+
+#### Who she has
+
+The part nobody could see before. Per other adventurer: the tie, the bond, which
+moves it unlocked, **how many times they have actually spent one**, adventures
+shared, and how often one took up the other's idea. Every number there had been
+counted for months and shown to nobody.
+
+#### One thing is stored, and only one
+
+Everything above is derived, which is the right default — it cannot drift, and
+it stays true if a turn is taken back. But deleting an adventure cascades, and a
+trophy room that forgets five evenings because somebody tidied up is worse than
+none.
+
+So `RoadEntry` writes one row per adventurer when an adventure **completes** —
+title, storyline, date, and the counts — with `ON DELETE SET NULL` rather than
+cascade. That is the whole point of the table: the adventure can go and the fact
+that she finished it stays, with the title kept as text beside the id. Exactly
+what `Acquaintance` already does, and for the same reason.
+
+Written at completion because that is the only moment the numbers have stopped
+moving, which is what makes a snapshot safe here and nowhere else. A live
+adventure is never read from that table. On her road, an adventure whose
+campaign has gone is still listed and still counted — it just has no journal
+left to link to, and says so.
+
+### Saying who is who
+
+A tie — *"Orin is the parent of Wren"*, *"Mira is the sibling of Bramble"* — is
+declared by the family, never invented by the storyteller, and it is the thing
+everything else in this section hangs off. `deepen` in `lib/engine/play.ts` only
+ever raises a bond on a tie somebody declared, so **two adventurers with nothing
+said about them earn nothing all evening**, however kind they are to each other.
+
+That made a scoping bug expensive. Reach used to be "somebody this *character*
+has already shared a campaign with", which is a chicken-and-egg: a newly made
+adventurer has shared nothing, so the dropdown came back empty at exactly the
+moment a family wants to say who he is. The case that found it — a father handed
+his old character to his daughters, made a new one, and could not say he was
+their father. Reach is now the **table**: your own adventurers, plus anybody in
+an adventure you own or are travelling in (`lib/game/ties.ts`). Not one step
+wider; this must never become a way to browse the whole app.
+
+The kinds have always included `FRIEND` and `PET` alongside the family ones, so
+best friends need nothing added — they needed somebody reachable to apply them
+to.
+
+**One end of a tie is always an adventurer you answer for.** That single
+invariant is what stops anybody arranging other people's families, and it is
+checked in the action rather than only in the form.
+
+#### Ties that touch another household
+
+One-sided declaration was fine while every character in the house belonged to
+one account. It stops being fine the moment somebody outside the house joins a
+party, because *"your child is my character's sister"* is a claim about somebody
+else's adventurer and it pays out in bond levels and Family Moves.
+
+So: a tie between two adventurers that already answer to you is confirmed on the
+spot — asking a household to agree with itself is ceremony for nobody. Anything
+else is **stored waiting**. It shows on both sheets, says plainly that nothing
+is being earned, and appears on the other household's list as *"1 tie to agree
+to"*, because nobody would ever go looking for it. Until somebody says yes it
+earns no bond, unlocks no moves, and is not mentioned to the storyteller.
+
+Either side may agree, and either side may remove — but the household that
+proposed cannot answer for the one being asked, or the whole thing would be two
+clicks by the same person.
+
+Every tie that existed before this was stamped confirmed by the migration. A
+family mid-adventure must not come back after a deploy to find their sisters
+unrelated.
+
+#### Asked at the moment it is obvious
+
+The character sheet has always had the editor and nobody found it — you go there
+to look at an adventurer, not to think about the party. So the campaign setup
+page now names any pair in the party with nothing declared and offers the
+sentence right there, along with the reason: bonds only grow between adventurers
+who have said how they are related.
+
+Where *neither* adventurer is yours — two children on two sign-ins — the pair is
+named but not offered, because one end of a tie must be somebody you answer for.
+Whoever is running the evening can say it out loud, which at a kitchen table is
+faster than any button.
+
 ### Bonds that count more than kindness
 
 Bonds only ever rose from one thing: a `bondMoment`, which the storyteller is
@@ -1865,6 +1983,10 @@ tests/
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter
   briefing.test.ts    What the table is told, and the nudges that are not scripts
   briefing.e2e.mts    The same through the pipeline, onto the phone and the wall
+  ties.test.ts        Who you can be related to, and who has to agree
+  ties.e2e.mts        Two households, a tie waiting, and the bond it unlocks
+  chronicle.test.ts   The dice over a lifetime, and what a finished adventure was worth
+  chronicle.e2e.mts   An adventure finished, then deleted — and still on her road
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

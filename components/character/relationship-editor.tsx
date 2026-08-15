@@ -1,7 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { removeRelationshipAction, setRelationshipAction } from "@/lib/game/actions";
+import {
+  confirmRelationshipAction,
+  removeRelationshipAction,
+  setRelationshipAction,
+} from "@/lib/game/actions";
 import type { FormState } from "@/lib/auth/actions";
 import { RELATIONSHIP_KINDS, RELATIONSHIP_LABELS, bondProgress, type RelationshipKind } from "@/lib/game/rules";
 import { Alert } from "@/components/ui";
@@ -13,6 +17,14 @@ export type RelationRow = {
   otherName: string;
   kind: RelationshipKind;
   bondXp: number;
+  /**
+   * Who still has to agree, or null when nobody does.
+   *
+   * "you" means this household is being asked and there is a button to press.
+   * "them" means we asked and are waiting. A tie between two adventurers that
+   * both answer to one account is never either — see `lib/game/ties.ts`.
+   */
+  waitingOn: "you" | "them" | null;
 };
 
 export function RelationshipEditor({
@@ -38,27 +50,58 @@ export function RelationshipEditor({
           {relations.map((relation) => {
             const bond = bondProgress(relation.bondXp);
             return (
+              /* The sentence gets the whole width on a phone, and the buttons
+                 drop beneath it. Two buttons and a wrapping explanation on a
+                 390-pixel screen left the text a column four characters wide —
+                 "Mira is / the child / of Rowan" — which is the same failure
+                 the stat rows had, and the same fix. */
               <li key={relation.id} className="flex flex-wrap items-center gap-3 py-3">
-                <span className="min-w-0 flex-1 text-hearth-200">
+                <span className="min-w-0 flex-1 basis-full text-hearth-200 sm:basis-0">
                   {characterName} is the{" "}
                   <span className="text-hearth-100">{RELATIONSHIP_LABELS[relation.kind]}</span>{" "}
                   {relation.otherName}
+                  {/* Said plainly rather than shown as a badge. A bond that is
+                      not earning anything yet is the sort of thing a family
+                      needs told, not hinted. */}
+                  {relation.waitingOn === "them" ? (
+                    <span className="mt-0.5 block text-sm text-amber-300/80">
+                      Waiting for whoever plays {relation.otherName} to agree. Until then this
+                      earns nothing.
+                    </span>
+                  ) : relation.waitingOn === "you" ? (
+                    <span className="mt-0.5 block text-sm text-amber-300/80">
+                      Somebody says this is true. Nothing is earned until you agree.
+                    </span>
+                  ) : null}
                 </span>
 
-                <span
-                  className="text-sm text-hearth-400"
-                  title={
-                    bond.needed === null
-                      ? "This bond is as strong as it gets."
-                      : `${bond.into} of ${bond.needed} toward the next level`
-                  }
-                >
-                  Bond {bond.level}
-                </span>
+                {relation.waitingOn === null ? (
+                  <span
+                    className="text-sm text-hearth-400"
+                    title={
+                      bond.needed === null
+                        ? "This bond is as strong as it gets."
+                        : `${bond.into} of ${bond.needed} toward the next level`
+                    }
+                  >
+                    Bond {bond.level}
+                  </span>
+                ) : null}
+
+                {relation.waitingOn === "you" ? (
+                  <form action={confirmRelationshipAction} className="ml-auto">
+                    <input type="hidden" name="relationshipId" value={relation.id} />
+                    <SubmitButton variant="secondary" pendingLabel="Agreeing…">
+                      Yes, that&rsquo;s right
+                    </SubmitButton>
+                  </form>
+                ) : null}
 
                 <form action={removeRelationshipAction}>
                   <input type="hidden" name="relationshipId" value={relation.id} />
-                  <SubmitButton variant="danger" pendingLabel="Removing…">Remove</SubmitButton>
+                  <SubmitButton variant="danger" pendingLabel="Removing…">
+                    {relation.waitingOn === "you" ? "No" : "Remove"}
+                  </SubmitButton>
                 </form>
               </li>
             );
@@ -66,14 +109,16 @@ export function RelationshipEditor({
         </ul>
       ) : (
         <p className="text-sm text-hearth-400">
-          No family ties yet. Bonds grow when characters help each other, and unlock moves they can
-          only use together.
+          No family ties yet — and nothing is being earned. Bonds only grow between adventurers
+          who have said how they are related, so until somebody here is named a sister, a father
+          or a best friend, every kind thing they do for each other counts for nothing.
         </p>
       )}
 
       {others.length === 0 ? (
         <p className="text-sm text-hearth-400">
-          Add another adventurer first, then you can say how they are related.
+          Nobody to be related to yet. Make another adventurer, or start an adventure together —
+          anybody at your table can be named here.
         </p>
       ) : unrelated.length === 0 ? (
         <p className="text-sm text-hearth-400">{characterName} is related to everyone else already.</p>

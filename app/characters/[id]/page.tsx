@@ -8,6 +8,7 @@ import { DeleteCharacter } from "@/components/character/delete-character";
 import { PortraitUpload } from "@/components/character/portrait-upload";
 import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
+import { pendingFor, reachableCharacterWhere } from "@/lib/game/ties";
 import {
   kindFromPerspective,
   statPointsUnspent,
@@ -120,26 +121,20 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
     }
   }
 
-  // Your own adventurers, and anyone this one has actually travelled with.
-  // The second half matters once a household hands each child their own
-  // sign-in: "Wren is Mira's daughter" is then a tie between two accounts, and
-  // the action has always allowed it — this is the list catching up.
+  // Everybody at your table — see `reachableCharacterWhere`. Scoped to the
+  // table rather than to this character, and that distinction is the whole bug
+  // it fixes: a newly made adventurer has travelled with nobody, so the old
+  // rule offered an empty list at exactly the moment a family most wants to say
+  // who he is. A father who has handed his old character to his daughters, and
+  // made a new one, can now say he is their father.
   const others = await db.character.findMany({
-    where: {
-      id: { not: character.id },
-      OR: [
-        { userId: user.id },
-        {
-          partyMemberships: {
-            some: { campaign: { party: { some: { characterId: character.id } } } },
-          },
-        },
-      ],
-    },
+    where: { id: { not: character.id }, ...reachableCharacterWhere(user.id) },
     select: { id: true, name: true, userId: true, user: { select: { displayName: true } } },
     orderBy: { createdAt: "asc" },
   });
 
+  // Unconfirmed ties are included here and nowhere else. This page is where a
+  // proposal is answered, so it is the one place that has to show one.
   const relations: RelationRow[] = [
     ...character.relationshipsA.map((row) => ({
       id: row.id,
@@ -147,6 +142,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       otherName: row.characterB.name,
       kind: kindFromPerspective(row, character.id),
       bondXp: row.bondXp,
+      waitingOn: pendingFor(row, user.id),
     })),
     ...character.relationshipsB.map((row) => ({
       id: row.id,
@@ -154,6 +150,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       otherName: row.characterA.name,
       kind: kindFromPerspective(row, character.id),
       bondXp: row.bondXp,
+      waitingOn: pendingFor(row, user.id),
     })),
   ];
 
@@ -165,9 +162,18 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         lead={`${character.race} ${character.archetype} · ${character.pronouns}`}
       />
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2">
         <Link href="/characters" className="text-sm text-hearth-300 underline hover:text-hearth-200">
           ← All adventurers
+        </Link>
+        {/* The sheet is who she is now; the road is everything she has done.
+            Kept apart on purpose — a page that is both is a page a child
+            scrolls past looking for the buttons. */}
+        <Link
+          href={`/characters/${character.id}/story`}
+          className="text-sm text-hearth-300 underline hover:text-hearth-200"
+        >
+          The long road →
         </Link>
       </div>
 

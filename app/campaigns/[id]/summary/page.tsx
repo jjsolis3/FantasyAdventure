@@ -236,6 +236,19 @@ export default async function SummaryPage({ params }: { params: Promise<{ id: st
                 </p>
               ) : null}
 
+              {/* Where this evening goes to live. Offered here rather than only
+                  on her sheet because this is the moment she cares — the
+                  adventure has just ended and the obvious next question is what
+                  it adds up to. */}
+              <p className="mt-3 text-sm">
+                <Link
+                  href={`/characters/${character.id}/story`}
+                  className="text-hearth-300 underline underline-offset-4 hover:text-hearth-100"
+                >
+                  Everything {character.name} has done →
+                </Link>
+              </p>
+
               {/* The thing she should go and do next, if there is one. */}
               {pointsWaiting > 0 || knackWaiting > 0 ? (
                 <p className="mt-4 rounded-lg border border-hearth-700/50 bg-hearth-800/20 p-3 text-sm text-hearth-200">

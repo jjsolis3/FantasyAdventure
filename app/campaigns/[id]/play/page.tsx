@@ -23,6 +23,7 @@ import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
 import { knownFacts, tableFrom } from "@/lib/game/briefing";
 import type { AvailableAbility } from "@/components/play/ability-picker";
+import { CONFIRMED_TIES } from "@/lib/game/ties";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +45,14 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               skills: { orderBy: { name: "asc" } },
               knacks: { select: { key: true } },
               inventory: { orderBy: { name: "asc" } },
-              relationshipsA: { include: { characterB: { select: { id: true, name: true } } } },
-              relationshipsB: { include: { characterA: { select: { id: true, name: true } } } },
+              relationshipsA: {
+                where: CONFIRMED_TIES,
+                include: { characterB: { select: { id: true, name: true } } },
+              },
+              relationshipsB: {
+                where: CONFIRMED_TIES,
+                include: { characterA: { select: { id: true, name: true } } },
+              },
             },
           },
         },

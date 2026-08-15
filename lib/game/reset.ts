@@ -211,13 +211,23 @@ export async function resetCharacter(characterId: string, build: StatBlock): Pro
 
     // Bonds are turned down rather than deleted: that these two are sisters was
     // chosen, and only how close they have grown was earned.
+    //
+    // `bondXp` has to go with `bondLevel`, and for a while it did not. Every
+    // display derives the level from the experience — `bondProgress(bondXp)` on
+    // the sheet, and `deepen` recomputes `bondLevelFor(bondXp + 1)` on the next
+    // kind thing anybody does — so zeroing the column alone reset nothing a
+    // player could see and un-reset itself on the following turn.
+    //
+    // The tie itself is untouched, including whether the other household has
+    // agreed to it. Starting an adventurer again is not a reason to ask her
+    // sister to confirm they are sisters.
     await tx.relationship.updateMany({
       where: { characterAId: characterId },
-      data: { bondLevel: 0 },
+      data: { bondLevel: 0, bondXp: 0 },
     });
     await tx.relationship.updateMany({
       where: { characterBId: characterId },
-      data: { bondLevel: 0 },
+      data: { bondLevel: 0, bondXp: 0 },
     });
 
     await tx.character.update({
