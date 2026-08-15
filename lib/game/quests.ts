@@ -503,6 +503,74 @@ export type QuestTurnInput = {
  * chapter advances, so the chapter's own quest is finished by the party rather
  * than swept up as abandoned by the story moving on.
  */
+/**
+ * Will this chapter's own work be finished once this turn is applied?
+ *
+ * Asked *before* the transaction, and that is the whole awkwardness of it: the
+ * next chapter's personal aims need a model call, model calls cannot happen
+ * inside a transaction, so whether the story moves on has to be decided while
+ * the turn is still only a set of intentions.
+ *
+ * The reason it has to be asked at all comes from a real evening. A family
+ * finished every objective of chapter one — the album, the camera film, both
+ * ticked off and the chapter quest marked complete — and then played six more
+ * turns in the same kitchen, because advancing the act listened only to the
+ * storyteller volunteering `actComplete` and it never did. Ten turns, one
+ * location, one chapter. "No real direction" was the note, and it was fair.
+ *
+ * So the hard signal wins here the same way it does in `lib/game/pressure.ts`:
+ * if the chapter's work is done, the chapter is over, whatever the model thinks.
+ * The resolvers below are the same ones that do the actual ticking a moment
+ * later, called rather than approximated, so this cannot answer differently
+ * from what the transaction then does.
+ */
+export async function chapterWillBeDone(
+  tx: Tx,
+  input: {
+    campaignId: string;
+    actIndex: number;
+    partyCharacterIds: string[];
+    /** Items the storyteller says were picked up this turn, holder included. */
+    gained: CarriedLike[];
+    deedsDone: string[];
+  },
+): Promise<boolean> {
+  const chapterQuest = await tx.quest.findFirst({
+    where: { campaignId: input.campaignId, actIndex: input.actIndex, status: "ACTIVE" },
+    include: { objectives: { orderBy: { position: "asc" } } },
+  });
+  // No open chapter quest means either it is already finished or there never
+  // was one. Neither is a reason to hold the story in this room.
+  if (!chapterQuest) return false;
+  if (chapterQuest.objectives.length === 0) return false;
+
+  const carriedRows = await tx.inventoryItem.findMany({
+    where: {
+      characterId: { in: input.partyCharacterIds },
+      foundInCampaignId: input.campaignId,
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const carried: CarriedLike[] = [
+    ...carriedRows.map((item) => ({
+      name: item.name,
+      holderId: item.characterId,
+      holderName: "",
+    })),
+    ...input.gained,
+  ];
+
+  const finds = new Set(
+    resolveFinds(chapterQuest.objectives, carried).map((find) => find.objectiveId),
+  );
+  const deeds = new Set(resolveDeeds(chapterQuest.objectives, input.deedsDone));
+
+  return chapterQuest.objectives.every(
+    (objective) => objective.doneAtTurn !== null || finds.has(objective.id) || deeds.has(objective.id),
+  );
+}
+
 export async function advanceQuests(tx: Tx, input: QuestTurnInput): Promise<string[]> {
   const messages: string[] = [];
 

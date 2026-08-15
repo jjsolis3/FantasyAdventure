@@ -249,9 +249,12 @@ export function buildContext(input: ContextInput): BuiltContext {
     // the table can see for itself — a screen tells them what is still missing,
     // so the storyteller has to make these findable rather than merely possible.
     (input.actSeeks?.length ?? 0) > 0
-      ? `Things the party should be able to find here. Make them findable — put them somewhere a ` +
-        `search, a question or a kindness would turn them up — but never force them into anybody's ` +
-        `hands, and let a party that solves this another way carry on:\n${(input.actSeeks ?? [])
+      ? `Things the party should be able to find here. Put each one SOMEWHERE — a place, a ` +
+        `person, a container — and leave it there until somebody actually goes and gets it. ` +
+        `Mention where it might be; never place it in front of whoever happens to be rolling. ` +
+        `Do not hand one over as a reward for a good roll, do not tuck one inside something ` +
+        `else as a bonus, and never put the same thing in two places because somebody looked ` +
+        `twice. If a party solves this another way, let them:\n${(input.actSeeks ?? [])
           .map((item) => `- ${item}`)
           .join("\n")}`
       : "",
@@ -263,10 +266,11 @@ export function buildContext(input: ContextInput): BuiltContext {
     // of them has something only they are looking for.
     (input.personalAims?.length ?? 0) > 0
       ? `WHAT EACH OF THEM QUIETLY WANTS. Only you know these. Over this chapter, give ` +
-        `each character at least one opening to act on theirs — a person to talk to, a thing ` +
-        `to notice, a moment where it would be natural. Never announce them, never have a ` +
-        `character state theirs aloud, and never make one of them the thing the party must ` +
-        `do next:\n${(input.personalAims ?? [])
+        `each character ONE opening to act on theirs — a person to talk to, a thing ` +
+        `to notice, a moment where it would be natural. One opening, not one per turn: an ` +
+        `aim the world keeps offering is an aim nobody achieved. Never announce them, never ` +
+        `have a character state theirs aloud, and never make one of them the thing the party ` +
+        `must do next:\n${(input.personalAims ?? [])
           .map((entry) => `- ${entry.character}: ${entry.aim}`)
           .join("\n")}`
       : "",
