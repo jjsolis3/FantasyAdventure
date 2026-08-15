@@ -59,6 +59,7 @@ type View = {
   onTheTable: string[];
   known: { id: string; kind: string; content: string }[];
   needed: { id: string; quest: string; text: string; kind: string }[];
+  talkNudge: string | null;
   rolls: {
     id: string;
     characterName: string;
@@ -718,6 +719,14 @@ function Paired({ view, token }: { view: View; token: string | null }) {
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {/* Last in the column, under the question and the things in reach —
+              the order a table would arrive at it in anyway. Addressed to the
+              room rather than to a player, which is exactly what a television
+              is for. */}
+          {view.talkNudge ? (
+            <p className="mt-4 shrink-0 text-xl text-moss-300 lg:text-2xl">{view.talkNudge}</p>
           ) : null}
         </div>
 

@@ -34,7 +34,12 @@ type TurnLike = { metadata: Prisma.JsonValue | null };
  * answer box — and two parallel props threaded that far is two chances to
  * forget one.
  */
-export type TableBriefing = { onTheTable: string[]; known: KnownFact[] };
+export type TableBriefing = {
+  onTheTable: string[];
+  known: KnownFact[];
+  /** What the board is still asking for. Shared quests only. */
+  needed: NeededObjective[];
+};
 
 /**
  * The question on the table, and the things the passage put within reach.

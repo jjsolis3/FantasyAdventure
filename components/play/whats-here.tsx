@@ -1,9 +1,9 @@
 "use client";
 
-import type { KnownFact } from "@/lib/game/briefing";
+import type { KnownFact, NeededObjective } from "@/lib/game/briefing";
 
 /**
- * The two things the table was never told.
+ * The three things the table was never told.
  *
  * A passage would end, a question would land, and the girls would start
  * guessing — a door that was never mentioned, a person who was not there —
@@ -11,11 +11,27 @@ import type { KnownFact } from "@/lib/game/briefing";
  * every fact they had ever collected sat in the database, going into the
  * storyteller's prompt and onto nobody's screen.
  *
- * So: what is within reach right now, always visible, and what they have
- * learned so far, one tap away. Neither is a hint. Both are things they were
- * already told, put where a nine-year-old can find them again without holding
- * four scenes in her head.
+ * So: what is within reach right now, always visible; what the board is still
+ * asking for, also always visible; and what they have learned so far, one tap
+ * away. None of it is a hint. All of it is things they were already told, put
+ * where a nine-year-old can find them again without holding four scenes in her
+ * head.
+ *
+ * The middle one is the newest and the one a whole evening was lost to. A
+ * family invented their own goal — "find the faceless demon creature" — and
+ * chased it for an hour while the real objectives, "the old family album" and
+ * "a camera that still takes film", sat behind a quest tab nobody opened
+ * mid-turn. A goal one tap away, during a turn, is a goal that does not exist.
  */
+
+/**
+ * What an objective is asking of them, in two words.
+ *
+ * FIND resolves itself by looking in the party's pockets, so "find" is honest:
+ * carrying it is the whole job. DEED needs the storyteller to say it happened,
+ * so "do" — there is no shortcut through an inventory.
+ */
+const NEED_WORDS: Record<string, string> = { FIND: "find", DEED: "do" };
 
 const KIND_WORDS: Record<string, string> = {
   FACT: "we found out",
@@ -26,14 +42,17 @@ const KIND_WORDS: Record<string, string> = {
 
 export function WhatsHere({
   onTheTable,
+  needed,
   known,
 }: {
   /** Things this passage put within reach. Nouns, never advice. */
   onTheTable: string[];
+  /** What the shared quests are still waiting on. */
+  needed: NeededObjective[];
   /** Everything worth remembering, most important first. */
   known: KnownFact[];
 }) {
-  if (onTheTable.length === 0 && known.length === 0) return null;
+  if (onTheTable.length === 0 && needed.length === 0 && known.length === 0) return null;
 
   return (
     <div className="mb-5 space-y-3">
@@ -49,6 +68,35 @@ export function WhatsHere({
                 className="rounded-full border border-hearth-700/70 bg-hearth-900/40 px-3 py-1 text-sm text-hearth-100"
               >
                 {thing}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Not folded, unlike what-you-know below. This is the answer to "what
+          are we even doing", and a girl who has to open something to find that
+          out will invent an answer instead. */}
+      {needed.length > 0 ? (
+        <div>
+          <h3 className="mb-2 text-xs tracking-wide text-hearth-400 uppercase">
+            What you still need
+          </h3>
+          <ul className="space-y-2">
+            {needed.map((objective, index) => (
+              <li key={objective.id}>
+                {/* The quest name once per run rather than on every line. Five
+                    objectives each trailing the same three words is a wall, and
+                    the girls stop reading walls. */}
+                {index === 0 || needed[index - 1].quest !== objective.quest ? (
+                  <p className="text-xs text-hearth-500">{objective.quest}</p>
+                ) : null}
+                <p className="flex gap-2 text-sm text-hearth-100">
+                  <span className="text-xs text-hearth-500 uppercase">
+                    {NEED_WORDS[objective.kind] ?? "do"}
+                  </span>
+                  <span>{objective.text}</span>
+                </p>
               </li>
             ))}
           </ul>

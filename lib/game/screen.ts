@@ -24,6 +24,7 @@ import { generateScreenCode } from "@/lib/auth/invite-code";
 import { scenePicture } from "@/lib/game/scene-picture";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { ENCOUNTER_REACH } from "@/lib/game/encounters";
+import { passageCounts, talkNudge } from "@/lib/game/talk";
 import {
   knownFacts,
   neededObjectives,
@@ -288,6 +289,15 @@ export type ScreenView = {
   /** What is still outstanding, in the players' own words. Shared quests only. */
   needed: NeededObjective[];
   /**
+   * The game suggesting they stop and confer, or null.
+   *
+   * On the wall rather than only on the phones, because this is the one message
+   * in the game that is addressed to the room instead of to a player. Four
+   * children reading "worth a word first?" on four separate screens is not the
+   * same event as all of them looking up and reading it together.
+   */
+  talkNudge: string | null;
+  /**
    * The last few dice.
    *
    * The most public thing that happens in an evening and, until now, the most
@@ -405,11 +415,20 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
 
   // Fetched newest first; `tableFrom` reads a scene in the order it happened.
   const { whatNow, onTheTable } = tableFrom((scene?.turns ?? []).slice().reverse());
-  const [known, needed, rolls] = await Promise.all([
+  const [known, needed, rolls, passages] = await Promise.all([
     knownFacts(campaignId),
     neededObjectives(campaignId),
     recentRolls(scene?.id ?? null, namesById),
+    passageCounts(scene?.id ?? null),
   ]);
+
+  const nudge = talkNudge({
+    encounterName: campaign.encounters[0]?.name ?? null,
+    soloed: campaign.encounters[0]?.soloCharacterId != null,
+    sinceTalking: passages.sinceTalking,
+    passages: passages.passages,
+    clock: pressureAt(campaign.pressure, pressureLimit(campaign.pacing)),
+  });
 
   // Shared quests only — see the note above about what a television is for.
   // A picture the family drew beats one a machine made, everywhere. It is the
@@ -498,6 +517,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
     onTheTable,
     known,
     needed,
+    talkNudge: nudge?.reason ?? null,
     rolls,
     scene: scene
       ? {
@@ -535,6 +555,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       // before the passage it belongs to, so for a few seconds the newest thing
       // on the television is a number.
       needed.map((objective) => objective.id).join(","),
+      nudge?.key ?? "-",
       rolls.map((roll) => roll.id).join(","),
     ].join(":"),
   };

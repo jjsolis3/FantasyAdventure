@@ -20,10 +20,29 @@
  * reading all of them at once and is the only place where the *relationship
  * between* two actions is visible.
  *
- * This matters more than it sounds. There is no button for it and no box to
- * tick, so it cannot be claimed, only done: to get it, two children have to
- * write two actions that genuinely serve one plan. If they end up doing that
- * every single turn, that is not an exploit, that is the entire point.
+ * This matters more than it sounds: to get it, two children have to write two
+ * actions that genuinely serve one plan. If they end up doing that every single
+ * turn, that is not an exploit, that is the entire point.
+ *
+ * ## And why there is now a button after all
+ *
+ * The paragraph above used to end "there is no button for it and no box to
+ * tick, so it cannot be claimed, only done" — and that purity was lovely and
+ * cost the mechanic its existence. A real session ran ten turns with three
+ * players constantly asking each other for things, and the adjudicator found
+ * nothing. Not one shared plan, in an evening that was full of them. Every bond
+ * finished at zero.
+ *
+ * A rule nobody can invoke and a model routinely misses is not a rule. So a
+ * player can now say *I'm helping with that* against somebody else's answer, and
+ * that declaration is merged with whatever the adjudicator spots.
+ *
+ * It is still not free. She has to write an action of her own, and it still has
+ * to make sense next to theirs — the storyteller narrates the pair as one thing
+ * and a declaration attached to something unrelated will read as nonsense to
+ * everybody at the table, which is a better check than any validator. What the
+ * button removes is not the effort; it is the requirement that a 7B model
+ * notice the effort.
  *
  * ## What it is worth
  *
@@ -100,6 +119,70 @@ export function resolvePlans(
   }
 
   return plans;
+}
+
+/**
+ * Plans the players declared themselves, rather than ones the model spotted.
+ *
+ * Built by id rather than by name, which is the whole reason these are more
+ * reliable than the adjudicator's: there is no name to mistype, no cousin to
+ * invent, and no inference to get wrong. A declaration either points at somebody
+ * in this party or it is dropped.
+ *
+ * The `plan` text is stitched from what the two of them actually wrote, because
+ * that is what the storyteller has to narrate as one thing.
+ */
+export function declaredPlans(
+  helping: { characterId: string; helpingId: string }[],
+  actions: { characterId: string; text: string }[],
+  party: { characterId: string; name: string }[],
+): SharedPlan[] {
+  const byId = new Map(party.map((member) => [member.characterId, member]));
+  const textById = new Map(actions.map((action) => [action.characterId, action.text.trim()]));
+  const plans: SharedPlan[] = [];
+  const seen = new Set<string>();
+
+  for (const claim of helping) {
+    // Helping yourself is not a plan, and neither is helping somebody who is
+    // not here. Both are reachable by a stale page rather than by mischief.
+    if (claim.characterId === claim.helpingId) continue;
+    const helper = byId.get(claim.characterId);
+    const helped = byId.get(claim.helpingId);
+    if (!helper || !helped) continue;
+
+    const key = [helper.characterId, helped.characterId].sort().join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // Named helped-first, because the plan belongs to whoever had the idea and
+    // the other one joined it. That ordering is what the prose should follow.
+    const theirs = textById.get(helped.characterId);
+    const hers = textById.get(helper.characterId);
+    const plan = [theirs, hers].filter(Boolean).join(" — and ") || "working on it together";
+
+    plans.push({
+      characterIds: [helped.characterId, helper.characterId],
+      names: [helped.name, helper.name],
+      plan,
+    });
+  }
+
+  return plans;
+}
+
+/**
+ * One list of plans out of two sources, with nobody paid twice.
+ *
+ * Declared ones win: if a player said out loud that she was helping, that is
+ * the truth of the turn, and a model's guess about the same pair adds nothing.
+ * A pair is a pair however it was noticed, so the key here is the same one
+ * `resolvePlans` dedupes on.
+ */
+export function mergePlans(declared: SharedPlan[], found: SharedPlan[]): SharedPlan[] {
+  const keyOf = (plan: SharedPlan) => [...plan.characterIds].sort().join("|");
+  const taken = new Set(declared.map(keyOf));
+
+  return [...declared, ...found.filter((plan) => !taken.has(keyOf(plan)))];
 }
 
 /** Every pair inside a plan, so each of them can earn a bond. */

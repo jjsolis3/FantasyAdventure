@@ -21,7 +21,9 @@ import type { AwaitedRoll } from "@/lib/game/table-dice";
 import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
 import { WhatsHere } from "./whats-here";
+import { TalkNudge } from "./talk-nudge";
 import type { TableBriefing } from "@/lib/game/briefing";
+import { STAT_INFO, type StatKey } from "@/lib/game/rules";
 
 export type PlayCharacter = {
   id: string;
@@ -47,11 +49,25 @@ type Phase =
   | { kind: "idle" }
   | { kind: "asking"; index: number }
   | { kind: "review" }
-  | { kind: "running"; stage: string; dice: DiceDetail[] }
+  | { kind: "running"; stage: string; dice: DiceDetail[]; checking?: AnnouncedCheck[] }
   /** Stopped, with the storyteller waiting to be told what the dice said. */
   | { kind: "rolling"; awaited: AwaitedRoll[]; error: string | null; busy: boolean }
   | { kind: "narrating"; text: string; dice: DiceDetail[] }
   | { kind: "failed"; message: string };
+
+/** What is about to be rolled, said before it is — see `TurnProgress`. */
+type AnnouncedCheck = {
+  characterName: string;
+  stat: string;
+  difficulty: string;
+  intent: string;
+};
+
+const DIFFICULTY_WORDS: Record<string, string> = {
+  EASY: "should be easy",
+  NORMAL: "tricky",
+  HARD: "a long shot",
+};
 
 const STAGE_LABELS: Record<string, string> = {
   adjudicating: "The storyteller is considering what you did…",
@@ -113,6 +129,7 @@ export function PlayClient({
   initialRound,
   whatNow,
   briefing,
+  talkNudge,
   encounter,
 }: {
   campaignId: string;
@@ -139,6 +156,13 @@ export function PlayClient({
   whatNow: string | null;
   /** What the table already knows — see `lib/game/briefing.ts`. */
   briefing: TableBriefing;
+  /**
+   * Why now would be a good moment to talk to each other, or null.
+   *
+   * The game asking, rather than waiting to be discovered — see
+   * `lib/game/talk.ts` for the evening that made this necessary.
+   */
+  talkNudge: string | null;
   /** What is standing in front of them, if anything. */
   encounter: EncounterView | null;
 }) {
@@ -156,6 +180,10 @@ export function PlayClient({
   // rather than at review, so the person typing decides per character rather
   // than once for the table.
   const [spends, setSpends] = useState<Record<string, string | null>>({});
+  // Whose plan each of them said she was joining. On one screen the person
+  // typing has just written everybody else's answer, so the only people worth
+  // offering are the ones already asked — see `joinable` below.
+  const [helps, setHelps] = useState<Record<string, string | null>>({});
   const [move, setMove] = useState<MoveChoice | null>(null);
   /** What the table says the last telling got wrong; sent with the retold turn. */
   const [correction, setCorrection] = useState("");
@@ -321,6 +349,9 @@ export function PlayClient({
           setPhase((current) =>
             current.kind === "running" ? { ...current, stage: String(data.stage) } : current,
           );
+        } else if (event === "checking") {
+          const checking = (data.checks as AnnouncedCheck[]) ?? [];
+          setPhase((current) => (current.kind === "running" ? { ...current, checking } : current));
         } else if (event === "dice") {
           dice = (data.checks as DiceDetail[]) ?? [];
           setPhase((current) => (current.kind === "running" ? { ...current, dice } : current));
@@ -542,6 +573,7 @@ export function PlayClient({
       characterId: character.id,
       text: (drafts[character.id] ?? "").trim(),
       abilityKey: spends[character.id] ?? null,
+      helpingId: helps[character.id] ?? null,
       alone: alone === character.id,
     }))
     .filter((action) => action.text.length > 0);
@@ -638,7 +670,11 @@ export function PlayClient({
             ) : null}
             {/* Under the question rather than over it. The question is the
                 prompt; this is what she looks at while answering it. */}
-            <WhatsHere onTheTable={briefing.onTheTable} known={briefing.known} />
+            <WhatsHere
+              onTheTable={briefing.onTheTable}
+              needed={briefing.needed}
+              known={briefing.known}
+            />
           </>
         ) : null}
 
@@ -674,6 +710,23 @@ export function PlayClient({
                 ))}
               </div>
             ) : null}
+            {/* Said while the dice are still in the air. The card that arrives
+                afterwards has all of this on it, but by then the number is
+                there too and nobody reads the rest — and the whole point is to
+                connect the stat on her sheet to the throw about to happen. */}
+            {phase.dice.length === 0 && phase.checking && phase.checking.length > 0 ? (
+              <ul className="space-y-1">
+                {phase.checking.map((check, index) => (
+                  <li key={index} className="text-sm text-hearth-300">
+                    <span className="text-hearth-100">{check.characterName}</span> —{" "}
+                    {STAT_INFO[check.stat as StatKey]?.label ?? check.stat} check,{" "}
+                    {DIFFICULTY_WORDS[check.difficulty] ?? "tricky"}
+                    <span className="block text-hearth-500">{check.intent}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
             <p className="text-xs text-hearth-500">
               A local storyteller thinks slowly. This can take a minute.
             </p>
@@ -749,6 +802,7 @@ export function PlayClient({
             availableMoves={availableMoves}
             busy={telling}
             briefing={briefing}
+            talkNudge={talkNudge}
             onRound={applyRound}
             onTakeTurn={takeTurn}
             poke={poke}
@@ -763,6 +817,17 @@ export function PlayClient({
             total={party.length}
             value={drafts[party[phase.index].id] ?? ""}
             spending={spends[party[phase.index].id] ?? null}
+            helping={helps[party[phase.index].id] ?? null}
+            onHelp={(id) =>
+              setHelps((current) => ({ ...current, [party[phase.index].id]: id }))
+            }
+            // Everybody already asked this round, and who therefore has an
+            // answer on the screen to join. Nobody can help with a plan that
+            // has not been said out loud yet.
+            joinable={party
+              .slice(0, phase.index)
+              .filter((member) => (drafts[member.id] ?? "").trim().length > 0)
+              .map((member) => ({ id: member.id, name: member.name }))}
             inputRef={inputRef}
             onChange={(text) =>
               setDrafts((current) => ({ ...current, [party[phase.index].id]: text }))
@@ -855,6 +920,7 @@ export function PlayClient({
           </div>
         ) : (
           <div className="space-y-3">
+            <TalkNudge reason={talkNudge} />
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -1068,6 +1134,9 @@ function AskCharacter({
   encounterName,
   alone,
   onAlone,
+  helping,
+  onHelp,
+  joinable,
 }: {
   campaignId: string;
   talking: boolean;
@@ -1086,6 +1155,11 @@ function AskCharacter({
   /** Set while something is standing there and nobody has claimed it yet. */
   encounterName: string | null;
   alone: boolean;
+  /** Whose plan she has said she is joining, or null. */
+  helping: string | null;
+  onHelp: (characterId: string | null) => void;
+  /** Everybody already asked this round — the only plans there are to join. */
+  joinable: { id: string; name: string }[];
   onAlone: (next: boolean) => void;
 }) {
   return (
@@ -1139,6 +1213,39 @@ function AskCharacter({
           chosen={spending}
           onChoose={onSpend}
         />
+      )}
+
+      {/* Offered only against somebody already asked, so there is a real plan
+          to join rather than an intention to have one. */}
+      {talking || joinable.length === 0 ? null : (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-hearth-400">Helping:</span>
+          <button
+            type="button"
+            onClick={() => onHelp(null)}
+            className={`rounded-full border px-3 py-1 ${
+              helping === null
+                ? "border-hearth-500 text-hearth-100"
+                : "border-hearth-800/70 text-hearth-400"
+            }`}
+          >
+            nobody
+          </button>
+          {joinable.map((other) => (
+            <button
+              key={other.id}
+              type="button"
+              onClick={() => onHelp(other.id)}
+              className={`rounded-full border px-3 py-1 ${
+                helping === other.id
+                  ? "border-moss-500 text-moss-300"
+                  : "border-hearth-800/70 text-hearth-400"
+              }`}
+            >
+              {other.name}
+            </button>
+          ))}
+        </div>
       )}
 
       {talking ? null : (

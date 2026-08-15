@@ -26,6 +26,8 @@ import { knackBonusFor } from "@/lib/game/knacks";
 import type { AwaitedRoll } from "@/lib/game/table-dice";
 import {
   TOGETHER_BONUS,
+  declaredPlans,
+  mergePlans,
   namesOf,
   planFor,
   resolvePlans,
@@ -48,6 +50,13 @@ export type TurnInput = {
     knacks?: string[];
   }[];
   actions: { characterId: string; text: string }[];
+  /**
+   * Pairs the players declared themselves — "I'm helping with that".
+   *
+   * Merged with whatever the adjudicator spots, and it wins on a tie. A model
+   * inferring a plan is a guess; a child pressing a button is a fact.
+   */
+  helping?: { characterId: string; helpingId: string }[];
   /**
    * What the table says the previous telling of this turn got wrong.
    *
@@ -79,6 +88,14 @@ export type TurnInput = {
   worldRoll?: { roll: number; nerve: number; pressed: number; note: string } | null;
   /** Its name, for the line the storyteller is handed about that roll. */
   encounterName?: string;
+  /**
+   * How hungry the story is for something to stand in front of them.
+   *
+   * Worked out by the caller rather than here, because it needs to know how
+   * long it has been since the last one — which is a database question, and
+   * this file deliberately never asks any. See `encounterAppetite`.
+   */
+  appetite?: string;
   /**
    * Objectives on the quest board that are not about carrying something, so the
    * extraction can report which of them the passage just finished rather than
@@ -132,6 +149,18 @@ export type ModelCalls = {
 export type TurnProgress =
   | { type: "stage"; stage: "adjudicating" | "rolling" | "narrating" | "extracting" }
   | { type: "dice"; checks: CheckResult[] }
+  /**
+   * What is about to be rolled, before any of it is.
+   *
+   * The table only ever saw a check after the fact — "and it went sideways" —
+   * so the seven stats a child spent twelve points on were invisible at the one
+   * moment they decide anything. This says "Grace, and you are good at that"
+   * while the dice are still in the air.
+   */
+  | {
+      type: "checking";
+      checks: { characterName: string; stat: string; difficulty: string; intent: string }[];
+    }
   /**
    * The turn has stopped and the table is being asked to roll.
    *
@@ -246,10 +275,13 @@ export async function adjudicateOnly(
 
     return {
       adjudication: result.value,
-      plans: resolvePlans(
-        result.value.together ?? [],
-        input.party.map((member) => ({ characterId: member.id, name: member.name })),
-      ),
+      plans: (() => {
+        const party = input.party.map((member) => ({ characterId: member.id, name: member.name }));
+        return mergePlans(
+          declaredPlans(input.helping ?? [], input.actions, party),
+          resolvePlans(result.value.together ?? [], party),
+        );
+      })(),
       fellBack: false,
       repairs: result.repairs,
     };
@@ -265,7 +297,14 @@ export async function adjudicateOnly(
         automatic: namedActions.map((action) => ({ character: action.character, effect: action.text })),
         together: [],
       },
-      plans: [],
+      // The adjudicator fell over; the players' own declarations did not. A
+      // storyteller that could not produce JSON is no reason to tell two
+      // children they were not helping each other.
+      plans: declaredPlans(
+        input.helping ?? [],
+        input.actions,
+        input.party.map((member) => ({ characterId: member.id, name: member.name })),
+      ),
       fellBack: true,
       repairs: 0,
     };
@@ -360,10 +399,32 @@ async function finishTurn(
   // Resolved before any dice, because a shared plan changes every roll inside
   // it and half the party rolling with the bonus and half without would be the
   // worst possible version of this.
-  const plans = resolvePlans(
-    adjudication.together ?? [],
-    input.party.map((member) => ({ characterId: member.id, name: member.name })),
+  const roster = input.party.map((member) => ({ characterId: member.id, name: member.name }));
+  const plans = mergePlans(
+    declaredPlans(input.helping ?? [], input.actions, roster),
+    resolvePlans(adjudication.together ?? [], roster),
   );
+
+  // Said before the dice rather than after them. Everything here is already
+  // decided — which stat, how hard, what she is attempting — and showing it
+  // while the roll is still happening is the only moment a child can connect
+  // the number on her sheet to the number about to be thrown.
+  onProgress?.({
+    type: "checking",
+    checks: adjudication.checks.flatMap((requested) => {
+      const member = findMember(input.party, requested.character);
+      return member
+        ? [
+            {
+              characterName: member.name,
+              stat: requested.stat,
+              difficulty: requested.difficulty,
+              intent: requested.intent,
+            },
+          ]
+        : [];
+    }),
+  });
 
   const checks: CheckResult[] = [];
   for (const requested of adjudication.checks) {
@@ -520,6 +581,7 @@ async function finishTurn(
             narration,
             partyNames: input.party.map((member) => member.name),
             openDeeds: input.openDeeds,
+            appetite: input.appetite,
           }),
           hint,
         ),
