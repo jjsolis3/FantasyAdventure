@@ -35,6 +35,8 @@ export type RoundAnswerView = {
   userId: string | null;
   /** A once-a-scene or once-a-chapter ability she is spending on this answer. */
   abilityKey: string | null;
+  /** Whose plan she said she was joining — see `lib/game/together.ts`. */
+  helpingCharacterId: string | null;
   answeredAt: string;
 };
 
@@ -100,6 +102,7 @@ function view(round: RoundRow, partyIds: string[]): RoundView {
       characterId: answer.characterId,
       text: answer.text,
       abilityKey: answer.abilityKey,
+      helpingCharacterId: answer.helpingCharacterId,
       waiting: answer.waiting,
       userId: answer.userId,
       answeredAt: answer.updatedAt.toISOString(),
@@ -211,6 +214,7 @@ export async function answerRound(
     text: string;
     waiting: boolean;
     abilityKey?: string | null;
+    helpingCharacterId?: string | null;
   },
 ): Promise<void> {
   const text = answer.waiting ? "" : answer.text.trim();
@@ -224,14 +228,17 @@ export async function answerRound(
       text,
       waiting: answer.waiting,
       // Waiting and watching is not the moment to spend the thing you get once
-      // a chapter, so choosing to wait puts it back.
+      // a chapter, so choosing to wait puts it back. Same for helping: you
+      // cannot join somebody's plan by declining to do anything.
       abilityKey: answer.waiting ? null : (answer.abilityKey ?? null),
+      helpingCharacterId: answer.waiting ? null : (answer.helpingCharacterId ?? null),
     },
     update: {
       userId: answer.userId,
       text,
       waiting: answer.waiting,
       abilityKey: answer.waiting ? null : (answer.abilityKey ?? null),
+      helpingCharacterId: answer.waiting ? null : (answer.helpingCharacterId ?? null),
     },
   });
 
@@ -333,7 +340,7 @@ export async function failRound(roundId: string, message: string): Promise<void>
  */
 export function actionsFrom(
   round: RoundView,
-): { characterId: string; text: string; abilityKey: string | null }[] {
+): { characterId: string; text: string; abilityKey: string | null; helpingId: string | null }[] {
   const byCharacter = new Map(round.answers.map((answer) => [answer.characterId, answer]));
 
   return round.partyIds
@@ -341,6 +348,7 @@ export function actionsFrom(
       characterId,
       text: byCharacter.get(characterId)?.text.trim() ?? "",
       abilityKey: byCharacter.get(characterId)?.abilityKey ?? null,
+      helpingId: byCharacter.get(characterId)?.helpingCharacterId ?? null,
     }))
     .filter((action) => action.text.length > 0);
 }

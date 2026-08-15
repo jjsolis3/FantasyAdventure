@@ -5,6 +5,7 @@ import { Alert } from "@/components/ui";
 import { AbilityPicker } from "@/components/play/ability-picker";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
+import { TalkNudge } from "./talk-nudge";
 import type { TableBriefing } from "@/lib/game/briefing";
 import type { PlayCharacter } from "./play-client";
 import type { RoundView } from "@/lib/game/rounds";
@@ -28,6 +29,7 @@ export function RoundBoard({
   availableMoves,
   busy,
   briefing,
+  talkNudge,
   onRound,
   onTakeTurn,
   poke,
@@ -41,6 +43,8 @@ export function RoundBoard({
   busy: boolean;
   /** What the table already knows — see `lib/game/briefing.ts`. */
   briefing: TableBriefing;
+  /** Why now is a good moment to confer, or null — see `lib/game/talk.ts`. */
+  talkNudge: string | null;
   onRound: (round: RoundView | null) => void;
   onTakeTurn: (roundId: string) => void;
   poke: () => void;
@@ -49,6 +53,9 @@ export function RoundBoard({
   // What each girl is spending, alongside what she is typing. Cleared when she
   // sends, because the answer now carries it.
   const [spends, setSpends] = useState<Record<string, string | null>>({});
+  // Whose plan each of your adventurers has said she is joining. Alongside the
+  // draft rather than inside it, for the same reason the ability spend is.
+  const [helps, setHelps] = useState<Record<string, string | null>>({});
   const [correction, setCorrection] = useState("");
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState("");
@@ -119,6 +126,7 @@ export function RoundBoard({
     return (
       <div className="space-y-4">
         {failure ? <Alert>{failure}</Alert> : null}
+        <TalkNudge reason={talkNudge} />
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -228,6 +236,16 @@ export function RoundBoard({
                 <p className="mt-2 text-hearth-200/80 italic">{answer.text}</p>
               ) : null}
 
+              {/* Said out loud on the card, because the whole value of
+                  declaring it is that everybody can see it before the dice. */}
+              {answer?.helpingCharacterId ? (
+                <p className="mt-1 text-sm text-moss-400">
+                  helping{" "}
+                  {party.find((other) => other.id === answer.helpingCharacterId)?.name ??
+                    "somebody"}
+                </p>
+              ) : null}
+
               {editable && answer ? (
                 <button
                   type="button"
@@ -248,6 +266,18 @@ export function RoundBoard({
                   character={character}
                   talking={talking}
                   briefing={briefing}
+                  helping={helps[character.id] ?? null}
+                  onHelp={(id) => setHelps((current) => ({ ...current, [character.id]: id }))}
+                  // Only somebody who has already said what they are doing, and
+                  // never herself.
+                  joinable={party
+                    .filter(
+                      (other) =>
+                        other.id !== character.id &&
+                        answers.get(other.id) &&
+                        !answers.get(other.id)?.waiting,
+                    )
+                    .map((other) => ({ id: other.id, name: other.name }))}
                   value={drafts[character.id] ?? ""}
                   spending={spends[character.id] ?? null}
                   sending={sending}
@@ -257,6 +287,7 @@ export function RoundBoard({
                     post({
                       action: "answer",
                       characterId: character.id,
+                      helpingCharacterId: helps[character.id] ?? null,
                       text: drafts[character.id] ?? "",
                       waiting: false,
                       abilityKey: spends[character.id] ?? null,
@@ -361,6 +392,9 @@ function YourAnswer({
   character,
   talking,
   briefing,
+  helping,
+  onHelp,
+  joinable,
   value,
   spending,
   sending,
@@ -373,6 +407,11 @@ function YourAnswer({
   character: PlayCharacter;
   talking: boolean;
   briefing: TableBriefing;
+  /** Whose plan she has said she is joining, or null. */
+  helping: string | null;
+  onHelp: (characterId: string | null) => void;
+  /** Everybody who has already answered — the only people there is a plan to join. */
+  joinable: { id: string; name: string }[];
   value: string;
   spending: string | null;
   sending: boolean;
@@ -400,6 +439,41 @@ function YourAnswer({
         }
         className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
       />
+
+      {/* Only offered against somebody who has actually said what they are
+          doing. "I'm helping" with nothing to help with is not a plan, and
+          it is the version of this that would let two children farm a bond by
+          pointing at each other. */}
+      {talking || joinable.length === 0 ? null : (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-hearth-400">Helping:</span>
+          <button
+            type="button"
+            onClick={() => onHelp(null)}
+            className={`rounded-full border px-3 py-1 ${
+              helping === null
+                ? "border-hearth-500 text-hearth-100"
+                : "border-hearth-800/70 text-hearth-400"
+            }`}
+          >
+            nobody
+          </button>
+          {joinable.map((other) => (
+            <button
+              key={other.id}
+              type="button"
+              onClick={() => onHelp(other.id)}
+              className={`rounded-full border px-3 py-1 ${
+                helping === other.id
+                  ? "border-moss-500 text-moss-300"
+                  : "border-hearth-800/70 text-hearth-400"
+              }`}
+            >
+              {other.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {talking ? null : (
         <IdeaHints

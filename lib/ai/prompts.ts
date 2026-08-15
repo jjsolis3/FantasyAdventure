@@ -215,6 +215,20 @@ ${STAT_LIST}
 
 Difficulty: EASY for simple-but-uncertain, NORMAL for genuinely tricky, HARD for a long shot.
 
+JUDGE WHAT THEY WROTE, NOTHING MORE:
+- "intent" is a restatement of the player's own words. Tidy the grammar, keep
+  the meaning. Never add a condition, a constraint or a risk they did not
+  mention.
+- A girl who wrote "I go back to the table to check the album" is going back to
+  the table. She is NOT doing it quietly, or unseen, or without waking anything
+  — and turning it into "without making noise" and then failing her on it is
+  failing her at something she never tried. That happened; do not do it again.
+- The difficulty comes from what the SCENE already makes hard, not from a
+  harder version of the action you have invented for her.
+- If what they wrote is genuinely easy in this scene, it needs no roll. An easy
+  thing made uncertain so that something can go wrong is the same mistake
+  wearing a different hat.
+
 THE SCENE:
 ${options.sceneText}
 ${correctionBlock(options.correction)}
@@ -332,6 +346,14 @@ export function extractionPrompt(options: {
    * Finds need no such list — they are settled by looking in people's pockets.
    */
   openDeeds?: string[];
+  /**
+   * How hungry the story is for something to stand in front of them.
+   *
+   * From `encounterAppetite`, which weighs the tone the family chose, whether
+   * one is already there, and how long it has been quiet. One sentence rather
+   * than a threshold, because its reader is a small language model.
+   */
+  appetite?: string;
 }): string {
   const deeds = options.openDeeds?.length
     ? `\nTHINGS THE PARTY IS CURRENTLY TRYING TO DO:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
@@ -421,8 +443,8 @@ Rules:
   will still be there next turn — somebody blocking the way who is already
   cross, a room that has just locked, a thing that has to be worked out before
   they can go on. Not a passing detail, not scenery, not somebody they merely
-  spoke to. Almost every turn is null, and null is the right answer unless the
-  passage genuinely leaves them facing something.
+  spoke to.
+  ${options.appetite ?? "Almost every turn is null, and null is the right answer unless the passage genuinely leaves them facing something."}
   When there is one, fill it in like this:
   {"name": "The Angry Customer", "want": "to be taken seriously",
    "kind": "PERSON", "nerve": "TENSE",

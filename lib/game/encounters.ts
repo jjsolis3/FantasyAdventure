@@ -332,3 +332,75 @@ export function endingNote(name: string, over: "THROUGH" | "TURNED"): string {
     ? `${name}: they got through it.`
     : `${name}: it turned, and the story goes on from somewhere worse.`;
 }
+
+/**
+ * How hungry the story is, right now, for something to stand in front of them.
+ *
+ * The instruction the extractor used to carry was one sentence, and it was
+ * tuned for a cosy evening: *"almost every turn is null, and null is the right
+ * answer."* A family then played ten turns of SPOOKY — a faceless figure one row
+ * nearer in every photograph, a hand pressed flat behind the flour sacks, a
+ * step in the hall that was not anybody's — and not one encounter opened. The
+ * whole system sat there while the exact story it was built for went past it.
+ *
+ * So the appetite now depends on three things:
+ *
+ *   - **What the table asked for.** A household that chose SPOOKY or
+ *     ADVENTUROUS wants to be made to deal with something. A COZY one does not,
+ *     and the old wording is still exactly right for them.
+ *   - **Whether one is already there.** Never two at once — that is a corridor
+ *     of obstacles rather than a story, and it is the failure this guards
+ *     against in the other direction.
+ *   - **How long it has been.** Appetite grows with the quiet. Just after one
+ *     resolves, the story should be allowed to breathe.
+ *
+ * Returned as a sentence rather than a number because its only reader is a
+ * language model, and "you have been quiet for six turns" lands harder on a 7B
+ * than a threshold ever will.
+ */
+export function encounterAppetite(options: {
+  tone: string;
+  /** True while something is already standing in front of them. */
+  standing: boolean;
+  /** Turns since the last one ended. Null when there has never been one. */
+  since: number | null;
+}): string {
+  if (options.standing) {
+    return (
+      "Something is ALREADY standing in front of them, so encounterOpened must be null. " +
+      "Two at once is a corridor of obstacles rather than a story."
+    );
+  }
+
+  if (options.tone === "COZY") {
+    return (
+      "This table asked for a gentle evening. Almost every turn is null, and null is the " +
+      "right answer unless the passage genuinely leaves them facing something."
+    );
+  }
+
+  // Long enough to have been noticed. Four turns is roughly a scene, and a
+  // scene in which nothing ever pushed back is the thing being fixed.
+  const quiet = options.since === null || options.since >= 4;
+
+  if (!quiet) {
+    return (
+      "Something was in front of them recently, so let the story breathe. Null unless " +
+      "the passage clearly leaves them facing a new one."
+    );
+  }
+
+  const asked =
+    options.tone === "SPOOKY"
+      ? "This table asked to be frightened"
+      : "This table asked for real tension";
+
+  return (
+    `${asked}, and nothing has stood in their way for a while. If this passage leaves them ` +
+    "facing something that will still be there next turn — a door that will not open, " +
+    "somebody who will not let them past, a thing that wants something — OPEN IT. It does " +
+    "not have to be a person and it does not have to be angry; a room, a rule or a bargain " +
+    "counts. A frightening story where nothing ever stands in front of them is a haunted " +
+    "tour, not a game. Still null if the passage genuinely leaves them facing nothing."
+  );
+}

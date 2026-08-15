@@ -58,6 +58,7 @@ import {
   ENCOUNTER_XP,
   NERVE,
   encounterAt,
+  encounterAppetite,
   encounterGuidance,
   endingNote,
   groundAfter,
@@ -93,7 +94,9 @@ import {
   SKILL_XP_PER_USE,
   STATS,
   STAT_INFO,
+  anotherMessage,
   bondLevelFor,
+  closerMessage,
   familyMoveByKey,
   moveNamesFor,
   kindFromPerspective,
@@ -793,6 +796,14 @@ export type PlayerAction = {
   text: string;
   abilityKey?: string | null;
   /**
+   * Whose plan she said she was joining.
+   *
+   * Declared rather than inferred, and that is the point: the adjudicator only
+   * ever saw two separately-typed sentences and had to guess whether they served
+   * one idea. It guessed "no" for a whole session. See `lib/game/together.ts`.
+   */
+  helpingId?: string | null;
+  /**
    * She has said she is taking the encounter on by herself.
    *
    * Declared with the action rather than settled afterwards, and that ordering
@@ -1011,6 +1022,37 @@ export async function playTurn(
     orderBy: { createdAt: "desc" },
   });
 
+  // How long it has been since anything last stood in their way, so the
+  // extractor can be told whether to be hungry. Counted in turns rather than in
+  // scenes, because a family notices ten quiet turns however many scene titles
+  // went past — which is exactly what happened on the evening that found this.
+  const lastResolved = standing
+    ? null
+    : await db.encounter.findFirst({
+        where: { campaignId: campaign.id, resolvedAt: { not: null } },
+        orderBy: { resolvedAt: "desc" },
+        select: { resolvedAt: true },
+      });
+
+  // Counted in passages rather than read off a column, because an encounter
+  // records when it ended but not which turn that was. Narration turns since
+  // then is the same number a family would give you if you asked them.
+  const quietFor = lastResolved?.resolvedAt
+    ? await db.turnEvent.count({
+        where: {
+          type: "NARRATION",
+          scene: { campaignId: campaign.id },
+          createdAt: { gt: lastResolved.resolvedAt },
+        },
+      })
+    : null;
+
+  const appetite = encounterAppetite({
+    tone: campaign.tone,
+    standing: standing !== null,
+    since: quietFor,
+  });
+
   // The world's own die. Server-side even when the family throws their own —
   // their die is theirs, and this one is nobody's. A parent rolling for the
   // angry customer would be playing against their own children.
@@ -1048,6 +1090,11 @@ export async function playTurn(
         knacks: member.character.knacks.map((knack) => knack.key),
       })),
       actions: accepted,
+      // What the players said out loud about working together, before anybody
+      // has to infer it from prose.
+      helping: accepted.flatMap((action) =>
+        action.helpingId ? [{ characterId: action.characterId, helpingId: action.helpingId }] : [],
+      ),
       correction: correction?.trim() || undefined,
       pressure: pressureGuidance({
         name: campaign.storyline.pressureName,
@@ -1067,6 +1114,7 @@ export async function playTurn(
         : undefined,
       worldRoll: world,
       encounterName: standing?.name,
+      appetite,
       pacing: pacingGuidance({
         pacing: campaign.pacing,
         // Scenes already played in this act, including the one in progress.
@@ -1473,12 +1521,17 @@ export async function playTurn(
       const nameOf = (id: string) =>
         campaign.party.find((member) => member.characterId === id)?.character.name ?? "Someone";
 
-      for (const move of movesUnlockedBetween(existing.bondLevel, bondLevel)) {
+      const unlocked = movesUnlockedBetween(existing.bondLevel, bondLevel);
+      for (const move of unlocked) {
         const named = moveNamesFor(kindFromPerspective(existing, a), move);
         milestones.push(
           `${nameOf(a)} and ${nameOf(b)} can now use ${named.name} together — ${named.blurb}`,
         );
       }
+      // Only when nothing unlocked. The unlock line already says they got
+      // closer and says something better with it, and two milestones about one
+      // pair on one turn reads like a bug.
+      if (unlocked.length === 0) milestones.push(closerMessage(nameOf(a), nameOf(b), bondLevel));
       return true;
     };
 
@@ -1633,7 +1686,7 @@ export async function playTurn(
 
       milestones.push(
         already
-          ? `${item.character} picks up another ${item.name}.`
+          ? anotherMessage(item.character, item.name)
           : item.requiresSkill
             ? `${item.character} is now carrying: ${item.name} — but cannot use it yet. That will take ${item.requiresSkill}.`
             : `${item.character} is now carrying: ${item.name}`,
@@ -2172,12 +2225,32 @@ export async function talkTurn(
         data: { bondXp, bondLevel },
       });
 
-      for (const move of movesUnlockedBetween(relationship.bondLevel, bondLevel)) {
+      const unlocked = movesUnlockedBetween(relationship.bondLevel, bondLevel);
+      for (const move of unlocked) {
         const named = moveNamesFor(kindFromPerspective(relationship, a), move);
         milestones.push(
           `${moment.who} and ${moment.to} can now use ${named.name} together — ${named.blurb}`,
         );
       }
+      // What the conversation was worth, said out loud. This is the whole
+      // reason a table would ever press "Talk to each other" twice.
+      if (unlocked.length === 0) {
+        milestones.push(closerMessage(moment.who, moment.to, bondLevel));
+      }
+    }
+
+    // Onto the transcript, the same as any other turn's.
+    //
+    // They were being collected here and thrown away — `talkTurn` returned them
+    // and the route only ever sent the narration on. So a conversation that
+    // unlocked a Family Move said nothing about it, and the round that is
+    // hardest to justify to a child ("nothing is rolled, the story does not
+    // move") was also the only one that never showed a result. That is very
+    // likely the whole reason a family pressed it once in an evening.
+    for (const milestone of milestones) {
+      await tx.turnEvent.create({
+        data: { sceneId: scene.id, ordinal: ordinal++, type: "SYSTEM", content: milestone },
+      });
     }
 
     await tx.campaign.update({

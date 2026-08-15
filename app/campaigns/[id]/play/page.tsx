@@ -21,9 +21,10 @@ import { PressureClock } from "@/components/play/pressure-clock";
 import type { EncounterView } from "@/components/play/encounter-panel";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
-import { knownFacts, tableFrom } from "@/lib/game/briefing";
+import { knownFacts, neededObjectives, tableFrom } from "@/lib/game/briefing";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 import { CONFIRMED_TIES } from "@/lib/game/ties";
+import { talkNudge, turnsSinceTalking } from "@/lib/game/talk";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,24 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   // this since the first turn and, until now, showing it to nobody but the
   // storyteller.
   const known = await knownFacts(campaign.id);
+
+  // What is still outstanding, on the story tab rather than behind the quest
+  // tab. A family spent a whole evening inventing goals — "find the faceless
+  // demon creature" — while "the old family album, a camera that still takes
+  // film" sat one tap away on a screen nobody opened mid-turn.
+  const needed = await neededObjectives(campaign.id);
+
+  // Whether the game should ask them to confer, and why. Worked out here rather
+  // than in the browser because every input is already on this page — the
+  // encounter, the clock, the passages — and because both screens should say
+  // the same thing at the same moment. See `lib/game/talk.ts`.
+  const nudge = talkNudge({
+    encounterName: standing?.name ?? null,
+    soloed: standing?.soloCharacterId != null,
+    sinceTalking: turnsSinceTalking(turns),
+    passages: turns.filter((turn) => turn.type === "NARRATION").length,
+    clock: pressureAt(campaign.pressure, pressureLimit(campaign.pacing)),
+  });
 
   // Which Family Moves the party can spend right now: unlocked by bond level,
   // between two travellers, and not already used in this scene.
@@ -423,7 +442,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               initialRound={round}
               encounter={encounter}
               whatNow={whatNow}
-              briefing={{ onTheTable, known }}
+              briefing={{ onTheTable, known, needed }}
+              talkNudge={nudge?.reason ?? null}
             />
           </>
         }

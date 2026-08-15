@@ -26,6 +26,10 @@ const bodySchema = z.discriminatedUnion("action", [
     // `validateAbilitySpends`. Checking twice would mean two places to keep in
     // step, and the one that matters is the one holding the transaction.
     abilityKey: z.string().max(120).nullable().optional(),
+    // Whose plan she is joining. Same reasoning as above: the turn checks that
+    // it points at somebody actually in this party, so a stale page cannot
+    // manufacture a bond with a stranger.
+    helpingCharacterId: z.string().min(1).nullable().optional(),
   }),
   z.object({ action: z.literal("withdraw"), characterId: z.string().min(1) }),
   z.object({
@@ -115,6 +119,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           text: body.text,
           waiting: body.waiting,
           abilityKey: body.abilityKey ?? null,
+          helpingCharacterId: body.helpingCharacterId ?? null,
         });
       } else {
         await withdrawAnswer(round.id, body.characterId);

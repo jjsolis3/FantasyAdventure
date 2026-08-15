@@ -783,3 +783,39 @@ export function movesUnlockedAt(bondLevel: number): FamilyMove[] {
 export function movesUnlockedBetween(before: number, after: number): FamilyMove[] {
   return FAMILY_MOVES.filter((move) => move.requires > before && move.requires <= after);
 }
+
+/**
+ * What a table is told when two of them got closer.
+ *
+ * Until now, nothing — unless the deepening happened to cross a Family Move
+ * threshold, which is roughly one time in five. So the single most rewarding
+ * thing in the game, the one that pays for looking after each other and for
+ * talking it over, was silent four times out of five. A reward nobody is told
+ * about is not a reward; it is bookkeeping.
+ *
+ * Deliberately plain. The bond number is on the sheet for anybody who wants it;
+ * this line is for the girl who was kind and deserves to hear that somebody
+ * noticed.
+ *
+ * The level is only mentioned once there is one. A bond climbs several points
+ * before it reaches level 1, and "grew closer — bond 0" is a sentence that
+ * takes something away from a child rather than giving it to her.
+ */
+export function closerMessage(a: string, b: string, bondLevel: number): string {
+  if (bondLevel < 1) return `${a} and ${b} grew closer.`;
+  return `${a} and ${b} grew closer — bond ${bondLevel}.`;
+}
+
+/**
+ * A second one of something, said in English.
+ *
+ * The storyteller names things with their article — "a smooth grey stone" — and
+ * the sentence that announces a duplicate puts a word in front of the name. So
+ * the transcript has been reading "Mira picks up another a smooth grey stone"
+ * since the day items were added, which is the kind of thing a ten-year-old
+ * reads out loud and then cannot stop laughing at.
+ */
+export function anotherMessage(character: string, item: string): string {
+  const named = item.replace(/^(a|an|the)\s+/i, "");
+  return `${character} picks up another ${named}.`;
+}

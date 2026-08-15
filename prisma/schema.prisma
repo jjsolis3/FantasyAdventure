@@ -221,6 +221,7 @@ model Character {
   knacks        CharacterKnack[]
   acquaintances Acquaintance[]
   road          RoadEntry[]
+  helpedInRounds RoundAnswer[] @relation("RoundAnswerHelping")
   practices     Practice[]
   inventory     InventoryItem[]
   keepsakes     Keepsake[]
@@ -929,6 +930,16 @@ model RoundAnswer {
   /// answer, which means nobody has spoken yet.
   waiting Boolean @default(false)
 
+  /// Whose plan she said she was joining.
+  ///
+  /// Working together used to be findable only by the adjudicator reading two
+  /// separately-typed sentences and inferring that they served one idea. A real
+  /// session ran ten turns of three players constantly helping each other and it
+  /// found none of it, so every bond finished at zero. A rule nobody can invoke
+  /// and a model routinely misses is not a rule. See `lib/game/together.ts`.
+  helpingCharacterId String?
+  helping            Character? @relation("RoundAnswerHelping", fields: [helpingCharacterId], references: [id], onDelete: SetNull)
+
   /// A once-a-scene or once-a-chapter ability she is spending on this answer.
   ///
   /// Held on the answer rather than chosen once at review the way a Family Move
@@ -943,6 +954,8 @@ model RoundAnswer {
   @@unique([roundId, characterId])
   @@index([characterId])
   @@index([userId])
+
+  @@index([helpingCharacterId])
 }
 
 enum SceneStatus {

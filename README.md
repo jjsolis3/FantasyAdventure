@@ -1337,6 +1337,64 @@ prediction and the commit cannot disagree.
 Finishing the last chapter's work now ends the adventure too, for the same
 reason.
 
+### Six things the same evening asked for
+
+The transcript above fixed the storyteller. Reading the same evening again for
+what the *game* did — rather than what it said — turned up six more, and all six
+are about the table rather than the prose.
+
+**"I'll help her with that."** `resolvePlans` found shared plans by reading all
+the actions at once and noticing two that served one idea. Elegant, and in ten
+turns of three children constantly asking each other for things it found
+**nothing**. A rule a 7B model reliably misses is not a rule, so a player can now
+tap *I'm helping with that* against somebody else's answer
+(`RoundAnswer.helpingCharacterId`). `declaredPlans` turns those taps into plans
+and `mergePlans` folds them in with whatever the adjudicator spotted. It is not
+free: she still has to write an action of her own, and it still has to make sense
+next to theirs — the storyteller narrates the pair as one thing, and a
+declaration attached to something unrelated reads as nonsense to everybody at the
+table, which is a better check than any validator.
+
+**Goals on the play screen, not behind a tab.** The family spent an hour chasing
+a goal they had invented — *find the faceless demon creature* — while *the old
+family album* and *a camera that still takes film* sat one tap away on the quest
+tab. A goal you have to open something to see is a goal that does not exist
+mid-turn. `neededObjectives` now renders under the passage, beside what is in
+reach. Shared quests only; a personal aim is hers until she says it.
+
+**The game asks them to talk it over.** *Talk to each other* was the smaller,
+greyer, second button, and everything about the screen said it was the lesser
+option. It was pressed once in an evening. Now `talkNudge` (`lib/game/talk.ts`)
+puts one line beside it at the moments a table would naturally confer — something
+standing in front of them, a clock nearly out, a scene just opened, four quiet
+passages — on the phones and on the television, and never more than one at a
+time. It points at the button, never at the answer.
+
+And it now says what talking was **worth**. Two bugs, both silent: a bond that
+deepened without crossing a Family Move threshold printed nothing at all, which
+is four deepenings in five; and `talkTurn` collected its milestones and dropped
+them on the floor, so even a conversation that *did* unlock a move announced
+nothing. The one round hardest to justify to a nine-year-old — *nothing is
+rolled, the story does not move* — was also the only one that never showed a
+result.
+
+**The adjudicator may not invent difficulty.** It was being handed the freedom to
+restate a player's action as an "intent", and it used it: *"I go back to the
+table to check the album"* came back as *doing it quietly*, which is a harder
+check than the one she asked for. `intent` is now defined as a restatement of her
+own words and nothing else.
+
+**Encounters that fire when the tone asks for them.** A family chose SPOOKY and
+got a quiet farmhouse, because the rule for opening an encounter was written once
+and conservatively. `encounterAppetite` now varies it: cozy stays cautious, spooky
+and adventurous get hungry after four quiet turns, and a standing encounter still
+hard-blocks a second.
+
+**The check, before the dice.** A `checking` progress event now names who is
+rolling, against what, and how hard, in the pause between the storyteller
+deciding and the dice landing. The most tense moment in the game used to be a
+spinner.
+
 ### The long road
 
 Every adventurer has a room at `/characters/[id]/story` holding everything she
@@ -2012,6 +2070,8 @@ lib/
     handover-actions.ts  Moving an adventurer to another account, intact
     access.ts       Who may open an adventure, and answer for whom
     rounds.ts       Collecting a round's answers from several devices
+    briefing.ts     What the table already knows, and what the board still wants
+    talk.ts         When the game asks them to confer, and what conferring earned
     invites.ts      Who can be asked along, and what you have been asked to
 components/         Shared UI, site header, character builder
 scripts/
@@ -2058,6 +2118,8 @@ tests/
   chronicle.e2e.mts   An adventure finished, then deleted — and still on her road
   storyteller.test.ts The prompt rules a real evening's transcript found wanting
   chapters.e2e.mts    A chapter that ends when its own work is done
+  talk.test.ts        When the game asks them to confer, and what it says it earned
+  talk.e2e.mts        A conversation through the real pipeline, onto the transcript
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines
