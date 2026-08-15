@@ -1268,6 +1268,75 @@ Mira**, so the room looks up instead of down at four phones.
 Set per adventure in its settings, and switchable mid-story. `SERVER` is the
 default and stays the behaviour when the dice are in another room.
 
+### What a real evening found
+
+The first full session — three players, ten turns, a spooky farmhouse — came
+back with three complaints, and reading the transcript against the prompts
+turned every one of them into a particular line.
+
+**"It felt like three separate stories."** `narrationPrompt` said *"Cover every
+character's action"* and `CORE_CONTRACT` said *"Give every character something to
+do or notice."* Ten passages out of ten came back as Orin-paragraph,
+Twinkle-paragraph, Ember-paragraph — three people in one kitchen never sharing a
+sentence.
+
+The consequence nobody would have predicted from reading the code: **every bond
+was still zero after ten turns.** One girl crocheted a hat *for* another; one
+asked another to pass the album. `bondMoments` are extracted from the narration,
+and the narration had put each of them alone in their own paragraph, so there was
+nothing for extraction to find. The format structurally prevented the game's
+central mechanic from ever firing.
+
+There is now a `ONE STORY, NOT THREE` block, and `together` detection was taught
+the pattern it kept missing — *one asks another for something and gets it*, which
+is the commonest form of cooperation at a real table and reads on paper as two
+unrelated sentences. `bondMoments` was widened to match: making somebody a hat is
+a bond moment.
+
+**"The recaps were generic — just repeating the passage."** That one was
+self-inflicted, from the previous round. The rule *"Every passage must leave at
+least THREE specific things a player could act on"* went into `CORE_CONTRACT`,
+which is the narration system prompt as well as extraction — so the model
+appended a literal stock check to every passage: *"A grandfather clock ticks
+twice, a loose floorboard creaks by the pantry door, and the tiny brass key rests
+upon the cedar box."* Restating the paragraph above it. The requirement now lives
+in extraction only, where `onTheTable` renders as chips; the prose is explicitly
+forbidden from ending in a list.
+
+**"No direction, and we didn't know how we finished things."** The storyteller
+was handing over the answers. Every good roll produced a present:
+
+> …as a marvelous bonus, the bottom of the pot reveals a hidden compartment…
+> As a bonus, tucked inside its leather cover is a pristine, unopened roll of
+> antique camera film…
+
+Three separate jars of coffee beans turned up for one personal aim that asked for
+one. `narrationPrompt` said *"a CRITICAL must go better than expected"* and
+nothing bounded it, so the nearest thing to hand was always something off the
+quest board. `WHAT A GOOD ROLL IS ALLOWED TO GIVE` now says what "better" means —
+further, quieter, faster, something to know, a better place to stand — and
+forbids handing over anything the party is currently looking for. Finding out
+where it is, is a gift; picking it up is a turn somebody has to take.
+
+#### A chapter ends when its work is done
+
+The same evening finished both of chapter one's objectives, watched the chapter
+quest close, and then played six more turns in the same kitchen. Ten turns, one
+location, "Chapter 1" throughout.
+
+Advancing the act listened only to the storyteller volunteering `actComplete`,
+and it never did. So `chapterWillBeDone` in `lib/game/quests.ts` now answers the
+hard question — will every objective of this chapter be ticked off once this turn
+lands? — and the story moves on either way, the model's opinion or the fact.
+
+It has to be asked *before* the transaction, because the next chapter's personal
+aims need a model call and model calls cannot happen inside one. It calls the
+same `resolveFinds` and `resolveDeeds` that do the ticking a moment later, so the
+prediction and the commit cannot disagree.
+
+Finishing the last chapter's work now ends the adventure too, for the same
+reason.
+
 ### The long road
 
 Every adventurer has a room at `/characters/[id]/story` holding everything she
@@ -1987,6 +2056,8 @@ tests/
   ties.e2e.mts        Two households, a tie waiting, and the bond it unlocks
   chronicle.test.ts   The dice over a lifetime, and what a finished adventure was worth
   chronicle.e2e.mts   An adventure finished, then deleted — and still on her road
+  storyteller.test.ts The prompt rules a real evening's transcript found wanting
+  chapters.e2e.mts    A chapter that ends when its own work is done
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

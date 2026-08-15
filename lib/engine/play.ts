@@ -47,6 +47,7 @@ import { xpForOutcome } from "@/lib/engine/dice";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import {
   advanceQuests,
+  chapterWillBeDone,
   openMainQuest,
   openPersonalQuests,
   type PersonalAim,
@@ -1175,12 +1176,32 @@ export async function playTurn(
   /** Set inside the transaction; the caller needs it to show the ending. */
   let campaignComplete = false;
 
-  // Whether the story is about to move on depends only on what the model just
-  // said and on where the campaign already was, so it can be worked out here —
-  // which matters, because the next chapter's personal aims need a model call
-  // and that cannot happen inside the transaction.
+  // Whether the story is about to move on has to be worked out here, before the
+  // transaction, because the next chapter's personal aims need a model call and
+  // model calls cannot happen inside one.
+  //
+  // Two signals, and the hard one is not optional. The storyteller volunteering
+  // `actComplete` is an opinion; a chapter whose every objective is now ticked
+  // off is a fact. A family once finished both of chapter one's objectives and
+  // then played six more turns in the same kitchen because only the opinion was
+  // being listened to — see `chapterWillBeDone`.
+  const chapterDone = await chapterWillBeDone(db, {
+    campaignId: campaign.id,
+    actIndex: campaign.currentActIndex,
+    partyCharacterIds: campaign.party.map((member) => member.characterId),
+    gained: result.extraction.itemsGained.flatMap((item) => {
+      const holder = campaign.party.find(
+        (member) => member.character.name.toLowerCase() === item.character.trim().toLowerCase(),
+      );
+      return holder
+        ? [{ name: item.name, holderId: holder.characterId, holderName: holder.character.name }]
+        : [];
+    }),
+    deedsDone: result.extraction.deedsDone,
+  });
+
   const movingOn =
-    result.extraction.actComplete &&
+    (result.extraction.actComplete || chapterDone) &&
     campaign.currentActIndex < campaign.storyline.acts.length;
   const nextAct = movingOn
     ? campaign.storyline.acts.find((act) => act.index === campaign.currentActIndex + 1)
@@ -1653,8 +1674,13 @@ export async function playTurn(
     // against `length - 1`, which ended every three-chapter storyline after the
     // second — the last chapter was never played and its quest never opened.
     const isFinalAct = campaign.currentActIndex >= campaign.storyline.acts.length;
-    const advancesAct = result.extraction.actComplete && !isFinalAct;
-    const finishes = result.extraction.actComplete && isFinalAct;
+    // The same two signals as `movingOn` above, and it has to be the same
+    // answer: the aims for the next chapter were already fetched on the strength
+    // of it. Finishing the last chapter's work ends the adventure, for exactly
+    // the reason finishing any other chapter's work ends that chapter.
+    const chapterOver = result.extraction.actComplete || chapterDone;
+    const advancesAct = chapterOver && !isFinalAct;
+    const finishes = chapterOver && isFinalAct;
     campaignComplete = finishes;
 
     // Quests come after the items, because finding the last thing a chapter
@@ -1670,7 +1696,7 @@ export async function playTurn(
         turn: turnCounter,
         deedsDone: result.extraction.deedsDone,
         questsOpened: result.extraction.questsOpened,
-        actComplete: result.extraction.actComplete,
+        actComplete: chapterOver,
         act: campaign.storyline.acts.find((act) => act.index === campaign.currentActIndex),
         nextAct: advancesAct
           ? campaign.storyline.acts.find((act) => act.index === campaign.currentActIndex + 1)

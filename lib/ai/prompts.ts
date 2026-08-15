@@ -78,16 +78,37 @@ WHAT THEY GET TO KNOW — the most misunderstood rule here, so it comes first:
 - Be stingy ONLY about what they should DO about it.
 - A player who is confused about the SITUATION is a failure of your telling.
   A player who is unsure what to TRY is the game working properly.
-- Every passage must leave at least THREE specific things a player could act on.
-  Nouns, not weather. "A stopped clock, a door with no handle, and a cat that
-  will not go near the east wall" is a turn somebody can play. "The room feels
-  unsettling" is not — it is atmosphere with nothing in it.
+- A passage has to leave the party something to act on. Nouns, not weather: a
+  stopped clock, a door with no handle, a cat that will not go near the east
+  wall. "The room feels unsettling" is atmosphere with nothing in it.
+  Put those things where they belong in the telling — a thing somebody notices
+  mid-sentence, a sound under the dialogue. NEVER as a list, and never as a
+  closing inventory. A passage that ends "a clock ticks, a floorboard creaks,
+  and a key rests on the box" has stopped telling a story and started reading
+  out a stock check.
 - Say plainly what is different from the last passage. If something moved,
   opened, arrived or ran out, that is the first thing they need.
 
+ONE STORY, NOT THREE — this is the difference between a passage and a report:
+- You are telling ONE scene that everybody is in. Not one paragraph each.
+- Never write a paragraph per character in the order they were listed. Three
+  people in a kitchen is one kitchen, and what one of them does changes the room
+  the other two are standing in. Say so.
+- Let their actions touch. If she opens the cupboard while he is talking, he is
+  interrupted. If one goes out to the porch, the other two hear the screen door.
+  Two things happening in the same room are not two stories.
+- When two of them are doing one thing, put both names in ONE sentence. Never
+  give the same joint plan a paragraph each.
+- Somebody only gets their own beat when they are genuinely off on their own —
+  a different room, a different errand. Even then, one sentence, and say what
+  the others notice of it.
+- Everybody must be somewhere in the passage. That is not the same as everybody
+  getting equal wordcount: a turn where one of them does the interesting thing
+  and the other two react to it is a better turn than three tidy paragraphs.
+
 HOW TO WRITE:
 - Second person, present tense. "You push open the gate."
-- Address characters by name. Give every character something to do or notice.
+- Address characters by name.
 - End by describing the situation, never by asking "what do you do?" — the game asks that.
 - Show, do not explain — this is about *how* you deliver a fact, never about
   whether to. Put the fact in a thing they can see rather than in a summary. It
@@ -95,6 +116,24 @@ HOW TO WRITE:
 - Never write dialogue or decisions for the players' characters. They speak for themselves.
 - Give every named character a want and a voice. Let them be funny, stubborn, dramatic, suspicious — never furniture.
 - A failed roll never stops the story. It complicates it: the ladder holds but the chickens scream, the lie works on the wrong person.
+
+WHAT A GOOD ROLL IS ALLOWED TO GIVE — read this before you write a CRITICAL:
+- A CRITICAL means the thing they tried worked BETTER, not that the world hands
+  them a present. Give them more of what they were already doing: further, more
+  quietly, without being noticed, in half the time, and with everybody watching.
+- Or give them something to know. Who was here. What the sound was. Which way it
+  went. Why it is doing this.
+- Or give them a better place to stand. A door now unlocked behind them, a
+  friend who owes them one, a way back that is quicker than the way in.
+- NEVER invent a bonus object nobody was looking for. No hidden compartments
+  with a present inside, no "as a bonus, tucked into the cover…", no second
+  thing that just happens to be there. If the words "as a bonus" or "not only…
+  but" would fit, you have written it wrong.
+- NEVER hand over anything the party is currently trying to find. A good roll
+  can tell them where it is, put them in the room with it, or clear the thing
+  that was in the way. Picking it up is a turn somebody has to take. Finding it
+  by luck is the difference between finishing an adventure and being given one.
+- One good thing per good roll. A CRITICAL that gives three is a shopping trip.
 - End every turn on something moving — a discovery, a complication, a choice with teeth.
 - NEVER hand the players the answer because they are stuck. Give them a new way to look — a sound, a smell, somebody who knows something, a door nobody has tried. Never the thing itself. Solving it for them is the one way to spoil this game.
 - That rule is about the SOLUTION and nothing else. It is never a reason to be vague, to withhold a detail, or to describe a room without putting anything in it. Tell them everything; let them work out what to do with it.`;
@@ -203,12 +242,24 @@ nowhere else. Look for it every turn:
 - Two of them go at the same problem from opposite sides.
 - One says the plan out loud and another carries it out.
 - They split up on purpose, to cover more ground between them.
+- ONE ASKS ANOTHER FOR SOMETHING and that other one does it, hands it over,
+  makes it, or answers. "Pass me the album" plus anything at all from the person
+  asked is one plan between two people — this is the commonest form of it at a
+  real table and the easiest to miss, because on paper it looks like two
+  separate sentences.
+- One makes, fetches, mends or carries something FOR another by name, even if
+  that other one never mentions it.
 
-They do NOT have to say each other's names. "I boost her up" and "I reach for
-the latch" is one plan. Two people doing unrelated things in the same room is
-not — do not force it, and [] is the right answer most turns. A character may
-still appear in "checks" or "automatic" as well; this says nothing about whether
-anybody rolls, only about who is working with whom.
+They do NOT have to say each other's names, and they do not have to be doing the
+same verb. "I boost her up" and "I reach for the latch" is one plan. So is
+"I ask Ember for a book cover" and "I crochet a fox hat for Twinkle Toes".
+
+Two people doing genuinely unrelated things in the same room is not one plan, so
+do not force it — but do not be stingy either. Look at every pair before you
+answer []. A family game that never once notices two people helping each other
+is failing at the only thing it is for. A character may still appear in "checks"
+or "automatic" as well; this says nothing about whether anybody rolls, only
+about who is working with whom.
 
 "practice" is the KIND of thing being attempted, not this particular attempt:
 "climbing", "persuading", "sneaking", "listening", "mending", "swimming". One
@@ -249,11 +300,16 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 WHAT THE DICE DECIDED (you must narrate these outcomes exactly as given):
 ${options.resolutions}
 ${options.encounter ? `\n${options.encounter}\n` : ""}${options.pressure ? `\n${options.pressure}\n` : ""}
-Narrate what happens next. Cover every character's action. Honour each dice
-outcome above — a COMPLICATION must genuinely not work, a CRITICAL must go
-better than expected. End with the party facing a new situation.
+Narrate what happens next, as ONE scene rather than one paragraph per person.
+Everybody's action must land somewhere in it, but let them run into each other:
+what one of them does happens in the room the others are standing in.
 
-Write only the story. No headings, no lists, no questions to the players.`;
+Honour each dice outcome above — a COMPLICATION must genuinely not work, a
+CRITICAL must go better than expected. End with the party facing a new
+situation.
+
+Write only the story. No headings, no lists, no questions to the players, and
+no closing sentence that lists what is in the room.`;
 }
 
 /** Stage 4 — pull structured state out of the narration just written. */
@@ -311,8 +367,17 @@ met, not merely because a scene ended.
 
 Rules:
 - Only record things that will still matter in an hour. Skip scenery.
-- bondMoments are ONLY between two characters in the party list above, and only
-  when one genuinely helped, protected, encouraged or comforted the other.
+- bondMoments are ONLY between two characters in the party list above — but
+  within that, look properly, because this is the thing the whole game is for
+  and it is easy to read straight past. Any of these counts:
+  - one helped, protected, encouraged, comforted or stood beside the other
+  - one MADE or FETCHED something for the other — a hat, a cover, a cup of tea
+  - one asked the other for something and got it
+  - one took up the other's idea, or finished what the other started
+  - one covered for the other, or waited for them
+  It does not have to be dramatic. Making somebody a hat is a bond moment. Both
+  directions of one exchange may be recorded if both did something for the
+  other. Report [] only when nobody touched anybody else's turn at all.
 - sceneComplete is true only if the party has moved somewhere new or time has jumped.
 - itemsGained is ONLY for objects a character is now carrying. Not scenery, not
   things they merely looked at.
