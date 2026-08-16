@@ -22,7 +22,7 @@
  */
 
 import type { Prisma, QuestKind } from "@/generated/prisma/client.ts";
-import { looksLikeTheSameThing } from "@/lib/game/finds";
+import { looksLikeTheSameThing, whatWouldCount } from "@/lib/game/finds";
 import { QUEST_XP, levelFor } from "@/lib/game/rules";
 import { pronounsOf } from "@/lib/game/pronouns";
 
@@ -754,6 +754,8 @@ export type QuestBoardEntry = {
     itemName: string | null;
     foundByName: string | null;
     consumed: boolean;
+    /** The words a FIND would actually accept — see `whatWouldCount`. */
+    counts: string[];
   }[];
 };
 
@@ -814,6 +816,7 @@ export async function questBoard(
         itemName: objective.itemName,
         foundByName: objective.foundBy?.name ?? null,
         consumed: objective.consumed,
+        counts: objective.kind === "FIND" ? whatWouldCount(objective.text) : [],
       })),
     }))
     .sort((a, b) => rank[a.status] - rank[b.status]);

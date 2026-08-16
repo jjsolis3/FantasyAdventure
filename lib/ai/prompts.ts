@@ -115,6 +115,20 @@ HOW TO WRITE:
   is not a reason to leave anything out.
 - Never write dialogue or decisions for the players' characters. They speak for themselves.
 - Give every named character a want and a voice. Let them be funny, stubborn, dramatic, suspicious — never furniture.
+
+WHAT THEY LOOK LIKE IS NOT WHAT THE STORY IS ABOUT:
+- Each adventurer has a "Looks like" line. It is a costume, not a plot. A cloak
+  is a cloak. It is not a mystery, an heirloom, a source of power, or the reason
+  anything happens.
+- Use it the way you would use it at a real table: once, when somebody would
+  actually see it, and then get on with the scene. "Mira pulls the moss-green
+  hood up" is right. A paragraph about the hood is not.
+- NEVER open a passage with what somebody is wearing, and never build a scene
+  around an item of clothing. If a character's outfit is doing plot work, you
+  have taken a costume and made it the story.
+- "Who they are" is different, and you may lean on it as much as you like — a
+  stubborn character should behave stubbornly. That is character. The hair is
+  not character.
 - A failed roll never stops the story. It complicates it: the ladder holds but the chickens scream, the lie works on the wrong person.
 
 WHAT A GOOD ROLL IS ALLOWED TO GIVE — read this before you write a CRITICAL:
@@ -377,6 +391,7 @@ Reply with ONLY this JSON, no other text:
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "onTheTable": ["<a thing the passage put within their reach>"],
+  "leads": ["<somewhere worth going, or somebody worth asking>"],
   "movedForward": true,
   "encounterOpened": null,
   "actComplete": false,
@@ -439,6 +454,20 @@ Rules:
   something they already tried, or did something that has nothing to do with what
   is in front of them. Be honest — a false here is not a punishment, it is how
   the story knows to start pressing.
+- leads is somewhere worth going next, or somebody worth asking — and it is the
+  single most useful thing you can give a table that is going in circles.
+  - It must be THE NEXT DOOR, never what is behind it. "The bell-ringer keeps
+    the old charts" is a lead. "The map is in the bell tower" is the answer, and
+    handing that over spoils the game.
+  - Only from what this passage actually established. Somebody said something,
+    a light was on somewhere, a road went off that way. Never invent a place the
+    party has not been told about.
+  - Say where or who, and the one thing that makes it worth the walk. Under
+    twelve words.
+  - Repeat a lead from an earlier turn only if it is still true and still
+    unvisited. Drop it the moment they have been.
+  - [] is the right answer on most turns. A signpost at every crossroads is the
+    same as no signpost at all.
 - encounterOpened is for a situation that is now STANDING IN FRONT OF THEM and
   will still be there next turn — somebody blocking the way who is already
   cross, a room that has just locked, a thing that has to be worked out before
@@ -491,15 +520,39 @@ to eight words, written as things and not as advice: "the shutter, nailed shut",
 "you could" or "try". Only what this passage actually mentioned.`;
 }
 
-/** Produced when a scene closes, so its turns can be dropped from the prompt. */
-export function summaryPrompt(options: { sceneTitle: string; transcript: string }): string {
+/**
+ * Produced when a scene closes, so its turns can be dropped from the prompt.
+ *
+ * The `ledger` is why a family stopped getting summaries that merely restated
+ * the passage. Asked to summarise eight hundred words of prose, a model returns
+ * shorter prose — it has no way to know which two sentences were the ones that
+ * changed anything. The game does know: every change was written down as a
+ * milestone at the time. Handing those over turns "summarise this" into
+ * "explain how these happened", which is a question with a useful answer.
+ */
+export function summaryPrompt(options: {
+  sceneTitle: string;
+  transcript: string;
+  /** What actually changed, one per line. See `lib/game/recap.ts`. */
+  ledger?: string;
+}): string {
   return `Summarise this scene from a family adventure in 3-5 sentences.
 
 Keep: what the party decided, who they met, what changed, anything unresolved.
 Drop: descriptions, dialogue, dice results.
 
 SCENE: ${options.sceneTitle}
-
+${
+  options.ledger
+    ? `
+WHAT ACTUALLY CHANGED IN THIS SCENE — these are the facts, taken from the game
+itself rather than from the writing. Every one of them must appear in your
+summary, said in your own words and in the order they happened. Do not repeat
+the list; explain how they came about.
+${options.ledger}
+`
+    : ""
+}
 ${options.transcript}
 
 Reply with ONLY this JSON:

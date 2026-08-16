@@ -28,6 +28,9 @@ import {
 import { signaturesFor } from "@/lib/game/character-options";
 import { abilitiesFor, hasRequirement, lockedFor } from "@/lib/game/practice";
 import { capitalise, pronounsOf, toBe, toHave } from "@/lib/game/pronouns";
+import { lookOf, lookSentence } from "@/lib/game/wardrobe";
+import { characterPicture } from "@/lib/game/character-picture";
+import { Face } from "@/components/character/face";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +52,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         include: { campaign: { select: { id: true, title: true, status: true } } },
       },
       portrait: { select: { version: true } },
+      art: { select: { version: true, lookKey: true } },
       keepsakes: {
         orderBy: { createdAt: "desc" },
         include: { campaign: { select: { id: true, title: true } } },
@@ -61,6 +65,10 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
   if (!character) notFound();
 
   const stats: StatBlock = statsOf(character);
+  // The same sentence the storyteller is given and the drawing model is asked
+  // for. Three surfaces, one function — a portrait that does not match the
+  // sheet is worse than no portrait.
+  const look = lookSentence(lookOf(character));
   const unspent = statPointsUnspent(stats, character.xp, character.buildBudget);
   const signatures = signaturesFor(character.archetype, character.level);
   // Named on the sheet before she has it, because a thing you are working
@@ -156,6 +164,19 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
+      <div className="mb-2">
+        <Face
+          picture={characterPicture({
+            id: character.id,
+            name: character.name,
+            look: lookOf(character),
+            portraitVersion: character.portrait?.version ?? null,
+            art: character.art,
+          })}
+          name={character.name}
+          size={72}
+        />
+      </div>
       <PageTitle
         eyebrow={`Level ${character.level}`}
         title={character.name}
@@ -197,6 +218,27 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             />
           </Card>
         ) : null}
+
+        {/* Above the numbers, and that is the right order for the audience.
+            A nine-year-old opening her adventurer's page is not coming for the
+            stat allocator, and the one screen in the game that is pure pleasure
+            should not be the hardest to find. */}
+        <Card>
+          <h2 className="font-display mb-1 text-xl text-hearth-100">How they look</h2>
+          {look ? (
+            <p className="mb-3 text-hearth-200">{look}</p>
+          ) : (
+            <p className="mb-3 text-sm text-hearth-400">
+              Nothing chosen yet. Pick a cloak, a colour and something they would be remembered by.
+            </p>
+          )}
+          <Link
+            href={`/characters/${character.id}/look`}
+            className="inline-block rounded-lg bg-hearth-600 px-4 py-2 font-medium text-hearth-50 hover:bg-hearth-500"
+          >
+            {look ? "Change how they look" : "Dress them"}
+          </Link>
+        </Card>
 
         {offered.length > 0 ? (
           <Card>

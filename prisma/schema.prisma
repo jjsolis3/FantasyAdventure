@@ -186,8 +186,33 @@ model Character {
   /// Stored verbatim and used by the Game Master when narrating.
   pronouns    String  @default("they/them")
   ageBand     AgeBand @default(GROWNUP)
-  /// Appearance and manner, in the player's own words. Feeds the GM prompt.
+  /// Who they are, in the player's own words. One sentence of manner.
+  ///
+  /// Narrowed from "appearance and manner" when the wardrobe arrived, and the
+  /// narrowing is the point. A family wrote a paragraph here and watched the
+  /// storyteller work it into every passage — correctly, because `renderParty`
+  /// appended it to the party line unlabelled, next to the stats, so the most
+  /// distinctive sentence in the prompt was also the only one with no stated
+  /// purpose. What she looks like now lives in the seven columns below, where
+  /// it can be told to stay in the background.
   description String?
+
+  // ---- What she looks like -------------------------------------------------
+  //
+  // Chosen from `lib/game/wardrobe.ts` rather than typed, though every one of
+  // them takes free text: a child who wants a coat made of bees should get one.
+  // Separate columns rather than one JSON blob, because these are picked one at
+  // a time by a form, read one at a time by a picker, and a wardrobe slot is
+  // exactly as much of a field as `race` is.
+  //
+  // All nullable, and half a look is a look — a girl who picks only a colour
+  // and a hairstyle is finished.
+  lookHair      String?
+  lookOutfit    String?
+  lookLayer     String?
+  lookArmour    String?
+  lookColour    String?
+  lookSignature String?
 
   // The seven stats. Constrained by a point budget that is enforced in code
   // (see lib/game/rules.ts) rather than by the database, so the rule can change
@@ -232,6 +257,7 @@ model Character {
   roundAnswers  RoundAnswer[]
   abilityUses   AbilityUse[]
   portrait      CharacterPortrait?
+  art           CharacterArt?
   /// Relationships where this character is the "A" side, and the "B" side.
   relationshipsA Relationship[]  @relation("RelationshipA")
   relationshipsB Relationship[]  @relation("RelationshipB")
@@ -1051,6 +1077,37 @@ model CharacterPortrait {
   mimeType String
 
   /// Bumped on every replacement, so a cached portrait is never the old one.
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+/// A portrait a drawing service made from the wardrobe she chose.
+///
+/// The middle rung of the portrait ladder, between a drawing somebody actually
+/// made and the crest that always works. Separate from `CharacterPortrait`
+/// rather than sharing it, and the separation is the whole point: a family who
+/// generates a portrait and *then* photographs a felt-tip drawing must not lose
+/// the drawing, and one who does it the other way round must not have their
+/// drawing quietly overwritten by a machine.
+///
+/// `lookKey` is what she was wearing when it was drawn. A girl who changes her
+/// cloak has a portrait of the old one, and the screen can say so and offer to
+/// draw her again — without which the picture silently becomes a lie.
+model CharacterArt {
+  id          String    @id @default(cuid())
+  characterId String    @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  data     Bytes
+  mimeType String @default("image/png")
+
+  /// The look this was drawn from, so a changed outfit can be noticed.
+  lookKey String
+  /// What was asked for, kept so a strange picture can be read back.
+  prompt String
+  model  String
+
   version   Int      @default(1)
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())

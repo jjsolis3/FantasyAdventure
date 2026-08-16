@@ -1,4 +1,6 @@
 import { LevelBadge } from "@/components/character/level-badge";
+import { Face } from "@/components/character/face";
+import type { CharacterPicture } from "@/lib/game/character-picture";
 import { RELATIONSHIP_LABELS, STATS, STAT_INFO, type RelationshipKind, type StatKey } from "@/lib/game/rules";
 
 export type PartySheet = {
@@ -12,12 +14,41 @@ export type PartySheet = {
   stats: Record<StatKey, number>;
   skills: { name: string; rank: number }[];
   inventory: { name: string; quantity: number; description: string | null }[];
-  bonds: { otherId: string; otherName: string; kind: RelationshipKind; bondLevel: number }[];
+  bonds: {
+    otherId: string;
+    otherName: string;
+    kind: RelationshipKind;
+    bondLevel: number;
+    /**
+     * How far into this level, and how far to the next.
+     *
+     * They earned bonds all evening and the number went up in silence: the
+     * moves a bond unlocks were only ever visible inside a picker, mid-turn,
+     * to whoever happened to be typing. A ladder nobody can see is a ladder
+     * nobody climbs on purpose.
+     */
+    into: number;
+    needed: number | null;
+    /** What they can do together now. */
+    moves: string[];
+    /** What the next level would open, when there is one. */
+    nextMove: { name: string; blurb: string } | null;
+  }[];
   /** The household answering for this adventurer. */
   playedBy: string;
   yours: boolean;
   /** Set when a picture has been uploaded; changes when it is replaced. */
   portraitVersion: number | null;
+  /**
+   * Whichever rung of the portrait ladder answered.
+   *
+   * Never null: the bottom rung is a crest built from her own colours, so every
+   * adventurer has a face on this list — which matters more here than anywhere,
+   * because this is the list a child scans to find her sister's row.
+   */
+  picture: CharacterPicture;
+  /** What she is wearing, from `lookSentence`. Empty until somebody dresses her. */
+  look: string;
 };
 
 /**
@@ -45,14 +76,7 @@ export function PartySheets({ sheets }: { sheets: PartySheet[] }) {
           className="rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4"
         >
           <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1">
-            {sheet.portraitVersion === null ? null : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`/api/characters/${sheet.id}/portrait?v=${sheet.portraitVersion}`}
-                alt=""
-                className="h-8 w-8 shrink-0 rounded-full object-cover"
-              />
-            )}
+            <Face picture={sheet.picture} name={sheet.name} size={32} className="shrink-0" />
             <span className="text-hearth-100">{sheet.name}</span>
             <span className="text-sm text-hearth-400">
               {sheet.race} {sheet.archetype}
@@ -83,8 +107,13 @@ export function PartySheets({ sheets }: { sheets: PartySheet[] }) {
             </dl>
           </div>
 
+          {/* What she looks like, then what she is like. Same order as the
+              dressing room and the same order as the prompt, so a child reading
+              her sister's sheet meets her the way the story does. */}
+          {sheet.look ? <p className="mt-4 text-sm text-hearth-200/80">{sheet.look}</p> : null}
+
           {sheet.description ? (
-            <p className="mt-4 text-sm leading-relaxed text-hearth-200/70 italic">
+            <p className="mt-1 text-sm leading-relaxed text-hearth-200/70 italic">
               {sheet.description}
             </p>
           ) : null}
@@ -130,6 +159,23 @@ export function PartySheets({ sheets }: { sheets: PartySheet[] }) {
                   <li key={bond.otherId} className="text-sm text-hearth-200/80">
                     {RELATIONSHIP_LABELS[bond.kind]} {bond.otherName}
                     <span className="text-hearth-400"> · bond {bond.bondLevel}</span>
+
+                    {bond.moves.length > 0 ? (
+                      <span className="block text-xs text-moss-400">
+                        together: {bond.moves.join(", ")}
+                      </span>
+                    ) : null}
+
+                    {/* The next rung, named. "Two more" means nothing on its
+                        own; "two more and you can Stand Together" is a reason
+                        to go and be kind to your sister. */}
+                    {bond.nextMove && bond.needed !== null ? (
+                      <span className="block text-xs text-hearth-500">
+                        {bond.needed - bond.into} more{" "}
+                        {bond.needed - bond.into === 1 ? "moment" : "moments"} together unlocks{" "}
+                        {bond.nextMove.name} — {bond.nextMove.blurb}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -27,6 +27,7 @@ import { ENCOUNTER_REACH } from "@/lib/game/encounters";
 import { passageCounts, talkNudge } from "@/lib/game/talk";
 import {
   knownFacts,
+  leadsFrom,
   neededObjectives,
   recentRolls,
   tableFrom,
@@ -289,6 +290,14 @@ export type ScreenView = {
   /** What is still outstanding, in the players' own words. Shared quests only. */
   needed: NeededObjective[];
   /**
+   * Somewhere worth going next, gathered across the scene.
+   *
+   * The most useful thing a wall can hold for a table going in circles, and the
+   * one thing this game could not say until now: it could put something in
+   * front of the party and had no way at all to point down a road.
+   */
+  leads: string[];
+  /**
    * The game suggesting they stop and confer, or null.
    *
    * On the wall rather than only on the phones, because this is the one message
@@ -414,7 +423,11 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
   );
 
   // Fetched newest first; `tableFrom` reads a scene in the order it happened.
-  const { whatNow, onTheTable } = tableFrom((scene?.turns ?? []).slice().reverse());
+  const inOrder = (scene?.turns ?? []).slice().reverse();
+  const { whatNow, onTheTable } = tableFrom(inOrder);
+  // Only the narrations are fetched here, which is all leads live on anyway —
+  // they are written onto the passage that raised them.
+  const leads = leadsFrom(inOrder);
   const [known, needed, rolls, passages] = await Promise.all([
     knownFacts(campaignId),
     neededObjectives(campaignId),
@@ -517,6 +530,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
     onTheTable,
     known,
     needed,
+    leads,
     talkNudge: nudge?.reason ?? null,
     rolls,
     scene: scene
@@ -556,6 +570,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
       // on the television is a number.
       needed.map((objective) => objective.id).join(","),
       nudge?.key ?? "-",
+      leads.join(","),
       rolls.map((roll) => roll.id).join(","),
     ].join(":"),
   };

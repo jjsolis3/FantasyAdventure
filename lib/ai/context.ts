@@ -31,7 +31,21 @@ export type PartyMemberContext = {
   archetype: string;
   pronouns: string;
   ageBand: string;
+  /** One sentence of manner — who she is, not what she looks like. */
   description?: string | null;
+  /**
+   * What she looks like, as one sentence from `lookSentence`.
+   *
+   * Separate from `description` because the two want opposite treatment, and
+   * running them together is what broke this. A family wrote a paragraph in the
+   * description box and watched the storyteller build every passage around it —
+   * correctly, given what it was handed: the most distinctive sentence in the
+   * prompt, unlabelled, sitting where a fact about the character goes.
+   *
+   * So the look is now rendered on its own line, told plainly that it is
+   * scenery, and the personality is told plainly that it is not.
+   */
+  look?: string | null;
   level: number;
   stats: Record<(typeof STATS)[number], number>;
   skills: { name: string; rank: number }[];
@@ -130,7 +144,14 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
       member.skills.length > 0
         ? ` Good at: ${member.skills.map((skill) => `${skill.name} ${skill.rank}`).join(", ")}.`
         : "";
-    const description = member.description ? ` ${member.description}` : "";
+    // Two lines, two jobs, and the labels are doing the work. An appearance
+    // handed to a storyteller with no stated purpose gets treated as the point
+    // of the character; the same words under "what she looks like" get treated
+    // as what she looks like.
+    const description = member.description ? `\n  Who they are: ${member.description}` : "";
+    const look = member.look
+      ? `\n  Looks like: ${member.look} Scenery, not plot — mention it only when somebody would actually see it, and never build a scene around it.`
+      : "";
 
     // The one thing this calling alone can do. Named here so the storyteller
     // leaves room for it — a Trickster's "there is always another way" only
@@ -178,7 +199,7 @@ function renderParty(party: PartyMemberContext[], bonds: BondContext[]): string 
 
     return (
       `- ${member.name} (${member.pronouns}), ${member.ageBand.toLowerCase()} ${member.race} ` +
-      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${own}${earned}${locked}`
+      `${member.archetype}, level ${member.level}. ${stats}.${skills}${description}${look}${own}${earned}${locked}`
     );
   });
 

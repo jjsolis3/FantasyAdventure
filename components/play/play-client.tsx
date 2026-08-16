@@ -673,6 +673,8 @@ export function PlayClient({
             <WhatsHere
               onTheTable={briefing.onTheTable}
               needed={briefing.needed}
+              leads={briefing.leads}
+              tried={briefing.tried}
               known={briefing.known}
             />
           </>

@@ -564,6 +564,7 @@ async function finishTurn(
     questsOpened: [],
     whatNow: null,
     onTheTable: [],
+    leads: [],
     // True, like the schema's default and for the same reason: this is the
     // shape used when extraction failed outright, and a turn the game could not
     // read is not one the party should be charged for.

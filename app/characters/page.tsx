@@ -13,6 +13,9 @@ import { AGE_BANDS } from "@/lib/game/character-options";
 import { LevelBadge } from "@/components/character/level-badge";
 import { waitingPointsFor } from "@/lib/game/waiting-points";
 import { CONFIRMED_TIES } from "@/lib/game/ties";
+import { Face } from "@/components/character/face";
+import { characterPicture } from "@/lib/game/character-picture";
+import { lookOf } from "@/lib/game/wardrobe";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,8 @@ export default async function CharactersPage() {
     include: {
       skills: true,
       knacks: { select: { id: true } },
+      portrait: { select: { version: true } },
+      art: { select: { version: true, lookKey: true } },
       relationshipsA: {
         where: CONFIRMED_TIES,
         include: { characterB: { select: { id: true, name: true } } },
@@ -130,6 +135,21 @@ export default async function CharactersPage() {
                   {/* The badge sits in its own column so a long name wraps
                       beside it rather than pushing it off the card. */}
                   <div className="flex items-start gap-4">
+                    {/* Never empty: the bottom rung of the ladder is a crest in
+                        her own colours, so a household scanning this list has a
+                        face against every name rather than a wall of text. */}
+                    <Face
+                      picture={characterPicture({
+                        id: character.id,
+                        name: character.name,
+                        look: lookOf(character),
+                        portraitVersion: character.portrait?.version ?? null,
+                        art: character.art,
+                      })}
+                      name={character.name}
+                      size={44}
+                      className="mt-0.5 shrink-0"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <Link
