@@ -38,7 +38,21 @@ const NOISE = new Set([
   "its",
 ]);
 
-function meaningfulWords(text: string): string[] {
+/** The crude singulariser: enough to make "keys" match "key", no stemmer. */
+function stem(word: string): string {
+  return word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
+}
+
+/**
+ * The words of a description, as written and as compared.
+ *
+ * Both forms, because the two uses want different ones and conflating them
+ * produced a genuinely funny bug: the stem of "brass" is "bras", which is
+ * exactly right for matching "brass key" against "a brass key" and exactly
+ * wrong to put on a screen in front of a nine-year-old under the words "things
+ * to look for".
+ */
+function wordPairs(text: string): { written: string; stemmed: string }[] {
   return text
     .toLocaleLowerCase()
     // Hyphens are kept, so a lantern-fox feather is not a lantern. A compound
@@ -47,10 +61,12 @@ function meaningfulWords(text: string): string[] {
     .replace(/[^\p{L}\p{N}\s'-]/gu, " ")
     .split(/\s+/)
     .filter(Boolean)
-    // Crude singularisation, which is all that is needed to make "keys" match
-    // "key" without dragging in a stemmer.
-    .map((word) => (word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word))
-    .filter((word) => !NOISE.has(word));
+    .map((word) => ({ written: word, stemmed: stem(word) }))
+    .filter((pair) => !NOISE.has(pair.stemmed));
+}
+
+function meaningfulWords(text: string): string[] {
+  return wordPairs(text).map((pair) => pair.stemmed);
 }
 
 /** Whether a carried item is plausibly the thing the chapter asked for. */
@@ -64,6 +80,40 @@ export function looksLikeTheSameThing(sought: string, carried: string): boolean 
   // teeth", and "key" alone is inside both.
   const overlap = wanted.filter((word) => held.has(word)).length;
   return overlap === wanted.length || overlap >= Math.min(2, held.size);
+}
+
+/**
+ * What the game would actually accept, said out loud.
+ *
+ * The matcher above has always been generous — *the brass key* is satisfied by
+ * *a small brass key, green at the teeth* — and the screen has always shown the
+ * storyline's exact words and nothing else. So a nine-year-old reads *"the
+ * collector's sky-map, creased and still warm"* as a riddle with one answer,
+ * hunts for that exact phrase, and never learns that any map of the sky would
+ * have done.
+ *
+ * That gap is worth closing with the truth rather than with a hint, and the
+ * truth is already here: these are the words `looksLikeTheSameThing` is looking
+ * for. Showing them is not making the quest easier — it is telling a child what
+ * the rules of the game she is playing actually are.
+ *
+ * Returns the words in the order they were written, so the phrase reads the way
+ * she wrote it: "sky-map" before "creased".
+ */
+export function whatWouldCount(sought: string): string[] {
+  // The written form, not the stemmed one — see `wordPairs`. De-duplicated on
+  // the stem, because "a key, the brass keys" should not ask her to find
+  // something with "key" in it twice.
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const pair of wordPairs(sought)) {
+    if (seen.has(pair.stemmed)) continue;
+    seen.add(pair.stemmed);
+    out.push(pair.written);
+  }
+
+  return out;
 }
 
 export type SoughtItem = {

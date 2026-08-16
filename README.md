@@ -1395,6 +1395,124 @@ rolling, against what, and how hard, in the pause between the storyteller
 deciding and the dice landing. The most tense moment in the game used to be a
 spinner.
 
+### The dressing room
+
+Four stats, two skills and a text box was the whole of an adventurer's identity.
+Everything added since made those numbers *deeper*; none of it made her look
+like anybody. The girls are nine and ten and they play Dress to Impress — they
+do not want to *describe* an adventurer, they want to browse.
+
+So a look is now six chosen slots — hair, what they wear, what goes over the
+top, armour, a colour, and one thing somebody would remember them by — each with
+a dozen concrete options and a free-text box underneath, because a child who
+wants a coat made of bees should get one. `lib/game/wardrobe.ts` holds the
+catalogue; `/characters/[id]/look` is the screen, and the sentence at the top
+rewrites itself on every tap.
+
+**And it fixed the story.** A family reported that whatever they wrote in the
+description box took over every passage. That was not the model being greedy —
+`renderParty` appended `description` to the party line *unlabelled*, next to the
+stats, so the most distinctive sentence in the prompt was also the only one with
+no stated purpose. Handed that, a storyteller quite reasonably treats it as what
+the character is about. Now there are two lines with two jobs:
+
+```
+- Mira (she/her), child Human Trickster, level 1. Might 3, Wits 3, …
+  Who they are: Names every animal she meets, and will not be hurried.
+  Looks like: with two braids, under a hooded travelling cloak, in moss green,
+    and always a whistle on a cord. Scenery, not plot — mention it only when
+    somebody would actually see it, and never build a scene around it.
+```
+
+The prompt gained a matching block: *a cloak is a cloak; it is not a mystery, an
+heirloom, or the reason anything happens.* Personality it may lean on as hard as
+it likes — a stubborn character should behave stubbornly. The hair is not
+character.
+
+#### A wardrobe that grows
+
+`earnedWearables` reads the party's pockets and offers back anything that could
+go on a body — cloaks, helms, bracers, amulets — marked with which adventure it
+came from. A cloak chosen from a list is a preference; a cloak taken off a
+scarecrow in chapter three and worn ever since is a story, and the game already
+knew where every item came from.
+
+#### The portrait ladder
+
+Same shape as `scenePicture`, and the bottom rung is why it was worth building:
+
+1. **A drawing somebody made**, photographed. Nothing beats it and nothing
+   overwrites it.
+2. **A portrait drawn from the wardrobe** — only when a drawing service is
+   configured, only when a child taps *Draw them*, and it says so when the
+   outfit has changed since. Stored in its own table so a machine's guess can
+   never land on top of a felt-tip drawing.
+3. **A crest.** Two colours from the palette she chose and the first letter of
+   her name, drawn as inline SVG.
+
+Most households will never configure a drawing model, and a dressing room that
+produced nothing visible is one nobody opens twice. A crest costs no bytes, no
+request and no provider, and it changes colour when she does.
+
+### Knowing what you are doing
+
+*"Still somewhat confusing as to what is needed to accomplish said quests."*
+Three causes, and every fix is a fact the game already held and had never said.
+
+**What would count.** `looksLikeTheSameThing` has always been generous — *the
+brass key* is satisfied by *a small brass key, green at the teeth* — and the
+screen has always shown the storyline's exact words, which read like a riddle
+with one answer. `whatWouldCount` now says which words the matcher is looking
+for. That is not making the quest easier; it is telling a child the rules of the
+game she is playing. (It also caught a genuinely funny bug: the matcher's crude
+singulariser turns "brass" into "bras", which is right for comparing and very
+wrong to print under *things to look for*.)
+
+**Somewhere to try.** The game had machinery for the storyteller to *open* an
+encounter and none at all for it to *place a lead*, so a party told to find a
+sky-map was left with a village and no reason to walk into any particular door.
+`leads` is now extracted per turn — *the bell-ringer keeps the old charts* — and
+gathered across the scene, de-duplicated, three at most. It is the next door,
+never what is behind it; the prompt says so twice, and says `[]` is the right
+answer on most turns.
+
+**What you have already tried.** Three girls searching the same barn twice is
+most of what aimless actually looks like. Every attempt anybody has typed has
+been a row since the first evening and had never been shown as a list. It is
+folded away next to *what you know*, because it is a checklist rather than part
+of the story.
+
+### A recap of what changed, not what was said
+
+*"The recaps were generic — just repeating what was said in the passage."*
+Structural rather than a matter of wording: `summaryPrompt` was handed a
+transcript and asked to summarise it, and a model handed prose returns shorter
+prose. It had no way to know which two sentences of eight hundred words mattered.
+
+The game did know. Every milestone — *Mira is now carrying the brass key*, *Mira
+and Rowan grew closer* — is a `SYSTEM` turn event on the scene it happened in.
+So `lib/game/recap.ts` reads the rows: the ledger goes on screen under each
+chapter's prose, **and** into the summariser, which now gets told what happened
+rather than asked to guess.
+
+#### The end of a chapter
+
+A chapter used to end silently, mid-scroll — the act index changed, the header
+said "Chapter 2", and nothing marked it. For a family playing on a school night
+that is the most useful thing the game can put on a screen. `chapterCard` shows
+what they did, how the dice went, what they carry into the next one, and — the
+actual point — that this is a good place to stop. It stays up for the whole of
+the new chapter's first scene, so nobody loses it by refreshing.
+
+#### And what a bond is for
+
+They earn bonds every evening and the moves those bonds unlock were only ever
+visible inside a picker, mid-turn, to whoever happened to be typing. The party
+sheet now says what a pair can do together and what one more moment would open:
+*one more moment together unlocks Shove Over*. "Two more" means nothing on its
+own; "two more and you can Stand Together" is a reason to go and be kind to your
+sister.
+
 ### The long road
 
 Every adventurer has a room at `/characters/[id]/story` holding everything she
@@ -2072,6 +2190,9 @@ lib/
     rounds.ts       Collecting a round's answers from several devices
     briefing.ts     What the table already knows, and what the board still wants
     talk.ts         When the game asks them to confer, and what conferring earned
+    wardrobe.ts     What she looks like, chosen rather than typed
+    character-picture.ts  Drawing, generated portrait, or a crest — in that order
+    recap.ts        What actually changed in a chapter, read off its own rows
     invites.ts      Who can be asked along, and what you have been asked to
 components/         Shared UI, site header, character builder
 scripts/
@@ -2120,6 +2241,9 @@ tests/
   chapters.e2e.mts    A chapter that ends when its own work is done
   talk.test.ts        When the game asks them to confer, and what it says it earned
   talk.e2e.mts        A conversation through the real pipeline, onto the transcript
+  wardrobe.test.ts    The look, the sentence three surfaces read, and the portrait ladder
+  guidance.test.ts    What would count, where to try next, and what already changed
+  wardrobe.e2e.mts    A dressed adventurer through a real turn, and the prompt she reaches
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

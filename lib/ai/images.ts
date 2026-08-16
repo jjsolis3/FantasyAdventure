@@ -104,6 +104,58 @@ export function sceneArtPrompt(input: {
 }
 
 /**
+ * The subject rules a portrait needs, which are not the scene's.
+ *
+ * `SUBJECT_RULES` exists to keep people small, distant and safe in a wide
+ * establishing view — exactly wrong here, where the whole request is one person
+ * filling the frame. So this states its own version rather than reusing that
+ * one, and keeps the parts that matter: nobody in danger, nothing frightening,
+ * no weapons raised.
+ *
+ * "Invent nothing" is the load-bearing line. A drawing model handed a short
+ * description will happily add a sword, a scar and a dramatic sky, and a girl
+ * who spent an afternoon choosing a moss-green cloak did not ask for any of it.
+ */
+export const PORTRAIT_RULES =
+  "A friendly head-and-shoulders portrait of one person, facing the viewer, " +
+  "plain soft background. Kind and approachable. Nothing frightening, no weapons, " +
+  "no injuries, nobody in danger. Draw exactly and only what is described — " +
+  "invent no extra clothing, objects, scars or scenery.";
+
+/**
+ * Turns a wardrobe into something safe to ask for.
+ *
+ * Built from `lookSentence` and nothing else, which is the point: the sheet,
+ * the storyteller's prompt and this request all read the same sentence, so a
+ * portrait cannot drift away from what the sheet says she is wearing.
+ *
+ * The personality line is deliberately left out. "Will not be hurried" is not a
+ * drawable fact, and handing a drawing model a sentence about behaviour is how
+ * a portrait acquires a facial expression nobody chose.
+ */
+export function portraitPrompt(input: {
+  name: string;
+  race: string;
+  archetype: string;
+  ageBand: string;
+  /** From `lookSentence` — what she is actually wearing. */
+  look: string;
+  tone: string;
+}): string {
+  const age = input.ageBand.toLocaleLowerCase();
+
+  return [
+    STYLE,
+    PORTRAIT_RULES,
+    moodFor(input.tone),
+    `A ${age} ${input.race} ${input.archetype} from a gentle family fantasy story.`,
+    input.look || "Simple travelling clothes.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
  * Strips the parts of narration that would read as instructions to the drawing
  * model rather than as description — anything addressed to the reader, and the
  * dialogue, which is the half of a scene a picture cannot show anyway.

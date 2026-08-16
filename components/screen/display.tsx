@@ -60,6 +60,7 @@ type View = {
   known: { id: string; kind: string; content: string }[];
   needed: { id: string; quest: string; text: string; kind: string }[];
   talkNudge: string | null;
+  leads: string[];
   rolls: {
     id: string;
     characterName: string;
@@ -594,6 +595,7 @@ function Paired({ view, token }: { view: View; token: string | null }) {
   const hasRail =
     (view.scene?.hasImage && token) ||
     view.needed.length > 0 ||
+    view.leads.length > 0 ||
     view.known.length > 0 ||
     view.rolls.length > 0 ||
     active.length > 0;
@@ -733,6 +735,18 @@ function Paired({ view, token }: { view: View; token: string | null }) {
         {hasRail ? (
           <aside className="flex w-[30%] min-w-0 shrink-0 flex-col gap-4 overflow-hidden">
             {view.scene?.hasImage && token ? <SceneArt version={view.version} token={token} /> : null}
+
+            {view.leads.length > 0 ? (
+              <Card title="Somewhere to try">
+                <ul className="space-y-1.5">
+                  {view.leads.slice(0, 3).map((lead) => (
+                    <li key={lead} className="text-xl text-hearth-200 lg:text-2xl">
+                      {lead}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
 
             {view.needed.length > 0 ? (
               <Card title="What we need">

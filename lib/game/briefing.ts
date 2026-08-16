@@ -22,9 +22,13 @@
 
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client.ts";
+import { whatWouldCount } from "@/lib/game/finds";
 
 /** A turn as it comes back from any of the pages that build a briefing. */
 type TurnLike = { metadata: Prisma.JsonValue | null };
+
+/** A turn with enough on it to tell an attempt from a passage. */
+type AttemptLike = TurnLike & { type: string; content: string };
 
 /**
  * Everything the table already knows, in one prop.
@@ -39,6 +43,10 @@ export type TableBriefing = {
   known: KnownFact[];
   /** What the board is still asking for. Shared quests only. */
   needed: NeededObjective[];
+  /** Somewhere worth going next, gathered across this scene. */
+  leads: string[];
+  /** What anybody has already tried this scene, newest first. */
+  tried: string[];
 };
 
 /**
@@ -69,6 +77,91 @@ export function tableFrom(turns: TurnLike[]): { whatNow: string | null; onTheTab
   return { whatNow, onTheTable };
 }
 
+/** How many attempts are worth listing. Beyond this it is a transcript. */
+export const TRIED_LIMIT = 8;
+
+/**
+ * What they have already tried in this scene, in their own words.
+ *
+ * Three girls searching the same barn twice is most of what "aimless" actually
+ * looks like from the sofa, and the fix needs no model and no schema: every
+ * attempt anybody has typed is already a row, and nobody has ever been shown
+ * them as a list.
+ *
+ * The transcript has them too, and that is not the same thing. A transcript is
+ * a story to read; this is a checklist to scan — deduplicated, newest first, no
+ * passages in between. The question it answers is "have we done this already?",
+ * and answering that by scrolling back through four passages is why nobody does.
+ *
+ * Talking is left out. A conversation is not an attempt, and a girl who said
+ * "I think we should go together" has not tried anything she could repeat by
+ * mistake.
+ */
+export function alreadyTried(turns: AttemptLike[], limit = TRIED_LIMIT): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index];
+    if (turn.type !== "PLAYER_ACTION") continue;
+    if ((turn.metadata as { spoken?: boolean } | null)?.spoken === true) continue;
+
+    const text = turn.content.trim();
+    if (!text) continue;
+
+    // Normalised only for the comparison. Two girls writing "I check the barn"
+    // and "I check the barn!" have tried one thing, and the list should say so
+    // — but it should say it in the words somebody actually typed.
+    const key = text.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push(text);
+    if (out.length === limit) break;
+  }
+
+  return out;
+}
+
+/** How many places are worth pointing at. Beyond this it is a map. */
+export const LEADS_LIMIT = 3;
+
+/**
+ * Somewhere worth going next, gathered across the whole scene.
+ *
+ * Different from `tableFrom`, deliberately, and the difference is what a lead
+ * is for. What is *on the table* belongs to one passage — pick the thing up or
+ * it goes away. A lead is a door: mentioned three turns ago, still shut, still
+ * worth walking through. So these accumulate across the scene rather than being
+ * read off the newest passage that had any.
+ *
+ * Scene-scoped and no further. A new scene is a new room, and a signpost
+ * pointing back at the last one is worse than no signpost.
+ *
+ * Newest first, because the newest is the one the story just made a case for.
+ */
+export function leadsFrom(turns: TurnLike[], limit = LEADS_LIMIT): string[] {
+  const out: string[] = [];
+
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const meta = turns[index].metadata as { leads?: string[] } | null;
+    if (!Array.isArray(meta?.leads)) continue;
+
+    for (const lead of meta.leads) {
+      if (typeof lead !== "string") continue;
+      const text = lead.trim();
+      if (!text) continue;
+      // The storyteller is told to repeat a live lead, so the same door will
+      // arrive several turns running. Once is enough.
+      if (out.some((seen) => seen.toLocaleLowerCase() === text.toLocaleLowerCase())) continue;
+      out.push(text);
+      if (out.length === limit) return out;
+    }
+  }
+
+  return out;
+}
+
 /** How many facts are worth showing at once. More than this is homework. */
 export const KNOWN_LIMIT = 6;
 
@@ -94,7 +187,20 @@ export async function knownFacts(campaignId: string, limit = KNOWN_LIMIT): Promi
   return rows.map((row) => ({ id: row.id, kind: row.kind, content: row.content }));
 }
 
-export type NeededObjective = { id: string; quest: string; text: string; kind: string };
+export type NeededObjective = {
+  id: string;
+  quest: string;
+  text: string;
+  kind: string;
+  /**
+   * The words the matcher is actually looking for, for a FIND.
+   *
+   * Empty for a DEED, which nothing matches against — only the storyteller can
+   * say a deed is done. See `whatWouldCount` for why saying this out loud is
+   * telling a child the rules rather than giving her the answer.
+   */
+  counts: string[];
+};
 
 /**
  * What is still outstanding, in the players' own words.
@@ -120,7 +226,13 @@ export async function neededObjectives(campaignId: string, limit = 5): Promise<N
   const out: NeededObjective[] = [];
   for (const quest of quests) {
     for (const objective of quest.objectives) {
-      out.push({ id: objective.id, quest: quest.title, text: objective.text, kind: objective.kind });
+      out.push({
+        id: objective.id,
+        quest: quest.title,
+        text: objective.text,
+        kind: objective.kind,
+        counts: objective.kind === "FIND" ? whatWouldCount(objective.text) : [],
+      });
       if (out.length === limit) return out;
     }
   }

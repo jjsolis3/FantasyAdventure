@@ -188,6 +188,10 @@ const server = createServer((request, response) => {
         // catch it before it reaches a child.
         '"onTheTable":["the flattened track through the barley",' +
         '"You could try the gap in the hedge","Rowan, still holding the lamp"],' +
+        // Somewhere worth going next. Repeated every turn on purpose: the
+        // storyteller is told to keep a live lead on the list, so the reader
+        // has to be the thing that de-duplicates it.
+        '"leads":["the bell-ringer keeps the old charts"],' +
         (encounter && encountersOpened++ === 0
           ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
             '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +

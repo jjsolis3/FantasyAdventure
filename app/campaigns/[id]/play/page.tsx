@@ -7,7 +7,13 @@ import type { TranscriptEntry, DiceDetail } from "@/components/play/transcript";
 import { STATS, STAT_INFO } from "@/lib/game/rules";
 import { LevelPip } from "@/components/character/level-badge";
 import type { AvailableMove } from "@/components/play/family-move-picker";
-import { kindFromPerspective, moveNamesFor, movesUnlockedAt } from "@/lib/game/rules";
+import {
+  bondProgress,
+  kindFromPerspective,
+  moveNamesFor,
+  movesUnlockedAt,
+  movesUnlockedBetween,
+} from "@/lib/game/rules";
 import { memberCampaignFilter, membershipFor } from "@/lib/game/access";
 import { currentRound } from "@/lib/game/rounds";
 import { questBoard } from "@/lib/game/quests";
@@ -21,10 +27,20 @@ import { PressureClock } from "@/components/play/pressure-clock";
 import type { EncounterView } from "@/components/play/encounter-panel";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
-import { knownFacts, neededObjectives, tableFrom } from "@/lib/game/briefing";
+import {
+  alreadyTried,
+  knownFacts,
+  leadsFrom,
+  neededObjectives,
+  tableFrom,
+} from "@/lib/game/briefing";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 import { CONFIRMED_TIES } from "@/lib/game/ties";
 import { talkNudge, turnsSinceTalking } from "@/lib/game/talk";
+import { lookOf, lookSentence } from "@/lib/game/wardrobe";
+import { characterPicture } from "@/lib/game/character-picture";
+import { chapterCard, recapsFor } from "@/lib/game/recap";
+import { ChapterCard } from "@/components/play/chapter-card";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +59,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
             include: {
               user: { select: { id: true, displayName: true } },
               portrait: { select: { version: true } },
+              art: { select: { version: true, lookKey: true } },
               skills: { orderBy: { name: "asc" } },
               knacks: { select: { key: true } },
               inventory: { orderBy: { name: "asc" } },
@@ -150,6 +167,17 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   // film" sat one tap away on a screen nobody opened mid-turn.
   const needed = await neededObjectives(campaign.id);
 
+  // Somewhere worth going next. The gap a real evening found: the game could
+  // put something in front of the party and had no way at all to point down a
+  // road, so a family told to find a sky-map was left with a village and no
+  // reason to walk into any particular door.
+  const leads = leadsFrom(turns);
+
+  // And what they have already had a go at, so the same barn is not searched
+  // three times. Every one of these has been a row since the first turn and has
+  // never been shown as a list.
+  const tried = alreadyTried(turns);
+
   // Whether the game should ask them to confer, and why. Worked out here rather
   // than in the browser because every input is already on this page — the
   // encounter, the clock, the passages — and because both screens should say
@@ -242,17 +270,38 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     bonds: [...member.character.relationshipsA, ...member.character.relationshipsB]
       .map((row) => {
         const other = "characterB" in row ? row.characterB : row.characterA;
+        const kind = kindFromPerspective(row, member.characterId);
+        const progress = bondProgress(row.bondXp);
+        // Named from this side of the pair, because the two directions of one
+        // move read differently — a daughter helping her father and a father
+        // helping his daughter are the same mechanic and not the same sentence.
+        const next = movesUnlockedBetween(row.bondLevel, row.bondLevel + 1)[0];
+
         return {
           otherId: other.id,
           otherName: other.name,
-          kind: kindFromPerspective(row, member.characterId),
+          kind,
           bondLevel: row.bondLevel,
+          into: progress.into,
+          needed: progress.needed,
+          moves: movesUnlockedAt(row.bondLevel).map((move) => moveNamesFor(kind, move).name),
+          nextMove: next
+            ? { name: moveNamesFor(kind, next).name, blurb: moveNamesFor(kind, next).blurb }
+            : null,
         };
       })
       .filter((bond) => inParty.has(bond.otherId)),
     playedBy: member.character.user.displayName,
     yours: member.character.userId === user.id,
     portraitVersion: member.character.portrait?.version ?? null,
+    look: lookSentence(lookOf(member.character)),
+    picture: characterPicture({
+      id: member.characterId,
+      name: member.character.name,
+      look: lookOf(member.character),
+      portraitVersion: member.character.portrait?.version ?? null,
+      art: member.character.art,
+    }),
   }));
 
   // What each girl can still spend, worked out once on the server so the table
@@ -316,13 +365,47 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     }))
     .filter((entry) => entry.items.length > 0);
 
-  const recap = campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary);
+  // What actually changed in each chapter behind them, read off the milestones
+  // the game wrote at the time. The prose summary alone was "just repeating what
+  // was said in the passage" — which is what happens when you ask a model to
+  // shorten prose without telling it which parts mattered.
+  const recap = await recapsFor(
+    campaign.scenes.filter((scene) => scene.status === "CLOSED" && scene.summary),
+  );
 
   // Offered only once a turn has actually been played — the snapshot is
   // written by a turn and cleared when it is used, so its presence is the
   // honest answer to "is there something to take back?".
   const canUndo = (await db.turnSnapshot.count({ where: { campaignId: campaign.id } })) > 0;
   const act = campaign.storyline.acts.find((entry) => entry.index === campaign.currentActIndex);
+
+  // The card that marks a chapter turning, shown for the whole of the new
+  // chapter's first scene. "First scene of this act" is the condition rather
+  // than "a chapter just ended this second": a family that refreshes, or the
+  // parent who was in the kitchen, should still get to read it.
+  const firstOfChapter =
+    openScene !== undefined &&
+    campaign.currentActIndex > 1 &&
+    !campaign.scenes.some(
+      (scene) => scene.actIndex === openScene.actIndex && scene.index < openScene.index,
+    );
+
+  const finishedAct = firstOfChapter
+    ? campaign.storyline.acts.find((entry) => entry.index === campaign.currentActIndex - 1)
+    : undefined;
+
+  const card = finishedAct
+    ? await chapterCard({
+        campaignId: campaign.id,
+        finishedIndex: finishedAct.index,
+        finishedTitle: finishedAct.title,
+        next: act ? { index: act.index, title: act.title } : null,
+        party: campaign.party.map((member) => ({
+          characterId: member.characterId,
+          name: member.character.name,
+        })),
+      })
+    : null;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 lg:max-w-6xl">
@@ -403,6 +486,10 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               />
             </div>
 
+            {/* Above the recap and above the story: when a chapter has just
+                turned, this is what the table is actually looking at. */}
+            {card ? <ChapterCard card={card} /> : null}
+
             {recap.length > 0 ? (
               <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
                 <summary className="cursor-pointer text-sm text-hearth-300">
@@ -410,9 +497,28 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                 </summary>
                 <div className="mt-3 space-y-3">
                   {recap.map((scene) => (
-                    <div key={scene.id}>
+                    <div key={scene.sceneId}>
                       <p className="text-sm font-medium text-hearth-300">{scene.title}</p>
                       <p className="text-sm leading-relaxed text-hearth-200/70">{scene.summary}</p>
+
+                      {/* The ledger under the prose. Not a second summary — the
+                          things that are still true tomorrow, in the words the
+                          game used when they happened. */}
+                      {scene.changed.length > 0 ? (
+                        <ul className="mt-1.5 space-y-0.5">
+                          {scene.changed.map((line) => (
+                            <li key={line} className="text-xs text-moss-400/90">
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+
+                      {scene.rolls.thrown > 0 ? (
+                        <p className="mt-1 text-xs text-hearth-500">
+                          {scene.rolls.landed} of {scene.rolls.thrown} rolls landed
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -442,7 +548,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               initialRound={round}
               encounter={encounter}
               whatNow={whatNow}
-              briefing={{ onTheTable, known, needed }}
+              briefing={{ onTheTable, known, needed, leads, tried }}
               talkNudge={nudge?.reason ?? null}
             />
           </>

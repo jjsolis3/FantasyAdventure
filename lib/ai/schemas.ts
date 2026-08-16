@@ -198,6 +198,25 @@ export const extractionSchema = z.object({
   onTheTable: z.array(z.string().min(1).max(80)).max(3).default([]),
 
   /**
+   * Somewhere worth going next, or somebody worth asking.
+   *
+   * The gap a real evening found: the game had machinery for the storyteller to
+   * *open* an encounter and none at all for it to *place* a lead. So a family
+   * would be told to find a sky-map and left with a village and no reason to
+   * walk into any particular door — which reads, from the sofa, as the game
+   * having no opinion about what they do next.
+   *
+   * It is the next door, never what is behind it. "The bell-ringer keeps the old
+   * charts" is a lead; "the map is in the bell tower" is the answer, and handing
+   * that over is the one way to spoil this game.
+   *
+   * Bounded at two, and empty most turns. A model asked "is there somewhere to
+   * go?" every turn will happily invent somewhere every turn, and a signpost at
+   * every crossroads is the same thing as no signpost.
+   */
+  leads: z.array(z.string().min(1).max(120)).max(2).default([]),
+
+  /**
    * Something the passage put in front of them, standing there until dealt with.
    *
    * Null on almost every turn, and the prompt says so twice. An encounter is a

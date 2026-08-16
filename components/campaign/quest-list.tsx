@@ -9,6 +9,13 @@ export type QuestObjectiveView = {
   itemName: string | null;
   foundByName: string | null;
   consumed: boolean;
+  /**
+   * The words the game would actually accept, for a FIND still outstanding.
+   *
+   * See `whatWouldCount` in `lib/game/finds.ts`. Empty for a DEED and for
+   * anything already ticked off.
+   */
+  counts: string[];
 };
 
 export type QuestView = {
@@ -117,6 +124,14 @@ export function QuestList({ quests, compact = false }: { quests: QuestView[]; co
                     <span className={objective.done ? "text-hearth-300" : "text-hearth-200/80"}>
                       {objective.text}
                     </span>
+                    {/* Only while it is still outstanding. Once it is found,
+                        what would have counted is a footnote about the past. */}
+                    {!objective.done && objective.counts.length > 0 ? (
+                      <span className="block text-xs text-hearth-500">
+                        It does not have to be worded like that — anything with{" "}
+                        {objective.counts.slice(0, 4).join(", ")} in its name will count.
+                      </span>
+                    ) : null}
                     {objective.done && objective.foundByName ? (
                       <span className="block text-hearth-500">
                         {objective.foundByName} found{" "}

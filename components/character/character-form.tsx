@@ -272,17 +272,24 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
 
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-hearth-200">
-            What do they look like? How do they act?
+            What are they like?
           </span>
           <textarea
             name="description"
-            rows={4}
+            rows={3}
             defaultValue={initial.description}
-            placeholder="Freckles, a too-big coat, and a habit of naming every animal she meets."
+            placeholder="Names every animal she meets, and will not be hurried."
             className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-400/50 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
           />
+          {/* Narrowed from "what do they look like? how do they act?" the day
+              the wardrobe arrived, and the narrowing is the fix. A family wrote
+              a paragraph of appearance here and the storyteller built every
+              passage around it — because it was handed the most distinctive
+              sentence in the prompt with nothing saying what it was for. One
+              sentence of manner is what this box is good at. */}
           <span className="mt-1.5 block text-sm text-hearth-400">
-            The storyteller reads this, so anything you write here will show up in the adventure.
+            How they behave, in a sentence — the storyteller leans on this. What they{" "}
+            <em>look</em> like is chosen in the dressing room, once they exist.
           </span>
         </label>
       </div>

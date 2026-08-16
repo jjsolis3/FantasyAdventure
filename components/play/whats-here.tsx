@@ -43,16 +43,30 @@ const KIND_WORDS: Record<string, string> = {
 export function WhatsHere({
   onTheTable,
   needed,
+  leads,
+  tried,
   known,
 }: {
   /** Things this passage put within reach. Nouns, never advice. */
   onTheTable: string[];
   /** What the shared quests are still waiting on. */
   needed: NeededObjective[];
+  /** Somewhere worth going next, gathered across the scene. */
+  leads: string[];
+  /** What anybody has already had a go at this scene. */
+  tried: string[];
   /** Everything worth remembering, most important first. */
   known: KnownFact[];
 }) {
-  if (onTheTable.length === 0 && needed.length === 0 && known.length === 0) return null;
+  if (
+    onTheTable.length === 0 &&
+    needed.length === 0 &&
+    leads.length === 0 &&
+    known.length === 0 &&
+    tried.length === 0
+  ) {
+    return null;
+  }
 
   return (
     <div className="mb-5 space-y-3">
@@ -97,6 +111,34 @@ export function WhatsHere({
                   </span>
                   <span>{objective.text}</span>
                 </p>
+
+                {/* What the game would actually accept. The matcher has always
+                    been forgiving and the screen has always shown the exact
+                    words, so a family read every objective as a riddle with one
+                    answer and hunted for the phrase rather than the thing. */}
+                {objective.counts.length > 0 ? (
+                  <p className="mt-0.5 ml-9 text-xs text-hearth-500">
+                    anything with {objective.counts.slice(0, 4).join(", ")} in its name counts
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Under what they need, because that is the order the question comes in:
+          what are we after, and where might it be. Never the answer — a lead is
+          the next door, and what is behind it is still a turn somebody takes. */}
+      {leads.length > 0 ? (
+        <div>
+          <h3 className="mb-2 text-xs tracking-wide text-hearth-400 uppercase">
+            Somewhere to try
+          </h3>
+          <ul className="space-y-1">
+            {leads.map((lead) => (
+              <li key={lead} className="text-sm text-hearth-200/90">
+                {lead}
               </li>
             ))}
           </ul>
@@ -118,6 +160,25 @@ export function WhatsHere({
                   {KIND_WORDS[fact.kind] ?? "we found out"}
                 </span>
                 {fact.content}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
+      {/* Also folded, and for the same reason — it is a checklist rather than
+          part of the story. Opened when somebody says "did we try the barn?",
+          which is a question that costs a table four passages of scrolling to
+          answer and one tap to answer here. */}
+      {tried.length > 0 ? (
+        <details className="rounded-lg border border-hearth-800/60 bg-hearth-950/30">
+          <summary className="cursor-pointer px-3 py-2 text-sm text-hearth-300">
+            What you have already tried ({tried.length})
+          </summary>
+          <ul className="space-y-1.5 px-3 pt-1 pb-3">
+            {tried.map((attempt) => (
+              <li key={attempt} className="text-sm text-hearth-200/70">
+                {attempt}
               </li>
             ))}
           </ul>

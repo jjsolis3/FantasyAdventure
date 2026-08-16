@@ -109,6 +109,8 @@ import {
 } from "@/lib/game/rules";
 import { CONFIRMED_TIES, isConfirmed } from "@/lib/game/ties";
 import { recordRoad } from "@/lib/game/chronicle";
+import { lookOf, lookSentence } from "@/lib/game/wardrobe";
+import { ledgerLine, recapFor } from "@/lib/game/recap";
 
 /** How many recent turns are offered to the context builder before trimming. */
 const RECENT_TURN_WINDOW = 12;
@@ -319,6 +321,10 @@ function partyContext(campaign: LoadedCampaign, spent?: Map<string, string[]>) {
     pronouns: member.character.pronouns,
     ageBand: member.character.ageBand,
     description: member.character.description,
+    // Rendered here rather than in the context builder so every surface that
+    // says what she looks like — the prompt, the sheet, the drawing request —
+    // is reading the same sentence out of the same function.
+    look: lookSentence(lookOf(member.character)),
     level: member.character.level,
     // `statsOf`, and never a literal. This block was written out by hand with
     // four stats and a cast, and it survived the move to seven — so Grace, Luck
@@ -1352,11 +1358,16 @@ export async function playTurn(
         ...(() => {
           const whatNow = result.extraction.whatNow?.trim();
           const onTheTable = cleanTable(result.extraction.onTheTable);
-          return whatNow || onTheTable.length
+          // Somewhere worth going next. Kept on the passage that raised it for
+          // the same reason as the other two — a lead read back off the story
+          // cannot drift out of step with the story.
+          const leads = cleanTable(result.extraction.leads);
+          return whatNow || onTheTable.length || leads.length
             ? {
                 metadata: {
                   ...(whatNow ? { whatNow } : {}),
                   ...(onTheTable.length ? { onTheTable } : {}),
+                  ...(leads.length ? { leads } : {}),
                 },
               }
             : {};
@@ -1943,10 +1954,18 @@ async function closeScene(campaignId: string, sceneId: string, config: AiConfig,
     .join("\n\n")
     .slice(0, 8000);
 
+  // What the game itself recorded happening here, so the summariser is told
+  // which two sentences of eight hundred words mattered rather than being asked
+  // to work it out. See `lib/game/recap.ts`.
+  const ledger = ledgerLine(
+    (await recapFor({ id: scene.id, title: scene.title, summary: null })).changed,
+  );
+
   let summary = "";
   try {
     const result = await requestStructured({
-      call: (hint) => calls.json(summaryPrompt({ sceneTitle: scene.title, transcript }), hint),
+      call: (hint) =>
+        calls.json(summaryPrompt({ sceneTitle: scene.title, transcript, ledger }), hint),
       validate: validator(summarySchema),
     });
     summary = result.value.summary;
