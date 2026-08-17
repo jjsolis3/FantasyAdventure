@@ -77,6 +77,13 @@ export type TurnInput = {
    */
   pressure?: string;
   /**
+   * Something outstanding for a long time with nothing to show for it.
+   *
+   * Narration only, like the clock, and for the same reason: it changes what
+   * the passage puts in the room rather than what any die says. See `stuckNote`.
+   */
+  stuck?: string;
+  /**
    * What is standing in front of them, and how it is going.
    *
    * Reaches narration, and — unlike the act clock — the dice as well, because
@@ -531,6 +538,7 @@ async function finishTurn(
     actions: namedActions,
     resolutions: resolutions || "Nothing needed a dice roll this turn.",
     pressure: input.pressure,
+    stuck: input.stuck,
     encounter: input.encounter,
   });
 

@@ -41,6 +41,12 @@ export type SkillOfferInput = {
 
 /** How many skills she may still choose, right now. */
 export function skillPicksUnspent(input: { level: number; chosen: number }): number {
+  // Clamped, and the clamp is load-bearing rather than defensive. The
+  // entitlement was one skill per level and is now one per three, so every
+  // adventurer already in a household holds more than the new rule allows —
+  // Orin is level 4 with four skills where the rule now says three. Nothing is
+  // taken off her sheet; she just has nothing waiting until the ladder catches
+  // up with her, which is exactly the slowdown that was asked for.
   return Math.max(0, chosenSkillsFor(input.level) - input.chosen);
 }
 

@@ -29,12 +29,16 @@ const built: StatBlock = statBlock({
 
 // ---- Stats that grow --------------------------------------------------------
 
-test("growth: one point every ten experience", () => {
+test("growth: one point every forty experience", () => {
+  // Forty rather than ten since the rebalance: an evening is roughly one point,
+  // and the 49 points of growth on a seven-stat sheet now cost 1960 — just
+  // under the 2080 the level ladder ends at, which is the relationship those
+  // two numbers are meant to have.
   assert.equal(statPointsEarned(0), 0);
-  assert.equal(statPointsEarned(9), 0);
-  assert.equal(statPointsEarned(10), 1);
-  assert.equal(statPointsEarned(95), 9);
-  assert.equal(XP_PER_STAT_POINT, 10);
+  assert.equal(statPointsEarned(39), 0);
+  assert.equal(statPointsEarned(40), 1);
+  assert.equal(statPointsEarned(380), 9);
+  assert.equal(XP_PER_STAT_POINT, 40);
 });
 
 test("growth: a freshly built character has nothing to spend", () => {
@@ -42,14 +46,14 @@ test("growth: a freshly built character has nothing to spend", () => {
 });
 
 test("growth: what she has spent is read off the sheet, not stored", () => {
-  // 30 xp earns 3 points; two are already in Might, so one is left.
+  // 120 xp earns 3 points; two are already in Might, so one is left.
   const spentTwo: StatBlock = { ...built, might: 5 };
-  assert.equal(statPointsUnspent(spentTwo, 30), 1);
+  assert.equal(statPointsUnspent(spentTwo, 120), 1);
 });
 
 test("growth: spending them all leaves none", () => {
   const spentThree: StatBlock = { ...built, might: 5, wits: 4 };
-  assert.equal(statPointsUnspent(spentThree, 30), 0);
+  assert.equal(statPointsUnspent(spentThree, 120), 0);
 });
 
 test("growth: taking a turn back cannot leave her owing points", () => {
@@ -279,7 +283,7 @@ test("growth: a grown sheet is not something the builder's rule can describe", (
   const grown: StatBlock = statBlock({ might: 5, wits: 4, heart: 3, spark: 3 });
 
   assert.equal(validateStats(grown).ok, false, "the build rule rejects it, correctly");
-  assert.equal(statPointsUnspent(grown, 30), 0, "and she has spent exactly what she earned");
+  assert.equal(statPointsUnspent(grown, 120), 0, "and she has spent exactly what she earned");
 });
 
 test("growth: an adventurer built under the old rule keeps every point she earned", () => {
@@ -295,14 +299,14 @@ test("growth: an adventurer built under the old rule keeps every point she earne
 
   assert.equal(STATS.reduce((sum, stat) => sum + oldStyle[stat], 0), OLD_BUDGET);
 
-  // Thirty experience earns three points, and she has spent none of them.
-  assert.equal(statPointsUnspent(oldStyle, 30, OLD_BUDGET), 3);
+  // A hundred and twenty experience earns three points, and she has spent none.
+  assert.equal(statPointsUnspent(oldStyle, 120, OLD_BUDGET), 3);
 
   // Measured against today's rule instead, she would be two short.
-  assert.equal(statPointsUnspent(oldStyle, 30), 1);
+  assert.equal(statPointsUnspent(oldStyle, 120), 1);
 });
 
 test("growth: a new adventurer is measured against the rule she was built with", () => {
-  assert.equal(statPointsUnspent(built, 30, STAT_BUDGET), 3);
+  assert.equal(statPointsUnspent(built, 120, STAT_BUDGET), 3);
   assert.equal(statPointsUnspent(built, 0, STAT_BUDGET), 0);
 });

@@ -430,7 +430,7 @@ export async function screenView(campaignId: string): Promise<ScreenView | null>
   const leads = leadsFrom(inOrder);
   const [known, needed, rolls, passages] = await Promise.all([
     knownFacts(campaignId),
-    neededObjectives(campaignId),
+    neededObjectives(campaignId, 5, campaign.turnCounter),
     recentRolls(scene?.id ?? null, namesById),
     passageCounts(scene?.id ?? null),
   ]);

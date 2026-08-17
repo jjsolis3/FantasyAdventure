@@ -9,7 +9,15 @@ import {
   skillPicksUnspent,
   suggestedSkills,
 } from "../lib/game/skill-offer.ts";
-import { STATS, STAT_BUDGET, STAT_MAX, STAT_MIN, statBlock, validateStats } from "../lib/game/rules.ts";
+import {
+  STATS,
+  STAT_BUDGET,
+  STAT_MAX,
+  STAT_MIN,
+  nextSkillLevel,
+  statBlock,
+  validateStats,
+} from "../lib/game/rules.ts";
 
 const total = (stats: Record<string, number>) => STATS.reduce((sum, stat) => sum + stats[stat], 0);
 
@@ -144,16 +152,25 @@ test("skills: a freshly built adventurer owes herself nothing", () => {
   assert.equal(skillPicksUnspent({ level: 2, chosen: 2 }), 0);
 });
 
-test("skills: one pick per level from the third", () => {
-  assert.equal(skillPicksUnspent({ level: 3, chosen: 2 }), 1);
-  assert.equal(skillPicksUnspent({ level: 4, chosen: 2 }), 2);
+test("skills: one pick every third level", () => {
+  assert.equal(skillPicksUnspent({ level: 3, chosen: 2 }), 0, "levels 1-3 are the builder's two");
+  assert.equal(skillPicksUnspent({ level: 4, chosen: 2 }), 1);
+  assert.equal(skillPicksUnspent({ level: 7, chosen: 2 }), 2);
+  assert.equal(skillPicksUnspent({ level: 7, chosen: 4 }), 0);
+});
+
+test("skills: a sheet already over the new entitlement loses nothing", () => {
+  // Orin, exactly as the journal found him: level 4 with four skills, on a
+  // ladder that now says three. He keeps all four and simply has nothing
+  // waiting until level 10 — which is the slowdown, working.
   assert.equal(skillPicksUnspent({ level: 4, chosen: 4 }), 0);
+  assert.equal(nextSkillLevel(4, 4), 10);
 });
 
 test("skills: practising your way to four does not cost you your choices", () => {
   // Four skills on the sheet, none of them chosen — she learned them all by
   // doing them. She should still have every pick her levels gave her.
-  assert.equal(skillPicksUnspent({ level: 4, chosen: 0 }), 4);
+  assert.equal(skillPicksUnspent({ level: 7, chosen: 0 }), 4);
 });
 
 test("skills: suggestions lead with what she keeps doing", () => {

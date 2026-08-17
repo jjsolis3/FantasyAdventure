@@ -1513,6 +1513,106 @@ sheet now says what a pair can do together and what one more moment would open:
 own; "two more and you can Stand Together" is a reason to go and be kind to your
 sister.
 
+### The evening that got stuck in chapter one
+
+Sixteen turns, one chapter, two players, and a family reporting three things:
+they could not finish a quest, they were levelling absurdly fast, and completing
+things was still confusing. Reading the journal against the code turned all
+three into exact lines.
+
+#### An objective nobody could ever tick
+
+`prisma/storylines.ts` gives chapter one of *The Village That Built Itself* a
+single thing to come away with:
+
+```ts
+seeks: ["the first thing you made, awake now and following you about"]
+```
+
+`seeks` becomes a **FIND**, and `resolveFinds` satisfies a FIND by looking in
+the party's pockets. In play that thing turned out to be a wooden owl called
+Woody who rides on a child's shoulder. A companion is not an `InventoryItem` and
+should never become one, so the chapter's only objective was **unsatisfiable by
+construction**. Nothing anybody typed for sixteen turns could have moved it.
+
+Fixing that one line would have fixed one storyline. What was actually wrong is
+that the pockets were the *only* answer, so `resolveDeeds` now matches any
+outstanding objective rather than DEEDs only, and the extraction is handed
+everything on the board rather than the deeds alone. The pockets are still the
+first answer and still the better one for an ordinary object — they need no
+model call and cannot be talked into anything. This is the second answer, for
+the things that are true in a story and could never be true in an inventory.
+
+It stays honest because the model does not get to invent one: it is handed the
+list and may only report that one of *those* happened.
+
+#### One line, one thing
+
+A personal aim read *"Craft the oversized wooden coffee mug and successfully
+take the first morning sip from it"* — two conditions, one ○, and no way to see
+that the crafting was done and the sip was not. So the evening contains a turn
+where a father drinks from a mug and nothing happens.
+
+`splitObjective` splits them, and both prompts now ask for one thing per
+objective. The splitter is deliberately timid: `and then`, `and successfully`
+and their kin always split, a bare `and` splits only when what follows reads as
+an instruction, and *a needle and thread* survives untouched. A wrong split
+would invent an objective nobody can finish, which is the failure this whole
+round exists to fix.
+
+#### Being stuck is now something the game can see
+
+The act clock notices a party going nowhere *in general*. Nothing noticed a
+party going nowhere *at one particular thing* — and that is what sixteen turns
+in one chapter actually looked like: busy, inventive, and no closer.
+
+`stuckObjectives` watches for a quest with nothing ticked after six turns.
+The storyteller is told to put the thing back within reach — and told twice, in
+capitals, not to hand it over — and the play screen says *"you have been after
+this for 16 turns"*, because a family who has been in one room all evening
+already knows, and the game pretending otherwise is what makes it feel like
+their fault.
+
+### A ladder that lasts a library
+
+The same journal: **level 4 in sixteen turns.** Both players. The old thresholds
+were `[0, 0, 10, 25, 45, 70, …]` and a roll pays 1–3 experience, so an evening
+earned about 45 each — a level every five to eight turns, three skills and three
+knacks a session, and a finished character long before the story library ran
+out. Exactly what the family said: *"we have not completed a full quest, but I
+was able to increase my stats by points, add 3 new skills and multiple knacks."*
+
+| | Was | Now |
+|---|---|---|
+| Level 2 | 10 xp | **40** |
+| Level 3 | 25 | **100** |
+| Level 4 | 45 | **180** |
+| Level 13 (cap) | 590 | **2080** |
+| xp per stat point | 10 | **40** |
+| A new skill | every level after 2 | **every third level** |
+| A new knack | every level | every level *(unchanged)* |
+
+An evening is now worth roughly one level early on and rather less later;
+reaching thirteen is a couple of years of weekly play. The two numbers stay tied
+together on purpose: the seven stats hold 49 points of growth, which at forty
+apiece is 1960 — just under the 2080 the ladder ends at, so the sheet fills up
+at about the moment the levels run out.
+
+**Nothing is taken away, and that is the whole difficulty.** Orin is level 4 on
+45 experience; the new ladder says 45 is level 2. So `levelReached` makes the
+stored level a high-water mark: it rises when the curve says so and never falls.
+Every writer of `Character.level` goes through it. An adventurer ahead of the
+new curve simply stays where she is until it catches up — levelling goes quiet
+for a while, which is precisely what was asked for.
+
+The same rule covers skills. Four chosen skills at level 4 is one over the new
+entitlement of three; `skillPicksUnspent` clamps at zero, so she keeps all four
+and has nothing waiting until level 10. And because "nothing waiting" is now the
+normal state, her sheet says when the next one arrives rather than going silent.
+
+Every level still hands over a knack, so a level-up is never empty; every third
+one hands over two things, which is what makes those worth waiting for.
+
 ### The long road
 
 Every adventurer has a room at `/characters/[id]/story` holding everything she
@@ -2244,6 +2344,8 @@ tests/
   wardrobe.test.ts    The look, the sentence three surfaces read, and the portrait ladder
   guidance.test.ts    What would count, where to try next, and what already changed
   wardrobe.e2e.mts    A dressed adventurer through a real turn, and the prompt she reaches
+  objectives.test.ts  Splitting two-in-one aims, and noticing a chapter nobody can finish
+  rebalance.e2e.mts   The stuck chapter finishing, and nobody losing a level or a skill
   mock-model-server.mts  Fake Ollama for the play tests
 prisma/
   schema.prisma     Accounts, characters, relationships, campaigns, storylines

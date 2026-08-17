@@ -23,6 +23,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client.ts";
 import { whatWouldCount } from "@/lib/game/finds";
+import { STUCK_AFTER } from "@/lib/game/quests";
 
 /** A turn as it comes back from any of the pages that build a briefing. */
 type TurnLike = { metadata: Prisma.JsonValue | null };
@@ -193,6 +194,15 @@ export type NeededObjective = {
   text: string;
   kind: string;
   /**
+   * Turns this has been outstanding, once that is a long time.
+   *
+   * Null while a party is working steadily. Saying "you have been after this
+   * for sixteen turns" is not a hint — it is the game admitting it can see what
+   * the family can see, and it is the difference between "we are exploring" and
+   * "we are lost". See `stuckObjectives`.
+   */
+  stuckFor: number | null;
+  /**
    * The words the matcher is actually looking for, for a FIND.
    *
    * Empty for a DEED, which nothing matches against — only the storyteller can
@@ -209,28 +219,42 @@ export type NeededObjective = {
  * the television is the least private surface in the house — same rule as
  * `screenView`, for the same reason.
  */
-export async function neededObjectives(campaignId: string, limit = 5): Promise<NeededObjective[]> {
+export async function neededObjectives(
+  campaignId: string,
+  limit = 5,
+  /** Where the adventure is now, so "how long has this been open" is answerable. */
+  turnCounter = 0,
+): Promise<NeededObjective[]> {
   const quests = await db.quest.findMany({
     where: { campaignId, status: "ACTIVE", secretForCharacterId: null },
     orderBy: { createdAt: "asc" },
     select: {
       title: true,
+      openedAtTurn: true,
       objectives: {
-        where: { doneAtTurn: null },
         orderBy: { position: "asc" },
-        select: { id: true, text: true, kind: true },
+        select: { id: true, text: true, kind: true, doneAtTurn: true },
       },
     },
   });
 
   const out: NeededObjective[] = [];
   for (const quest of quests) {
+    // Only when nothing on this quest has moved. A party that has ticked one of
+    // three is getting somewhere, and telling them otherwise would be both
+    // wrong and discouraging.
+    const untouched = quest.objectives.every((objective) => objective.doneAtTurn === null);
+    const open = turnCounter - quest.openedAtTurn;
+    const stuckFor = untouched && open >= STUCK_AFTER ? open : null;
+
     for (const objective of quest.objectives) {
+      if (objective.doneAtTurn !== null) continue;
       out.push({
         id: objective.id,
         quest: quest.title,
         text: objective.text,
         kind: objective.kind,
+        stuckFor,
         counts: objective.kind === "FIND" ? whatWouldCount(objective.text) : [],
       });
       if (out.length === limit) return out;

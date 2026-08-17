@@ -169,6 +169,16 @@ const server = createServer((request, response) => {
       // hand-replayed one.
       const ending = prompt.includes(FINALE);
 
+      // A storyteller reporting that one of the listed things has happened,
+      // which since the Woody fix may be a FIND as well as a DEED. Echoes the
+      // first line back — exactly what a real model does when the passage shows
+      // the wooden owl riding on somebody's shoulder.
+      const ticking = process.env.MOCK_TICK === "1";
+      const listed = ticking
+        ? (prompt.match(/WHAT THE PARTY IS STILL TRYING TO DO OR GET HOLD OF:\n- ([^\n]+)/)?.[1] ?? "")
+        : "";
+      const deeds = listed ? JSON.stringify([listed]) : "[]";
+
       content = idle
         ? '{"sceneTitle":null,"location":null,"memories":[],"bondMoments":[],"itemsGained":[],' +
           '"deedsDone":[],"questsOpened":[],"whatNow":"You are still standing in the barley. Now what?",' +
@@ -192,6 +202,7 @@ const server = createServer((request, response) => {
         // storyteller is told to keep a live lead on the list, so the reader
         // has to be the thing that de-duplicates it.
         '"leads":["the bell-ringer keeps the old charts"],' +
+        `"deedsDone":${deeds},` +
         (encounter && encountersOpened++ === 0
           ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
             '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +

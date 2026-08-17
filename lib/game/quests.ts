@@ -23,7 +23,7 @@
 
 import type { Prisma, QuestKind } from "@/generated/prisma/client.ts";
 import { looksLikeTheSameThing, whatWouldCount } from "@/lib/game/finds";
-import { QUEST_XP, levelFor } from "@/lib/game/rules";
+import { QUEST_XP, levelReached } from "@/lib/game/rules";
 import { pronounsOf } from "@/lib/game/pronouns";
 
 /** The transaction handle the turn pipeline hands around. */
@@ -88,11 +88,34 @@ export function resolveFinds(
 }
 
 /**
- * Which unmet DEED objectives the storyteller says were accomplished.
+ * Which unmet objectives the storyteller says were accomplished.
  *
  * Matched forgivingly against what it reported, for the same reason finds are:
  * the model is describing what happened in its own words, not quoting the
  * objective back. Each report satisfies at most one objective.
+ *
+ * ## Why this is no longer DEEDs only
+ *
+ * It was, and the reasoning sounded right: a FIND settles itself by looking in
+ * people's pockets, so nobody needs to ask the storyteller about it. The hole
+ * in that cost a family a whole evening.
+ *
+ * Chapter one of *The Village That Built Itself* asks for **"the first thing you
+ * made, awake now and following you about"**. In play that turned out to be a
+ * wooden owl called Woody, who rides on a child's shoulder. A companion is not
+ * an `InventoryItem` and should never become one — putting a pet in a pocket to
+ * satisfy a matcher is the tail wagging the dog — so the chapter's only
+ * objective was unsatisfiable by construction. Sixteen turns in one chapter,
+ * and nothing anybody could have typed would have moved it.
+ *
+ * The pockets are still the first answer, and for an ordinary object they are
+ * the better one: they need no model call and cannot be talked into anything.
+ * This is the second answer, for the objectives that are true in the story and
+ * cannot be true in an inventory.
+ *
+ * What keeps it honest is that the model does not get to invent one. It is
+ * handed the list of what is outstanding and may only report that one of *those*
+ * happened — see `openDeeds` in `extractionPrompt`.
  */
 export function resolveDeeds(objectives: ObjectiveLike[], reported: string[]): string[] {
   const done = new Set<string>();
@@ -100,7 +123,6 @@ export function resolveDeeds(objectives: ObjectiveLike[], reported: string[]): s
   for (const claim of reported) {
     const match = objectives.find(
       (objective) =>
-        objective.kind === "DEED" &&
         objective.doneAtTurn === null &&
         !done.has(objective.id) &&
         looksLikeTheSameThing(objective.text, claim),
@@ -136,6 +158,181 @@ export function listOf(names: string[]): string {
   const final = crowded ? "; and " : " and ";
 
   return `${names.slice(0, -1).join(separator)}${final}${names[names.length - 1]}`;
+}
+
+/**
+ * Separators that only ever join two instructions, never one phrase.
+ *
+ * These are safe to split on unconditionally: nothing anybody would name a
+ * single object contains "and then".
+ */
+const STRONG_JOINS = [
+  " and then ",
+  ", then ",
+  " and afterwards ",
+  " and finally ",
+  " and successfully ",
+  " and after that ",
+];
+
+/**
+ * Words that mark the second half of a plain "and" as its own instruction.
+ *
+ * A short list on purpose. "a needle and thread" must never become two
+ * objectives, and the way to guarantee that is to split on a bare "and" only
+ * when what follows reads as a thing to *do*.
+ */
+const IMPERATIVES = new Set([
+  "take", "bring", "give", "get", "put", "make", "fit", "tell", "ask", "show",
+  "open", "close", "return", "deliver", "plant", "light", "feed", "free", "fix",
+  "mend", "carry", "wear", "use", "find", "hand", "place", "fetch", "craft",
+  "build", "finish", "start", "reach", "cross", "climb", "sing", "read", "write",
+  "drink", "eat", "wake", "calm", "persuade", "convince", "rescue", "escape",
+]);
+
+/**
+ * One line, one thing.
+ *
+ * A family's personal aim read *"Craft the oversized wooden coffee mug and
+ * successfully take the first morning sip from it"* — two conditions, one ○,
+ * and no way to see that the crafting was done and the sip was not. So the
+ * evening included a turn where a father drank from a mug, watched nothing
+ * happen, and reasonably concluded the game was broken.
+ *
+ * Splitting them is half the fix; the prompt now asks for one thing per
+ * objective, which is the other half. This exists because a 7B model asked for
+ * one thing will sometimes write two anyway, and because the storyline library
+ * was written by hand before anybody made this rule.
+ *
+ * Deliberately timid. A wrong split invents an objective that can never be
+ * finished, which is exactly the failure this whole round is fixing — so a bare
+ * "and" only splits when what follows it reads as an instruction, and
+ * "a needle and thread" survives untouched.
+ */
+export function splitObjective(text: string): string[] {
+  const trimmed = text.trim().replace(/[.]+$/, "");
+  if (!trimmed) return [];
+
+  for (const join of STRONG_JOINS) {
+    const at = trimmed.toLocaleLowerCase().indexOf(join);
+    if (at > 0) {
+      const head = trimmed.slice(0, at).trim();
+      const tail = trimmed.slice(at + join.length).trim();
+      if (head.length >= 6 && tail.length >= 6) {
+        return [...splitObjective(head), ...splitObjective(tail)];
+      }
+    }
+  }
+
+  const at = trimmed.toLocaleLowerCase().indexOf(" and ");
+  if (at > 0) {
+    const head = trimmed.slice(0, at).trim();
+    const tail = trimmed.slice(at + 5).trim();
+    const firstWord = tail.split(/\s+/)[0]?.toLocaleLowerCase().replace(/[^a-z]/g, "") ?? "";
+    if (head.length >= 6 && tail.length >= 6 && IMPERATIVES.has(firstWord)) {
+      return [...splitObjective(head), ...splitObjective(tail)];
+    }
+  }
+
+  return [trimmed];
+}
+
+/**
+ * Objectives as they should be written down, split and numbered.
+ *
+ * Capped, because a model that writes one enormous sentence should not turn a
+ * chapter into a checklist of nine.
+ */
+export function objectiveRows(
+  entries: { kind: "FIND" | "DEED"; text: string }[],
+  limit = 5,
+): { kind: "FIND" | "DEED"; text: string; position: number }[] {
+  const rows: { kind: "FIND" | "DEED"; text: string; position: number }[] = [];
+
+  for (const entry of entries) {
+    for (const text of splitObjective(entry.text)) {
+      if (rows.some((row) => row.text.toLocaleLowerCase() === text.toLocaleLowerCase())) continue;
+      rows.push({ kind: entry.kind, text, position: rows.length });
+      if (rows.length === limit) return rows;
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * How many turns an objective may sit untouched before the game says something.
+ *
+ * Six is roughly a third of an evening. Long enough that a party working
+ * steadily toward something is never nagged, short enough that nobody spends a
+ * whole session circling a locked door.
+ */
+export const STUCK_AFTER = 6;
+
+export type StuckObjective = { text: string; turns: number };
+
+/**
+ * What the party has been after for a long time without getting near it.
+ *
+ * The act clock already notices a table going nowhere *in general*. Nothing
+ * noticed a table going nowhere *at one particular thing* — which is what
+ * sixteen turns in chapter one actually looked like. They were busy, inventive
+ * and having a nice time; they were also no closer to the one thing the chapter
+ * was waiting on, and no part of the game was watching that number.
+ *
+ * Measured from when the quest opened rather than from the last attempt,
+ * deliberately. "You have not touched this in six turns" needs a record of
+ * attempts per objective, which does not exist; "this has been outstanding for
+ * sixteen turns" needs one subtraction and is the number that actually matters
+ * to a family wondering why they are still in the same room.
+ */
+export function stuckObjectives(
+  quests: { openedAtTurn: number; objectives: { text: string; doneAtTurn: number | null }[] }[],
+  turnCounter: number,
+  after = STUCK_AFTER,
+): StuckObjective[] {
+  const out: StuckObjective[] = [];
+
+  for (const quest of quests) {
+    const turns = turnCounter - quest.openedAtTurn;
+    if (turns < after) continue;
+    // Only when *nothing* on this quest has moved. A party that has ticked one
+    // of three is making progress, and telling them they are stuck would be
+    // both wrong and discouraging.
+    if (quest.objectives.some((objective) => objective.doneAtTurn !== null)) continue;
+
+    for (const objective of quest.objectives) {
+      if (objective.doneAtTurn !== null) continue;
+      out.push({ text: objective.text, turns });
+    }
+  }
+
+  return out;
+}
+
+/**
+ * What the storyteller is told about it.
+ *
+ * Written as an instruction to put the thing back within reach, and — this is
+ * the load-bearing half — as a prohibition on handing it over. A model told
+ * "they are stuck" and nothing else will solve the chapter for them, which is
+ * the one way to spoil this game. The wording deliberately echoes the rule the
+ * pressure clock uses for the same reason.
+ */
+export function stuckNote(stuck: StuckObjective[]): string {
+  if (stuck.length === 0) return "";
+
+  const list = stuck.slice(0, 3).map((entry) => `- ${entry.text}`).join("\n");
+  const turns = Math.max(...stuck.map((entry) => entry.turns));
+
+  return (
+    `STILL WAITING, ${turns} TURNS LATER:\n${list}\n` +
+    `The party has been at this a long time and has got nowhere near it. Put it ` +
+    `back within reach in this passage: somewhere they can see, somebody who ` +
+    `mentions it, a way in that is now open. Do NOT hand it over and do NOT have ` +
+    `somebody bring it to them — picking it up is still a turn one of them has to ` +
+    `take. Getting them into the room with it is the whole job.`
+  );
 }
 
 export type SpentItem = { itemName: string; foundByName: string };
@@ -242,11 +439,7 @@ export async function openMainQuest(
       objectives: {
         create:
           act.seeks.length > 0
-            ? act.seeks.map((name, index) => ({
-                kind: "FIND" as const,
-                text: name,
-                position: index,
-              }))
+            ? objectiveRows(act.seeks.map((name) => ({ kind: "FIND" as const, text: name })))
             : // A chapter that asks for nothing in particular still needs one
               // thing to be waiting on, or it would open already finished.
               [{ kind: "DEED" as const, text: `See ${act.title} through`, position: 0 }],
@@ -304,9 +497,12 @@ export async function openPersonalQuests(
         title: aim.title.trim(),
         summary: aim.summary.trim(),
         openedAtTurn: turn,
-        objectives: {
-          create: [{ kind: aim.objective.kind, text: aim.objective.text, position: 0 }],
-        },
+        // Split, because this is where the two-in-one line came from. A model
+        // asked for "the one thing that finishes it" will occasionally answer
+        // with two, and a personal aim is the worst place for that: it is the
+        // one objective on the board nobody else can see, so nobody else can
+        // notice it is stuck.
+        objectives: { create: objectiveRows([aim.objective]) },
       },
     });
   }
@@ -363,13 +559,7 @@ async function openSideQuests(
         title,
         summary: opening.summary.trim() || title,
         openedAtTurn: turn,
-        objectives: {
-          create: opening.objectives.map((objective, index) => ({
-            kind: objective.kind,
-            text: objective.text,
-            position: index,
-          })),
-        },
+        objectives: { create: objectiveRows(opening.objectives) },
       },
     });
 
@@ -485,7 +675,9 @@ async function completeQuest(
     if (!character) continue;
 
     const total = character.xp + xp;
-    const level = levelFor(total);
+    // High-water mark — see `levelReached`. Nobody goes down a level because
+    // the ladder was retuned underneath them.
+    const level = levelReached(total, character.level);
     await tx.character.update({ where: { id: characterId }, data: { xp: total, level } });
 
     if (level > character.level) messages.push(`${character.name} reached level ${level}!`);
