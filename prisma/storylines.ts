@@ -642,4 +642,184 @@ export const storylines = [
       },
     ],
   },
+  {
+    slug: "say-it-three-times",
+    title: "Say It Three Times",
+    tagline: "Everyone in the year knows the rhyme. Nobody can remember who taught it to them.",
+    premise:
+      "It went round the whole school in a week — a skipping rhyme with four verses and a dare at " +
+      "the end of it. Say the last verse into a dark window three times and something answers. " +
+      "Everybody has tried it and nothing happened. Then the small things in the first verse start " +
+      "coming true, a week late, to whoever said it first — and the only person who knows all four " +
+      "verses has not been in school since Tuesday.",
+    hook:
+      "The window in the changing rooms is the good one: black glass, nobody about, and the taps " +
+      "drip in almost the right rhythm. You have said it twice. The second time, the reflection was " +
+      "half a beat late putting its hands down. There is one more to go — and somewhere behind you, " +
+      "very quietly, somebody else has already started counting.",
+    defaultTone: "SPOOKY",
+    readingLevel: "TEEN",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 12,
+    pressureName: "How many times it has been said",
+    acts: [
+      {
+        index: 1,
+        title: "Two Down",
+        goal: "Establish that the rhyme is real and running a verse behind. Everything that happens must have a completely reasonable explanation that is completely wrong. Nobody is hurt; things go wrong in small, deniable, extremely annoying ways.",
+        beats: [
+          "Something from the first verse comes true in a way you could argue was a coincidence",
+          "A grown-up has a sensible explanation, is very sure of it, and is wrong",
+          "Somewhere out of sight, another child says the third verse",
+        ],
+        seeks: ["the exercise book with all four verses copied out in three different hands"],
+      },
+      {
+        index: 2,
+        title: "The One Who Taught It",
+        goal: "Track the rhyme back to whoever started it, through children and objects rather than through any adult explaining. Every answer should be one more person who learned it from somebody else.",
+        beats: [
+          "Every child they ask learned it from someone who learned it from someone",
+          "A name in the back of the book has been rubbed out and written in again",
+          "The empty place on Tuesday's register belongs to somebody nobody can quite picture",
+        ],
+        seeks: [
+          "the school photograph from the year the rhyme starts",
+          "the rubbed-out name, held up to the light until it reads",
+        ],
+      },
+      {
+        index: 3,
+        title: "The Fourth Verse",
+        goal: "The rhyme turns out to be a way of calling somebody in from a game that nobody ever ended. The fourth verse is a name. Finishing it properly needs more than one voice in the same room — and it ends warmly rather than in a bang.",
+        beats: [
+          "The last verse is a name, and it has been missing from the rhyme the whole time",
+          "Saying it properly takes every voice at once, in one room, out loud",
+          "The glass stops answering, and the changing rooms go back to being changing rooms",
+        ],
+        seeks: ["the last verse, written out in full for the first time"],
+      },
+    ],
+  },
+  {
+    slug: "build-before-dark",
+    title: "Build Before Dark",
+    tagline: "A country where the ground comes up in tidy squares, and the sun is already low.",
+    premise:
+      "Nobody knows how the family got here and nobody local seems remotely surprised. It is a good " +
+      "country: the earth comes away in neat cubes, timber stacks itself, and anything taken apart " +
+      "goes back together if you work out the order. It has one rule, and everybody says it the " +
+      "same way. When the light goes, the things that were taken apart come looking for their " +
+      "pieces. They are not angry. They are extremely determined, and they can see in the dark.",
+    hook:
+      "The sun is four hands above the hills, which a woman carrying a door says means about an " +
+      "hour. There is a spade nobody has claimed, a hillside that comes away in squares as clean as " +
+      "cut cake, and a sheep that has not stopped watching you since you arrived. Down in the " +
+      "valley one window is already lit, and whoever lit it has shut their door.",
+    defaultTone: "ADVENTUROUS",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 15,
+    pressureName: "How low the sun is",
+    acts: [
+      {
+        index: 1,
+        title: "An Hour of Daylight",
+        goal: "Shelter and light before dark. Let them build badly and let it matter — a bad shelter is survivable and a shared one is comfortable. Reward invention over caution, and let anything they make stay made.",
+        beats: [
+          "The hillside comes away in cubes, and the cubes stack any way at all",
+          "Something follows one of them home and waits outside, politely, all night",
+          "What one of them builds badly turns out to be exactly the right shape later",
+        ],
+        seeks: ["a lamp with enough oil in it for one whole night"],
+      },
+      {
+        index: 2,
+        title: "Down",
+        goal: "Under the hill, for the stone that makes its own light. Depth is the danger rather than anything living — dark, distance, and a way back that has to be held open. Different characters should notice different things.",
+        beats: [
+          "Every layer down is a different colour and a different sound underfoot",
+          "Something has been stacking cubes into the same shape down here, badly, for years",
+          "A passage stays open only while somebody stands in it",
+        ],
+        seeks: [
+          "a handful of the stone that keeps its own light",
+          "the small stacked figure somebody down here has been making over and over",
+        ],
+      },
+      {
+        index: 3,
+        title: "What the Dark Wants",
+        goal: "The thing below follows light rather than people, and has never once seen the sky. The way through is showing it, not escaping it. End on the whole party on one rope and the country letting them keep everything they built.",
+        beats: [
+          "It follows the lamp rather than the people, and it stops when they stop",
+          "The way up needs everybody on the rope and one of them at the top",
+          "It sees the sky, and every cube anybody laid stays exactly where it was put",
+        ],
+        seeks: ["the first cube out of the hillside, carried all the way back up"],
+      },
+    ],
+  },
+  {
+    slug: "come-out-come-out",
+    title: "Come Out, Come Out",
+    tagline: "A game of hide and seek started in this shop a very long time ago. Nobody called it off.",
+    premise:
+      "Hemmings & Son closed on a Tuesday twenty years ago and the lights never entirely went out. " +
+      "Inside, a game is still running: somebody is still counting, several somebodies are still " +
+      "hidden, and the rules have got very strict about how anybody wins. It is a proper chase and " +
+      "it is properly frightening. It is also true that the seeker has been It for twenty years, " +
+      "and what it actually wants is for somebody to find it, for once.",
+    hook:
+      "The service door was open, which it had no business being. Inside, the escalators are running " +
+      "with nobody on them and the tannoy is counting somewhere above you, unhurried — 'forty-one… " +
+      "forty-two…' On the floor by the till, in chalk gone furry with dust, somebody has written out " +
+      "the rules of a game. There are four of them. You can only read three.",
+    defaultTone: "SPOOKY",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 15,
+    pressureName: "How high the counting has got",
+    acts: [
+      {
+        index: 1,
+        title: "Forty-One, Forty-Two",
+        goal: "Teach the game by playing it. Hiding works, splitting up works, and being found is never the end of anybody — it costs a light and the game carries on. Frighten them properly and never once catch anyone.",
+        beats: [
+          "The counting carries everywhere and gets louder in the wrong direction",
+          "A good hiding place works exactly once, because the game remembers it",
+          "Being found costs a light rather than a person",
+        ],
+        seeks: ["the fourth rule, chalked under the till where the dust lay thickest"],
+      },
+      {
+        index: 2,
+        title: "The Ones Still Hiding",
+        goal: "Find the other players, who have been hidden for twenty years and are very good at it. They are bored rather than frightening, and they will come out if somebody does it properly. Each one called in brings a floor of lights back on.",
+        beats: [
+          "Somebody has been in the same place so long the shop has grown around them",
+          "One will only come out if a person counts for them properly, eyes shut, no peeking",
+          "The lights come back a floor at a time as each of them is called in",
+        ],
+        seeks: [
+          "the staff badge belonging to the last person to leave",
+          "the tally of everyone still hiding, kept on the back of a price card",
+        ],
+      },
+      {
+        index: 3,
+        title: "All In, All In",
+        goal: "End the game by finding the seeker, which nobody has ever done. Its hiding place is the place you count from, so nobody has ever looked there. The last move is kindness rather than escape, and afterwards it is only a shop.",
+        beats: [
+          "The one place nobody looks is the place the counting comes from",
+          "Calling it in takes every voice at once, from wherever each of them is standing",
+          "The tannoy stops in the middle of a number, and so do the escalators",
+        ],
+        seeks: ["the chalk, worn down to a stub, kept from the floor by the till"],
+      },
+    ],
+  },
 ] as const;

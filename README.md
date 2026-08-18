@@ -385,8 +385,8 @@ Both, and the split is the point.
 
 A **storyline** is a written template: a premise, an opening hook, and a
 three-act spine where each act carries a goal, a handful of optional beats, and
-sometimes a list of things the party should be able to find. Ten of them ship
-seeded, and they are the same for everyone.
+sometimes a list of things the party should be able to find. Thirteen of them
+ship seeded, and they are the same for everyone.
 
 A **campaign** is one family's run through one of those, and almost none of it
 is written down in advance. Every word narrated is generated fresh from what
@@ -1512,6 +1512,44 @@ sheet now says what a pair can do together and what one more moment would open:
 *one more moment together unlocks Shove Over*. "Two more" means nothing on its
 own; "two more and you can Stand Together" is a reason to go and be kind to your
 sister.
+
+### Three more on the shelf
+
+The library was ten cosy-to-spooky adventures in one register. These three were
+asked for by name, and each is written toward something the girls already play:
+
+| | | |
+|---|---|---|
+| **Say It Three Times** | SPOOKY · TEEN | A skipping rhyme with four verses and a dare at the end. Things start coming true a verse late, to whoever said it first. |
+| **Build Before Dark** | ADVENTUROUS · MIDDLE_GRADE | A country where the ground comes up in tidy cubes and anything taken apart goes back together. When the light goes, the things that were taken apart come looking for their pieces. |
+| **Come Out, Come Out** | SPOOKY · MIDDLE_GRADE | A game of hide and seek started in a closed-down department store twenty years ago. Somebody is still counting. |
+
+They are written in the *genre* rather than in anybody's world — no borrowed
+names, characters or branding — which keeps this repository the family's own and
+happens to make them better stories, because the endings have to be invented
+rather than remembered.
+
+Each of them lands on the floor `CORE_CONTRACT` sets. *Come Out, Come Out* is
+the clearest case: it is a proper chase, it is properly frightening, nobody is
+ever caught, and the last move is finding the seeker — who has been It for
+twenty years and would very much like to stop.
+
+#### What a new adventure now has to survive
+
+Two guards went into `tests/storylines.test.ts` with these, both earned the hard
+way earlier in the same week:
+
+- **No sought thing is secretly two things.** `splitObjective` takes "craft the
+  mug and take the first sip" apart, so a shipped seek that trips it would
+  arrive as two objectives nobody wrote. Every seek in the library is checked
+  against it.
+- **What would count has to read like words a child would hunt for.** The
+  outstanding-FIND line now prints those words on screen, so a seek made of
+  filler would put *"that, will, with"* under the heading *anything with these
+  in its name counts*.
+
+Plus the ordinary ones: chapters numbered from one, every tone and reading level
+real, no two adventures sharing a clock, a slug or a title.
 
 ### The evening that got stuck in chapter one
 
