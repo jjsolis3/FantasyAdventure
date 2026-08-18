@@ -385,7 +385,7 @@ Both, and the split is the point.
 
 A **storyline** is a written template: a premise, an opening hook, and a
 three-act spine where each act carries a goal, a handful of optional beats, and
-sometimes a list of things the party should be able to find. Thirteen of them
+sometimes a list of things the party should be able to find. Fourteen of them
 ship seeded, and they are the same for everyone.
 
 A **campaign** is one family's run through one of those, and almost none of it
@@ -1513,26 +1513,38 @@ sheet now says what a pair can do together and what one more moment would open:
 own; "two more and you can Stand Together" is a reason to go and be kind to your
 sister.
 
-### Three more on the shelf
+### Four more on the shelf
 
-The library was ten cosy-to-spooky adventures in one register. These three were
-asked for by name, and each is written toward something the girls already play:
+The library was ten cosy-to-spooky adventures in one register. These four were
+asked for by name, and each is written toward something the girls already play
+or have just watched:
 
 | | | |
 |---|---|---|
 | **Say It Three Times** | SPOOKY · TEEN | A skipping rhyme with four verses and a dare at the end. Things start coming true a verse late, to whoever said it first. |
 | **Build Before Dark** | ADVENTUROUS · MIDDLE_GRADE | A country where the ground comes up in tidy cubes and anything taken apart goes back together. When the light goes, the things that were taken apart come looking for their pieces. |
 | **Come Out, Come Out** | SPOOKY · MIDDLE_GRADE | A game of hide and seek started in a closed-down department store twenty years ago. Somebody is still counting. |
+| **Until Six** | SPOOKY · MIDDLE_GRADE | A night shift at a shut-up pizza-and-arcade place. The band on the stage has stood there since 1987 and is not supposed to move. |
 
 They are written in the *genre* rather than in anybody's world — no borrowed
 names, characters or branding — which keeps this repository the family's own and
 happens to make them better stories, because the endings have to be invented
 rather than remembered.
 
-Each of them lands on the floor `CORE_CONTRACT` sets. *Come Out, Come Out* is
-the clearest case: it is a proper chase, it is properly frightening, nobody is
-ever caught, and the last move is finding the seeker — who has been It for
-twenty years and would very much like to stop.
+Each of them lands on the floor `CORE_CONTRACT` sets, and the two frightening
+ones land on it hardest. *Come Out, Come Out* is a proper chase in which nobody
+is ever caught, and the last move is finding the seeker — who has been It for
+twenty years and would very much like to stop. *Until Six* keeps every part of
+the night-shift horror the girls know from the films: the cameras, the doors,
+the power running down, the thing that only moves when nobody is looking. What
+it does not have is a monster. The band is looking for four children who were
+never found, it has been looking since 1987, and it can no longer tell a lost
+child from one who is only visiting — so the last hour of the shift is spent
+putting four names somewhere they can be read.
+
+That is not the contract being worked around. It is the contract turning out to
+describe the thing the girls already loved: a place built for children's
+birthdays, and something inside it that is frightening because it is sad.
 
 #### What a new adventure now has to survive
 

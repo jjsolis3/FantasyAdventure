@@ -822,4 +822,69 @@ export const storylines = [
       },
     ],
   },
+  {
+    slug: "until-six",
+    title: "Until Six",
+    tagline: "The band stops playing at nine. Nobody has ever written down what they do until six.",
+    premise:
+      "Bumbleton's Pizza & Games has been shut for refurbishment since the spring, and somebody has " +
+      "to mind it overnight. The job is three lines long: keep the lights on, keep the doors shut, " +
+      "be gone by six. The band on the stage — a bear, a rabbit, a chicken and a fox, in waistcoats " +
+      "— has stood in the same place since 1987 and is not supposed to move. It moves. What none of " +
+      "the notes mention is that it is not hunting anybody. It is looking for four children who " +
+      "were never found, it has been looking for a very long time, and it can no longer tell a lost " +
+      "child from one who is only visiting.",
+    hook:
+      "The manager left before you arrived. Taped inside the office window is a laminated card of " +
+      "rules in cheerful bubble letters, and somebody has gone over rule four in biro, three times: " +
+      "KEEP THE STAGE LIT. Out in the dark of the main room four shapes stand under dead spotlights, " +
+      "exactly where the poster says they should be. The clock above the ball pit says nine. Your " +
+      "shift ends at six.",
+    defaultTone: "SPOOKY",
+    readingLevel: "MIDDLE_GRADE",
+    minPlayers: 2,
+    maxPlayers: 5,
+    estimatedScenes: 15,
+    pressureName: "How much power is left",
+    acts: [
+      {
+        index: 1,
+        title: "Nine to Twelve",
+        goal: "Teach the building by night: the cameras, the doors, the power that runs out, and the fact that the band only moves when nobody is looking. Frighten them properly. Nothing ever touches anybody — a bad moment costs a light or a door, never a person — and the first real scare must resolve into something sad rather than something hostile.",
+        beats: [
+          "A camera shows the stage with one figure fewer than the poster promises",
+          "One of them is standing in the party room holding a paper crown, waiting to be told the party has started",
+          "The power is finite, and the party finds that out by spending too much of it",
+        ],
+        seeks: ["the paper crown from the party room, with a name written inside it"],
+      },
+      {
+        index: 2,
+        title: "The Ones Who Stayed Behind",
+        goal: "Work out who the band is looking for, through objects and the building itself rather than any adult explaining. Every answer should be a thing somebody left behind. Let the band be near the party without ever cornering them, and let one of them be plainly, obviously careful not to touch anyone.",
+        beats: [
+          "The lost-property box holds four things nobody has claimed since 1987",
+          "A birthday photograph has more children standing in it than the party list has names",
+          "One of them follows a torch beam rather than a person, and stops dead when the beam does",
+        ],
+        seeks: [
+          "the birthday photograph with one extra child in it",
+          "the lost-property tag with a name nobody at that party had",
+        ],
+      },
+      {
+        index: 3,
+        title: "Until Six",
+        goal: "Finish the search the band cannot finish on its own. Nothing is defeated, switched off or escaped from — the last hour is spent putting four names somewhere they can be read, which is all any of this was ever for. At six the lights come up by themselves and it is a pizza restaurant again.",
+        beats: [
+          "The band will follow somebody who walks slowly, and will not follow anybody who runs",
+          "The last name is only half-remembered, so it takes more than one voice to finish",
+          "At six the spotlights come on, and the stage holds exactly what the poster says it holds",
+        ],
+        seeks: [
+          "the birthday board from the party room, with four more names on it than it started with",
+        ],
+      },
+    ],
+  },
 ] as const;
