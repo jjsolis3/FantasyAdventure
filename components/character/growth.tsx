@@ -6,6 +6,8 @@ import {
   LUCK_NUDGE_NOTE,
   luckOdds,
   statModifier,
+  XP_PER_STAT_POINT,
+  nextPointAt,
   statPointsUnspent,
   type StatBlock,
 } from "@/lib/game/rules";
@@ -27,14 +29,25 @@ export function Growth({
   characterId,
   stats,
   xp,
+  builtWith,
   yours,
 }: {
   characterId: string;
   stats: StatBlock;
   xp: number;
+  /**
+   * The budget she was actually built with.
+   *
+   * It was not passed at all, so this defaulted to today's constant — which is
+   * precisely the mistake `Character.buildBudget` exists to prevent, made on the
+   * one screen where a child reads the number. An adventurer built when the
+   * budget was 21 was being told she had spent two points she never spent.
+   */
+  builtWith: number;
   yours: boolean;
 }) {
-  const unspent = statPointsUnspent(stats, xp);
+  const unspent = statPointsUnspent(stats, xp, builtWith);
+  const next = nextPointAt(stats, xp, builtWith);
 
   return (
     <div>
@@ -44,7 +57,18 @@ export function Growth({
             {unspent} {unspent === 1 ? "point" : "points"} to spend.
           </span>
         ) : (
-          "One more point every ten experience. Spend them wherever you like — they never come back out."
+          <>
+            One more point every {XP_PER_STAT_POINT} experience. Spend them wherever you like — they
+            never come back out.
+            {/* When, specifically. Points are rare now by design, and a sheet
+                that says "0 to spend" for three evenings with no explanation
+                reads as the game having forgotten her. */}
+            {next !== null ? (
+              <span className="mt-1 block text-hearth-300">
+                {xp} so far — the next one lands at {next}.
+              </span>
+            ) : null}
+          </>
         )}
       </p>
 

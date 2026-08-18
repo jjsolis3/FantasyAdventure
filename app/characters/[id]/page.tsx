@@ -259,7 +259,13 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
               ? `${capitalise(them.subject)} ${toHave(them.subject)} grown`
               : `What ${them.subject} ${toBe(them.subject)} like`}
           </h2>
-          <Growth characterId={character.id} stats={stats} xp={character.xp} yours />
+          <Growth
+            characterId={character.id}
+            stats={stats}
+            xp={character.xp}
+            builtWith={character.buildBudget}
+            yours
+          />
 
           {/* When the next choice arrives. Slowing the ladder makes "nothing
               waiting" the normal state, and an absence with no explanation

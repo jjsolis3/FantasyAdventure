@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, STAT_MIN, XP_PER_STAT_POINT, canRaise, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
+import { NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, STAT_MIN, XP_PER_STAT_POINT, canRaise, nextPointAt, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
 import {
   ATTEMPTS_TO_LEARN,
   MAX_SKILLS,
@@ -309,4 +309,34 @@ test("growth: an adventurer built under the old rule keeps every point she earne
 test("growth: a new adventurer is measured against the rule she was built with", () => {
   assert.equal(statPointsUnspent(built, 120, STAT_BUDGET), 3);
   assert.equal(statPointsUnspent(built, 0, STAT_BUDGET), 0);
+});
+
+test("growth: the sheet counts against the budget she was built with", () => {
+  // The bug this exists to catch, found while answering "should I reset my
+  // characters". `Growth` called `statPointsUnspent` without her `buildBudget`,
+  // so it fell back to today's constant — the exact mistake that column was
+  // added to prevent, made on the one screen a child actually reads.
+  const OLD_BUDGET = 21;
+  const oldStyle: StatBlock = statBlock({});
+
+  assert.equal(statPointsUnspent(oldStyle, 120, OLD_BUDGET), 3);
+  assert.equal(statPointsUnspent(oldStyle, 120), 1, "and this is what she was being shown");
+});
+
+test("growth: the next point has a number on it", () => {
+  const built19: StatBlock = statBlock({ might: 5, wits: 4, heart: 3, spark: 1, grace: 1, luck: 1, grit: 4 });
+
+  // Nothing spent yet, so the first point lands at one interval.
+  assert.equal(nextPointAt(built19, 0, 19), XP_PER_STAT_POINT);
+
+  // Two points already in the sheet: the third lands at three intervals.
+  const spentTwo: StatBlock = { ...built19, might: 7 };
+  assert.equal(nextPointAt(spentTwo, 45, 19), 3 * XP_PER_STAT_POINT);
+});
+
+test("growth: a full sheet is told there is nothing further, not a number", () => {
+  const full = statBlock(
+    Object.fromEntries(STATS.map((stat) => [stat, STAT_CEILING])) as Record<string, number>,
+  );
+  assert.equal(nextPointAt(full, 100_000, 19), null);
 });

@@ -134,6 +134,28 @@ export function statPointsUnspent(
   return Math.max(0, statPointsEarned(xp) - (totalSpent(stats) - builtWith));
 }
 
+/**
+ * The experience total at which her next point lands, or null once the sheet
+ * is full.
+ *
+ * Points are rare by design now — roughly one an evening — and rarity with no
+ * explanation reads as neglect. A sheet that says "0 to spend" for three
+ * evenings should say when that stops being true.
+ *
+ * Counted from what she has *spent* rather than from her current total, so an
+ * adventurer who is ahead of the new curve is told the honest number rather
+ * than a cheerful one.
+ */
+export function nextPointAt(
+  stats: StatBlock,
+  xp: number,
+  builtWith: number = STAT_BUDGET,
+): number | null {
+  if (STATS.every((stat) => stats[stat] >= STAT_CEILING)) return null;
+  const spent = Math.max(0, totalSpent(stats) - builtWith);
+  return (spent + 1) * XP_PER_STAT_POINT;
+}
+
 /** Whether one more point may go into this stat. */
 export function canRaise(
   stats: StatBlock,
