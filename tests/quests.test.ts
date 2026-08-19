@@ -81,9 +81,26 @@ test("quests: two reports cannot both claim the same objective", () => {
   assert.deepEqual(done, ["o1"]);
 });
 
-test("quests: finds do not answer deeds, and deeds do not answer finds", () => {
-  assert.deepEqual(resolveDeeds([find("o1", "the brass key")], ["the brass key"]), []);
+test("quests: a pocket cannot answer a deed", () => {
+  // Carrying something named after a deed is not doing it. This direction stays
+  // shut: only the storyteller can say a deed happened.
   assert.deepEqual(resolveFinds([deed("o1", "the brass key")], [carried("the brass key")]), []);
+});
+
+test("quests: the storyteller may answer a FIND nobody can put in a pocket", () => {
+  // The evening this exists for. Chapter one of *The Village That Built Itself*
+  // asks for "the first thing you made, awake now and following you about",
+  // which turned out to be a wooden owl riding on a child's shoulder. A
+  // companion is not an InventoryItem, so the pockets could never answer it and
+  // the chapter could never close.
+  const objectives = [find("o1", "the first thing you made, awake now and following you about")];
+  const done = resolveDeeds(objectives, ["the first thing Orin made is awake and following them"]);
+  assert.deepEqual(done, ["o1"]);
+});
+
+test("quests: an objective already found is not ticked a second time", () => {
+  const objectives = [{ ...find("o1", "the brass key"), doneAtTurn: 4 }];
+  assert.deepEqual(resolveDeeds(objectives, ["the brass key"]), []);
 });
 
 test("quests: finishing says who gave up what", () => {

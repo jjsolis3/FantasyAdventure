@@ -121,6 +121,15 @@ export function WhatsHere({
                     anything with {objective.counts.slice(0, 4).join(", ")} in its name counts
                   </p>
                 ) : null}
+
+                {/* Said plainly. A family who has been in one room for sixteen
+                    turns already knows; the game pretending otherwise is what
+                    makes it feel like their fault. */}
+                {objective.stuckFor !== null ? (
+                  <p className="mt-0.5 ml-9 text-xs text-amber-500/90">
+                    you have been after this for {objective.stuckFor} turns
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>

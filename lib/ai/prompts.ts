@@ -319,6 +319,16 @@ export function narrationPrompt(options: {
    * weather; this changes what the passage is *about*.
    */
   encounter?: string;
+  /**
+   * Something the party has been after for a long time without getting near it.
+   *
+   * From `stuckNote`. A family spent sixteen turns in chapter one, and while the
+   * headline cause was an objective that could not be ticked at all, the deeper
+   * one is that nothing in the game ever noticed. The clock notices a party
+   * going nowhere in general; nothing noticed a party going nowhere *at one
+   * particular thing*.
+   */
+  stuck?: string;
 }): string {
   return `${options.context}
 ${correctionBlock(options.correction)}
@@ -327,7 +337,7 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 
 WHAT THE DICE DECIDED (you must narrate these outcomes exactly as given):
 ${options.resolutions}
-${options.encounter ? `\n${options.encounter}\n` : ""}${options.pressure ? `\n${options.pressure}\n` : ""}
+${options.encounter ? `\n${options.encounter}\n` : ""}${options.pressure ? `\n${options.pressure}\n` : ""}${options.stuck ? `\n${options.stuck}\n` : ""}
 Narrate what happens next, as ONE scene rather than one paragraph per person.
 Everybody's action must land somewhere in it, but let them run into each other:
 what one of them does happens in the room the others are standing in.
@@ -353,11 +363,16 @@ export function extractionPrompt(options: {
    */
   pacing?: string;
   /**
-   * Objectives currently on the board that are not about carrying something.
+   * Every objective currently outstanding on the board.
    *
    * Given so that "deedsDone" can be matched rather than invented: the model is
    * asked which of *these* happened, not what the party achieved in general.
-   * Finds need no such list — they are settled by looking in people's pockets.
+   *
+   * It used to be deeds only, because a FIND settles itself by looking in
+   * people's pockets. That is still the first answer and still the better one
+   * for an ordinary object — but it cannot settle an objective like "the first
+   * thing you made, awake now and following you about", which in play was a
+   * wooden owl riding on a child's shoulder. See `resolveDeeds`.
    */
   openDeeds?: string[];
   /**
@@ -370,7 +385,7 @@ export function extractionPrompt(options: {
   appetite?: string;
 }): string {
   const deeds = options.openDeeds?.length
-    ? `\nTHINGS THE PARTY IS CURRENTLY TRYING TO DO:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
+    ? `\nWHAT THE PARTY IS STILL TRYING TO DO OR GET HOLD OF:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
     : "";
 
   return `Read this passage from a story and extract what should be remembered.
@@ -424,11 +439,23 @@ Rules:
   something to grow toward. Leave both null for almost everything.
 - deedsDone may ONLY contain things from the list above, and only when the
   passage shows them actually finished. Do not invent entries. Usually [].
+  - Some of those things are objects. If the passage shows the party has one —
+    in hand, on a shoulder, walking beside them, tied to the cart — say so here.
+    The game checks pockets by itself, so this is for the ones that are true in
+    the story and could never be true in a pocket: a creature, a companion, a
+    door now open, somebody who has agreed to come along.
+  - "Finished" means finished. Being close, being told where it is, or wanting
+    it very much is not finished, and reporting it here would take the thing
+    they are working toward away from them.
 - questsOpened is for a NEW errand the passage introduced that the party could
   choose to take on — a neighbour's missing cat, a promise made, a debt owed.
   Only when it is a real, findable thing somebody asked for. Never restate what
   the party is already doing, and never open one just to have something to say:
   most turns start nothing, and [] is the right answer.
+  - ONE THING PER OBJECTIVE. Never "craft the mug and take the first sip from
+    it" — that is two objectives, and written as one it can only ever be half
+    finished with nothing on screen to say which half. If it needs two, write
+    two.
 - whatNow is one short question handing the moment back to the players, in the
   voice of somebody running the game: "The door is open an inch. Do you go in?"
   It must NAME something the passage actually put in front of them — a thing, a
@@ -622,7 +649,11 @@ Rules:
 - Nothing that requires another character to fail, lose something, or be kept in
   the dark. These run alongside the story, never against each other.
 - Write the summary TO them: "See if you can get the miller's dog to trust you."
-- kind is FIND only if it is finished by carrying an object. Otherwise DEED.`;
+- kind is FIND only if it is finished by carrying an object. Otherwise DEED.
+- ONE thing, not two. "Craft the mug and take the first sip from it" is two
+  aims wearing one coat: half of it can be finished with nothing on her screen
+  to say which half, and she will decide the game is broken. If it takes two
+  steps, pick the step that ends it.`;
 }
 
 /**

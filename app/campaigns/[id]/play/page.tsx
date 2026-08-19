@@ -165,7 +165,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   // tab. A family spent a whole evening inventing goals — "find the faceless
   // demon creature" — while "the old family album, a camera that still takes
   // film" sat one tap away on a screen nobody opened mid-turn.
-  const needed = await neededObjectives(campaign.id);
+  const needed = await neededObjectives(campaign.id, 5, campaign.turnCounter);
 
   // Somewhere worth going next. The gap a real evening found: the game could
   // put something in front of the party and had no way at all to point down a

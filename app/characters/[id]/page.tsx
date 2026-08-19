@@ -11,6 +11,7 @@ import { RelationshipEditor, type RelationRow } from "@/components/character/rel
 import { pendingFor, reachableCharacterWhere } from "@/lib/game/ties";
 import {
   kindFromPerspective,
+  nextSkillLevel,
   statPointsUnspent,
   statsOf,
   type StatBlock,
@@ -96,6 +97,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
     practices: character.practices,
   };
   const skillsWaiting = skillPicksUnspent(skillInput);
+  const nextSkill = nextSkillLevel(character.level, skillInput.chosen);
 
   const takenKnacks = character.knacks.map((knack) => knack.key);
   const knacksWaiting = knacksUnspent(character.level, takenKnacks.length);
@@ -257,7 +259,24 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
               ? `${capitalise(them.subject)} ${toHave(them.subject)} grown`
               : `What ${them.subject} ${toBe(them.subject)} like`}
           </h2>
-          <Growth characterId={character.id} stats={stats} xp={character.xp} yours />
+          <Growth
+            characterId={character.id}
+            stats={stats}
+            xp={character.xp}
+            builtWith={character.buildBudget}
+            yours
+          />
+
+          {/* When the next choice arrives. Slowing the ladder makes "nothing
+              waiting" the normal state, and an absence with no explanation
+              reads as the game having forgotten her — so it says when. */}
+          {skillsWaiting === 0 && nextSkill !== null ? (
+            <p className="mt-3 text-sm text-hearth-400">
+              {nextSkill > character.level
+                ? `Something new to be good at at level ${nextSkill}.`
+                : "Something new to be good at is waiting."}
+            </p>
+          ) : null}
 
           {takenKnacks.length > 0 ? (
             <>

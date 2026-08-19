@@ -91,11 +91,18 @@ export const STAT_CEILING = 12;
 /**
  * How much experience buys the next point.
  *
- * One sphere lights up every ten, which is roughly five good rolls or one
- * chapter finished — often enough to feel like it is happening, rarely enough
- * that it stays an event.
+ * Moved from ten to forty with the level curve, and it had to move with it. The
+ * seven stats hold 49 points of growth between the build cap of 5 and the
+ * ceiling of 12; at ten apiece that is 490 experience, which the old ladder
+ * reached around level twelve and a real family reached in a handful of
+ * evenings. At forty it is 1960, just under the 2080 the ladder now ends at —
+ * so the sheet fills up at roughly the same moment the levels run out, which is
+ * the relationship these two numbers are supposed to have.
+ *
+ * In practice: about one point an evening. Enough to be a decision, rare enough
+ * to be an event.
  */
-export const XP_PER_STAT_POINT = 10;
+export const XP_PER_STAT_POINT = 40;
 
 /** How many points of growth this much experience has earned, in total. */
 export function statPointsEarned(xp: number): number {
@@ -127,6 +134,28 @@ export function statPointsUnspent(
   return Math.max(0, statPointsEarned(xp) - (totalSpent(stats) - builtWith));
 }
 
+/**
+ * The experience total at which her next point lands, or null once the sheet
+ * is full.
+ *
+ * Points are rare by design now — roughly one an evening — and rarity with no
+ * explanation reads as neglect. A sheet that says "0 to spend" for three
+ * evenings should say when that stops being true.
+ *
+ * Counted from what she has *spent* rather than from her current total, so an
+ * adventurer who is ahead of the new curve is told the honest number rather
+ * than a cheerful one.
+ */
+export function nextPointAt(
+  stats: StatBlock,
+  xp: number,
+  builtWith: number = STAT_BUDGET,
+): number | null {
+  if (STATS.every((stat) => stats[stat] >= STAT_CEILING)) return null;
+  const spent = Math.max(0, totalSpent(stats) - builtWith);
+  return (spent + 1) * XP_PER_STAT_POINT;
+}
+
 /** Whether one more point may go into this stat. */
 export function canRaise(
   stats: StatBlock,
@@ -139,18 +168,49 @@ export function canRaise(
 
 export const SKILLS_PER_CHARACTER = 2;
 
+/** How many levels between one chosen skill and the next. */
+export const LEVELS_PER_SKILL = 3;
+
 /**
  * How many skills she is entitled to have *chosen*.
  *
- * Two at the builder, then one more at every level after the second. Level 3
- * hands over a third, level 4 a fourth, and levelling up stops being a number
- * that goes up with nothing attached to it.
+ * Two at the builder, then one more every third level: three at level 4, four
+ * at 7, five at 10, six at 13.
  *
- * Starting at 3 rather than 2 is deliberate. The first level-up already carries
- * a knack, and stacking two choices on one moment makes both of them smaller.
+ * It was one at every level after the second, and a family found the problem
+ * immediately — *"at level 4, I should not have 5 skills already"*. Two players
+ * came out of one evening at level 4 with four skills each, most of a knack
+ * catalogue, and a character sheet that had stopped having room to grow. A
+ * choice that arrives every session is not a reward; it is admin.
+ *
+ * Every level still hands over something — a knack — so a level-up is never
+ * empty. Every third one hands over two things, which is what makes those ones
+ * worth waiting for.
+ *
+ * Nothing is ever taken away. An adventurer already holding more skills than
+ * this allows keeps every one of them; `skillPicksUnspent` clamps at zero, so
+ * she simply waits longer for her next pick. See the note there.
  */
 export function chosenSkillsFor(level: number): number {
-  return SKILLS_PER_CHARACTER + Math.max(0, level - 2);
+  return SKILLS_PER_CHARACTER + Math.max(0, Math.floor((level - 1) / LEVELS_PER_SKILL));
+}
+
+/**
+ * The level at which her next chosen skill arrives, or null at the cap.
+ *
+ * Needed because slowing the entitlement makes the *absence* of a choice the
+ * normal state, and an absence with no explanation reads as the game having
+ * forgotten her. "Your next new skill is at level 7" is a small sentence that
+ * turns four quiet level-ups into a countdown.
+ *
+ * Takes what she already holds, not just her level, so an adventurer who is
+ * ahead of the new ladder is told the truth about when it catches up with her.
+ */
+export function nextSkillLevel(level: number, chosen: number): number | null {
+  for (let at = Math.max(level, 1); at <= MAX_LEVEL; at += 1) {
+    if (chosenSkillsFor(at) > chosen) return at;
+  }
+  return null;
 }
 
 /**
@@ -483,10 +543,28 @@ export function bondProgress(bondXp: number): { level: number; into: number; nee
  * arriving after the stats are full, which is the point — the girls should
  * always be a session away from something new.
  *
- * The four new steps are a first guess at pacing and are meant to be tuned after
- * a few real evenings, not argued about in advance.
+ * ## Retuned after two real evenings, which is what they were for
+ *
+ * The first guess was far too generous, and a family reported it precisely:
+ * *"we have not completed a full quest, but I was able to increase my stats by
+ * points, add 3 new skills and multiple knacks."* Sixteen turns of two players
+ * earned about 45 experience each — which under the old ladder was **level 4**.
+ * A level every five to eight turns; two or three levels an evening; a whole
+ * character finished long before the story library was.
+ *
+ * The new steps are 40, 60, 80, 100, 120, 150, 180, 210, 240, 270, 300, 330 —
+ * so an evening is worth roughly one level early on and rather less later, and
+ * reaching thirteen is a couple of years of weekly play rather than a fortnight.
+ *
+ * Two things had to move with it, and both are in this file:
+ *
+ *   - `XP_PER_STAT_POINT`, or the sheet would fill up in a tenth of a career.
+ *   - Nothing at all about the *stored* level, which is what keeps this from
+ *     taking anything away. See `levelReached`.
  */
-const LEVEL_THRESHOLDS = [0, 0, 10, 25, 45, 70, 100, 140, 190, 250, 320, 400, 490, 590];
+const LEVEL_THRESHOLDS = [
+  0, 0, 40, 100, 180, 280, 400, 550, 730, 940, 1180, 1450, 1750, 2080,
+];
 
 export const MAX_LEVEL = LEVEL_THRESHOLDS.length - 1;
 
@@ -511,6 +589,28 @@ export function levelFor(xp: number): number {
     if (xp >= LEVEL_THRESHOLDS[index]) level = index;
   }
   return level;
+}
+
+/**
+ * The level a character is actually on. Never goes down.
+ *
+ * The whole of the answer to "how do you make a level curve four times steeper
+ * without punishing the people already playing on the old one". Orin is level 4
+ * on 45 experience; the new ladder says 45 is level 2. Recomputing would take
+ * two levels off a real child's adventurer overnight, along with everything
+ * they imply — the knack ladder, how far off a second signature is, and the
+ * number on the front of her sheet, which is the one she cares about.
+ *
+ * So the stored level is a high-water mark. It rises when the curve says so and
+ * never falls, which means a character ahead of the new curve simply stays
+ * where she is until the curve catches up with her. Nobody loses anything;
+ * levelling just goes quiet for a while, which is precisely what was asked for.
+ *
+ * Every writer of `Character.level` goes through this. There is no other way to
+ * set it.
+ */
+export function levelReached(xp: number, stored: number): number {
+  return Math.max(stored, levelFor(xp));
 }
 
 /** What a level costs, from nothing. Clamped, so the cap is a flat line. */

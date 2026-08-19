@@ -2,6 +2,8 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { storylines } from "../prisma/storylines.ts";
 import { DEFAULT_PRESSURE_NAME } from "../lib/game/pressure.ts";
+import { splitObjective } from "../lib/game/quests.ts";
+import { whatWouldCount } from "../lib/game/finds.ts";
 
 /**
  * Guards on the shipped adventures.
@@ -102,4 +104,64 @@ test("storylines: no two adventures share a clock", () => {
   // clock borrowed from another story will not match anything the table sees.
   const names = storylines.map((story) => story.pressureName.toLocaleLowerCase());
   assert.equal(new Set(names).size, names.length, JSON.stringify(names));
+});
+
+test("storylines: no sought thing is secretly two things", () => {
+  // The mug. A family's personal aim read "craft the mug and successfully take
+  // the first sip", which is two conditions in one circle — half finishable
+  // with nothing on screen to say which half. `splitObjective` now takes those
+  // apart, and a shipped seek that trips it would arrive as two objectives the
+  // author never wrote.
+  for (const act of acts) {
+    const seeks = "seeks" in act && Array.isArray(act.seeks) ? (act.seeks as string[]) : [];
+    for (const sought of seeks) {
+      const parts = splitObjective(sought);
+      assert.equal(
+        parts.length,
+        1,
+        `${act.story}, chapter ${act.index}: "${sought}" comes apart into ${parts.length} — ${parts.join(" | ")}`,
+      );
+    }
+  }
+});
+
+test("storylines: what would count reads like words a child would hunt for", () => {
+  // Shown under every outstanding FIND now, so a seek made entirely of filler
+  // would put "that, will, with" on a nine-year-old's screen under the heading
+  // "anything with these in its name counts".
+  for (const act of acts) {
+    const seeks = "seeks" in act && Array.isArray(act.seeks) ? (act.seeks as string[]) : [];
+    for (const sought of seeks) {
+      const counts = whatWouldCount(sought);
+      assert.ok(
+        counts.length >= 2,
+        `${act.story}: "${sought}" has almost nothing to match on — ${counts.join(", ")}`,
+      );
+    }
+  }
+});
+
+test("storylines: every adventure is one the app can actually run", () => {
+  const TONES = ["COZY", "ADVENTUROUS", "SPOOKY"];
+  const LEVELS = ["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"];
+
+  for (const story of storylines) {
+    assert.ok(TONES.includes(story.defaultTone), `${story.title}: tone ${story.defaultTone}`);
+    assert.ok(LEVELS.includes(story.readingLevel), `${story.title}: level ${story.readingLevel}`);
+    assert.ok(story.minPlayers >= 1 && story.minPlayers <= story.maxPlayers, story.title);
+    // Chapters numbered from one, in order. The act index is what the quest
+    // board, the chapter card and the art ladder all key off.
+    story.acts.forEach((act, at) => {
+      assert.equal(act.index, at + 1, `${story.title}: chapter ${at + 1} is numbered ${act.index}`);
+      assert.ok(act.beats.length > 0, `${story.title}, chapter ${act.index} has no beats`);
+      assert.ok(act.goal.length > 20, `${story.title}, chapter ${act.index} has a thin goal`);
+    });
+  }
+});
+
+test("storylines: no two adventures share a slug or a title", () => {
+  const slugs = storylines.map((story) => story.slug);
+  const titles = storylines.map((story) => story.title.toLocaleLowerCase());
+  assert.equal(new Set(slugs).size, slugs.length, "a duplicate slug would upsert over the other");
+  assert.equal(new Set(titles).size, titles.length);
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAX_LEVEL, NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_MIN, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
+import { MAX_LEVEL, NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_MIN, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, levelReached, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
 import { KNACKS, extraSkillRoom, knacksEarned } from "../lib/game/knacks.ts";
 import { MAX_SKILLS } from "../lib/game/practice.ts";
 
@@ -156,12 +156,12 @@ test("bond progress reports position within the current level", () => {
 });
 
 test("level progress reports position within the current level", () => {
-  // Level 1 spans 0..9, level 2 starts at 10.
-  assert.deepEqual(levelProgress(0), { level: 1, into: 0, needed: 10 });
-  assert.deepEqual(levelProgress(7), { level: 1, into: 7, needed: 10 });
-  // Level 2 spans 10..24.
-  assert.deepEqual(levelProgress(10), { level: 2, into: 0, needed: 15 });
-  assert.deepEqual(levelProgress(20), { level: 2, into: 10, needed: 15 });
+  // Level 1 spans 0..39, level 2 starts at 40.
+  assert.deepEqual(levelProgress(0), { level: 1, into: 0, needed: 40 });
+  assert.deepEqual(levelProgress(7), { level: 1, into: 7, needed: 40 });
+  // Level 2 spans 40..99.
+  assert.deepEqual(levelProgress(40), { level: 2, into: 0, needed: 60 });
+  assert.deepEqual(levelProgress(70), { level: 2, into: 30, needed: 60 });
 });
 
 test("level progress reports no further to go at the cap", () => {
@@ -219,13 +219,16 @@ test("levels always cost more than the one before", () => {
 });
 
 test("room to learn opens twice on the way up, and stacks with Fast Learner", () => {
-  // What she may have chosen: two at the builder, then one per level from the
-  // third. The middle two are the numbers the girls were promised.
+  // What she may have chosen: two at the builder, then one more every third
+  // level. It used to be one per level, and a family got to level 4 with four
+  // skills in a single evening — a choice that arrives every session is not a
+  // reward, it is admin.
   assert.equal(chosenSkillsFor(1), 2);
-  assert.equal(chosenSkillsFor(2), 2);
-  assert.equal(chosenSkillsFor(3), 3);
-  assert.equal(chosenSkillsFor(4), 4);
-  assert.equal(chosenSkillsFor(MAX_LEVEL), 2 + MAX_LEVEL - 2);
+  assert.equal(chosenSkillsFor(3), 2);
+  assert.equal(chosenSkillsFor(4), 3);
+  assert.equal(chosenSkillsFor(7), 4);
+  assert.equal(chosenSkillsFor(10), 5);
+  assert.equal(chosenSkillsFor(MAX_LEVEL), 6);
 
   // And the room always sits above it, so a skill she earned by doing it four
   // times never has to displace one she chose.
@@ -241,10 +244,43 @@ test("room to learn opens twice on the way up, and stacks with Fast Learner", ()
 
 test("character levels rise with experience", () => {
   assert.equal(levelFor(0), 1);
-  assert.equal(levelFor(9), 1);
-  assert.equal(levelFor(10), 2);
-  assert.equal(levelFor(25), 3);
+  assert.equal(levelFor(39), 1);
+  assert.equal(levelFor(40), 2);
+  assert.equal(levelFor(100), 3);
   assert.equal(levelFor(10_000), MAX_LEVEL);
+});
+
+test("an evening is worth roughly one level, not three", () => {
+  // The measurement that forced the retune. Sixteen turns of two players earned
+  // about 45 experience each, which used to be level 4.
+  const anEvening = 45;
+  assert.equal(levelFor(anEvening), 2, "one evening is one level, not three");
+  assert.equal(levelFor(anEvening * 4), 4, "four evenings is level 4");
+  assert.equal(levelFor(anEvening * 10), 6, "ten evenings is level 6");
+  assert.ok(
+    levelFor(anEvening * 25) < MAX_LEVEL,
+    "and twenty-five evenings is still not the end of the road",
+  );
+});
+
+test("a level is a high-water mark and never falls", () => {
+  // The whole answer to retuning a curve underneath people who are already
+  // playing on it. Orin is level 4 on 45 experience; the new ladder says 45 is
+  // level 2, and taking two levels off a real child's adventurer overnight is
+  // not a thing this game does.
+  assert.equal(levelReached(45, 4), 4);
+  assert.equal(levelReached(45, 1), 2, "and it still rises when the curve says so");
+  assert.equal(levelReached(2100, 4), MAX_LEVEL);
+});
+
+test("the sheet fills up at about the same time the levels run out", () => {
+  // 49 points of growth across seven stats, from the build cap of 5 to the
+  // ceiling of 12. If these two drift apart, one of them stops meaning anything
+  // — which is exactly what had happened before the retune.
+  const fillsTheSheet = STATS.length * (STAT_CEILING - 5) * XP_PER_STAT_POINT;
+  assert.equal(fillsTheSheet, 1960);
+  assert.ok(fillsTheSheet <= xpForLevel(MAX_LEVEL));
+  assert.ok(fillsTheSheet > xpForLevel(MAX_LEVEL) * 0.8, "and not miles short of it either");
 });
 
 // ---- Skill growth ----------------------------------------------------------

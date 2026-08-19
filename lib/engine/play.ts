@@ -50,6 +50,8 @@ import {
   chapterWillBeDone,
   openMainQuest,
   openPersonalQuests,
+  stuckNote,
+  stuckObjectives,
   type PersonalAim,
 } from "@/lib/game/quests";
 import { pacingGuidance } from "@/lib/game/pacing";
@@ -100,7 +102,7 @@ import {
   familyMoveByKey,
   moveNamesFor,
   kindFromPerspective,
-  levelFor,
+  levelReached,
   movesUnlockedBetween,
   skillRankFor,
   skillRoom,
@@ -109,6 +111,7 @@ import {
 } from "@/lib/game/rules";
 import { CONFIRMED_TIES, isConfirmed } from "@/lib/game/ties";
 import { recordRoad } from "@/lib/game/chronicle";
+import { looksLikeTheSameThing } from "@/lib/game/finds";
 import { lookOf, lookSentence } from "@/lib/game/wardrobe";
 import { ledgerLine, recapFor } from "@/lib/game/recap";
 
@@ -994,13 +997,38 @@ export async function playTurn(
     orderBy: { ordinal: "desc" },
   });
 
-  // Deeds still outstanding, so the extraction can say which of them the
-  // passage finished. Finds are not asked about — they settle themselves by
-  // looking in people's pockets.
-  const openDeeds = (
+  // Everything still outstanding, so the extraction can say which of them the
+  // passage finished.
+  //
+  // It used to be DEEDs only, on the reasoning that a FIND settles itself by
+  // looking in people's pockets. That reasoning has a hole in it that cost a
+  // family an entire evening. Chapter one of *The Village That Built Itself*
+  // asks for "the first thing you made, awake now and following you about" —
+  // which in play is a wooden owl called Woody who rides on somebody's
+  // shoulder. A companion is not an `InventoryItem` and never will be, so the
+  // chapter's only objective could not be ticked off by any sequence of events
+  // whatsoever. Sixteen turns, one chapter, nothing anybody typed could have
+  // helped.
+  //
+  // So the pockets are still the *first* answer for a FIND, and now the
+  // storyteller gets a second one. It is still only ever allowed to say that
+  // one of these listed things happened — it cannot invent an objective — which
+  // is what keeps this from becoming a way to finish a chapter by asserting it.
+  // Anything the party has been after for a long time with nothing to show for
+  // it. Read before the turn, so the passage this turn writes is the one that
+  // puts it back in the room. See `stuckObjectives`.
+  const openQuests = await db.quest.findMany({
+    where: { campaignId: campaign.id, status: "ACTIVE" },
+    select: {
+      openedAtTurn: true,
+      objectives: { select: { text: true, doneAtTurn: true } },
+    },
+  });
+  const stuck = stuckNote(stuckObjectives(openQuests, campaign.turnCounter));
+
+  const openObjectives = (
     await db.questObjective.findMany({
       where: {
-        kind: "DEED",
         doneAtTurn: null,
         quest: { campaignId: campaign.id, status: "ACTIVE" },
       },
@@ -1147,7 +1175,8 @@ export async function playTurn(
         narrationHint: spend.ability.narrationHint,
       })),
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
-      openDeeds,
+      openDeeds: openObjectives,
+      stuck,
   };
 
   // ---- The table's own dice ------------------------------------------------
@@ -1387,7 +1416,9 @@ export async function playTurn(
     for (const [characterId, gained] of xpByCharacter) {
       const character = await tx.character.findUniqueOrThrow({ where: { id: characterId } });
       const xp = character.xp + gained;
-      const level = levelFor(xp);
+      // `levelReached`, never `levelFor`. A curve that got four times steeper
+      // must not take a level off an adventurer who earned hers on the old one.
+      const level = levelReached(xp, character.level);
       await tx.character.update({ where: { id: characterId }, data: { xp, level } });
 
       if (level > character.level) {
@@ -1677,27 +1708,49 @@ export async function playTurn(
       )?.characterId;
       if (!characterId) continue;
 
-      // Picking up a second rope should raise the count, not create a duplicate.
-      const already = await tx.inventoryItem.findUnique({
-        where: { characterId_name: { characterId, name: item.name } },
+      // Picking up a second rope should raise the count, not create a duplicate
+      // — and "the same rope" is a looser question than an exact string match.
+      //
+      // One evening left a child carrying both "sugar-dusted apple turnover"
+      // and "warm, sugar-dusted apple turnover", because the storyteller
+      // described the same pastry twice and the unique key is on the name. The
+      // forgiving matcher that has settled quest finds since the beginning
+      // settles this too: if she is already carrying something that looks like
+      // this thing, it is this thing.
+      const carried = await tx.inventoryItem.findMany({
+        where: { characterId },
+        select: { id: true, name: true },
       });
+      const already = carried.find(
+        (row) =>
+          row.name.toLocaleLowerCase() === item.name.toLocaleLowerCase() ||
+          looksLikeTheSameThing(row.name, item.name),
+      );
 
-      await tx.inventoryItem.upsert({
-        where: { characterId_name: { characterId, name: item.name } },
-        create: {
-          characterId,
-          name: item.name,
-          description: item.description ?? null,
-          foundInCampaignId: campaign.id,
-          requiresSkill: item.requiresSkill ?? null,
-          requiresRank: item.requiresRank ?? null,
-        },
-        update: { quantity: { increment: 1 } },
-      });
+      if (already) {
+        await tx.inventoryItem.update({
+          where: { id: already.id },
+          data: { quantity: { increment: 1 } },
+        });
+      } else {
+        await tx.inventoryItem.create({
+          data: {
+            characterId,
+            name: item.name,
+            description: item.description ?? null,
+            foundInCampaignId: campaign.id,
+            requiresSkill: item.requiresSkill ?? null,
+            requiresRank: item.requiresRank ?? null,
+          },
+        });
+      }
 
       milestones.push(
         already
-          ? anotherMessage(item.character, item.name)
+          // Named as she already has it. "Mira picks up another warm,
+          // sugar-dusted apple turnover" when her sheet says "apple turnover"
+          // is the same confusion in a new coat.
+          ? anotherMessage(item.character, already.name)
           : item.requiresSkill
             ? `${item.character} is now carrying: ${item.name} — but cannot use it yet. That will take ${item.requiresSkill}.`
             : `${item.character} is now carrying: ${item.name}`,
@@ -2357,6 +2410,22 @@ export async function markStoppingPoint(campaignId: string, userId: string) {
 
   const scene = campaign.scenes[0];
   if (!scene) throw new Error("There is no open scene.");
+
+  // Nothing has happened since the last one, so there is nothing new to mark.
+  //
+  // The journal from one evening read "The family stopped here on 16 August
+  // 2026." three times in a row, because pressing the button three times wrote
+  // three rows. A bookmark is a place in a story, and a story that has not
+  // moved has only one place to be.
+  const last = await db.turnEvent.findFirst({
+    where: { sceneId: scene.id },
+    orderBy: { ordinal: "desc" },
+    select: { metadata: true },
+  });
+  if ((last?.metadata as { bookmark?: boolean } | null)?.bookmark === true) {
+    await db.campaign.update({ where: { id: campaignId }, data: { lastPlayedAt: new Date() } });
+    return;
+  }
 
   const when = new Date();
   await db.turnEvent.create({
