@@ -1,6 +1,6 @@
 "use client";
 
-import type { KnownFact, NeededObjective } from "@/lib/game/briefing";
+import type { Attempt, KnownFact, NeededObjective } from "@/lib/game/briefing";
 
 /**
  * The three things the table was never told.
@@ -53,8 +53,8 @@ export function WhatsHere({
   needed: NeededObjective[];
   /** Somewhere worth going next, gathered across the scene. */
   leads: string[];
-  /** What anybody has already had a go at this scene. */
-  tried: string[];
+  /** What anybody has already had a go at this chapter. */
+  tried: Attempt[];
   /** Everything worth remembering, most important first. */
   known: KnownFact[];
 }) {
@@ -186,8 +186,17 @@ export function WhatsHere({
           </summary>
           <ul className="space-y-1.5 px-3 pt-1 pb-3">
             {tried.map((attempt) => (
-              <li key={attempt} className="text-sm text-hearth-200/70">
-                {attempt}
+              <li key={attempt.text} className="text-sm text-hearth-200/70">
+                {attempt.text}
+                {/* Marked rather than hidden. "We tried that two rooms ago" is
+                    a different fact from "we tried that just now" — the first
+                    is a reason to wonder whether it would work here, and
+                    flattening the two would quietly tell a party that a door
+                    they pushed on in the cellar is one they pushed on in the
+                    attic. */}
+                {attempt.thisScene ? null : (
+                  <span className="ml-2 text-xs text-hearth-500">earlier in this chapter</span>
+                )}
               </li>
             ))}
           </ul>

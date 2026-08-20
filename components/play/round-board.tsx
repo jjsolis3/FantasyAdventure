@@ -6,7 +6,8 @@ import { AbilityPicker } from "@/components/play/ability-picker";
 import { FamilyMovePicker, type AvailableMove, type MoveChoice } from "./family-move-picker";
 import { IdeaHints } from "./idea-hints";
 import { TalkNudge } from "./talk-nudge";
-import type { TableBriefing } from "@/lib/game/briefing";
+import type { TableBriefing, YourAim } from "@/lib/game/briefing";
+import { YourAims } from "./your-aim";
 import type { PlayCharacter } from "./play-client";
 import type { RoundView } from "@/lib/game/rounds";
 
@@ -29,6 +30,7 @@ export function RoundBoard({
   availableMoves,
   busy,
   briefing,
+  yourAims,
   talkNudge,
   onRound,
   onTakeTurn,
@@ -43,6 +45,15 @@ export function RoundBoard({
   busy: boolean;
   /** What the table already knows — see `lib/game/briefing.ts`. */
   briefing: TableBriefing;
+  /**
+   * What this browser's player is quietly after.
+   *
+   * Safe on this board specifically because a card is only ever filled in by
+   * the person who owns that adventurer, and these came down a path scoped to
+   * that same account — so an aim is shown in her box and nowhere else, even
+   * though the rest of the board is shared. See `yourAims`.
+   */
+  yourAims: YourAim[];
   /** Why now is a good moment to confer, or null — see `lib/game/talk.ts`. */
   talkNudge: string | null;
   onRound: (round: RoundView | null) => void;
@@ -266,6 +277,7 @@ export function RoundBoard({
                   character={character}
                   talking={talking}
                   briefing={briefing}
+                  yourAims={yourAims}
                   helping={helps[character.id] ?? null}
                   onHelp={(id) => setHelps((current) => ({ ...current, [character.id]: id }))}
                   // Only somebody who has already said what they are doing, and
@@ -392,6 +404,7 @@ function YourAnswer({
   character,
   talking,
   briefing,
+  yourAims,
   helping,
   onHelp,
   joinable,
@@ -407,6 +420,8 @@ function YourAnswer({
   character: PlayCharacter;
   talking: boolean;
   briefing: TableBriefing;
+  /** Everybody's this player owns; filtered to this card's below. */
+  yourAims: YourAim[];
   /** Whose plan she has said she is joining, or null. */
   helping: string | null;
   onHelp: (characterId: string | null) => void;
@@ -422,6 +437,11 @@ function YourAnswer({
 }) {
   return (
     <div className="mt-3 space-y-3">
+      {/* Above her box, in her browser, and on nobody else's card. The whole
+          point of a private aim is that she is the one keeping track of it —
+          which she cannot do if the only place it is written down is a tab. */}
+      {talking ? null : <YourAims aims={yourAims} characterId={character.id} />}
+
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}

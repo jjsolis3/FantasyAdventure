@@ -69,14 +69,23 @@ body {
   }
 
   /* A chapter starting three lines from the bottom of a page is the one thing
-     that makes a printed keepsake read like a bank statement. */
+     that makes a printed keepsake read like a bank statement.
+
+     Only `break-before` now that a chapter holds all of its scenes rather than
+     being one of them: `break-inside: avoid` on eight pages of story is a rule
+     no browser can honour, and asking for it made the honest half unreliable
+     too. A chapter starts on a fresh page; a scene inside it does not. */
   .journal-chapter {
-    break-inside: avoid-page;
     break-before: page;
   }
 
   .journal-chapter:first-of-type {
     break-before: auto;
+  }
+
+  /* A scene heading is no use at the foot of a page with nothing under it. */
+  .journal-scene h3 {
+    break-after: avoid;
   }
 
   .journal-entry {

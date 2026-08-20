@@ -31,6 +31,7 @@
  */
 
 import { db } from "@/lib/db";
+import { isClockEvent } from "@/lib/game/clock-log";
 
 export type SceneRecap = {
   sceneId: string;
@@ -61,7 +62,16 @@ export const CHANGED_LIMIT = 6;
  */
 const FORGETTABLE = [/\bused\b.*\.$/i, /can now use .* together/i];
 
-function worthKeeping(line: string): boolean {
+/**
+ * Exported so the milestones that must survive can be guarded by name.
+ *
+ * The filter is a pattern match on a sentence, which means any milestone
+ * reworded into the shape of a spend would quietly stop reaching recaps — and
+ * quietly is the problem. An encounter ending is the one most worth pinning
+ * down: it is the biggest thing that happens in a chapter and the easiest to
+ * word as *"the Hollow Man used its last trick."*, which this would drop.
+ */
+export function worthKeeping(line: string): boolean {
   // The Family Move unlock is the one exception to the "used" rule above: it is
   // phrased like a spend and is in fact a permanent thing they now have. It
   // gets its own place in the pair card, so it is dropped from here to leave
@@ -85,7 +95,7 @@ export async function recapFor(scene: {
     db.turnEvent.findMany({
       where: { sceneId: scene.id, type: "SYSTEM" },
       orderBy: { ordinal: "asc" },
-      select: { content: true },
+      select: { content: true, metadata: true },
     }),
     db.turnEvent.findMany({
       where: { sceneId: scene.id, type: "DICE_ROLL" },
@@ -95,6 +105,12 @@ export async function recapFor(scene: {
 
   const changed: string[] = [];
   for (const event of system) {
+    // The clock's own receipts share this table and are not milestones. Six
+    // notches would crowd out the six things that are still true tomorrow,
+    // which is the one job a recap has. They have their own history, next to
+    // the clock, where they mean something — see `lib/game/clock-log.ts`.
+    if (isClockEvent(event.metadata)) continue;
+
     const line = event.content.trim();
     if (!line || !worthKeeping(line)) continue;
     if (changed.includes(line)) continue;

@@ -26,6 +26,9 @@ import { scenePicture } from "@/lib/game/scene-picture";
 import { PressureClock } from "@/components/play/pressure-clock";
 import type { EncounterView } from "@/components/play/encounter-panel";
 import { pressureAt, pressureLimit } from "@/lib/game/pressure";
+import { clockMoves } from "@/lib/game/clock-log";
+import { knownPeople } from "@/lib/game/acquaintances";
+import { KnownPeople } from "@/components/campaign/known-people";
 import { abilitiesFor, scopeLabel, unspentAbilities } from "@/lib/game/abilities";
 import {
   alreadyTried,
@@ -33,6 +36,7 @@ import {
   leadsFrom,
   neededObjectives,
   tableFrom,
+  yourAims,
 } from "@/lib/game/briefing";
 import type { AvailableAbility } from "@/components/play/ability-picker";
 import { CONFIRMED_TIES } from "@/lib/game/ties";
@@ -167,6 +171,28 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   // film" sat one tap away on a screen nobody opened mid-turn.
   const needed = await neededObjectives(campaign.id, 5, campaign.turnCounter);
 
+  // Who this party knows from earlier adventures. The same loader the
+  // storyteller's own context uses, so the room and the model can never
+  // disagree about who is out there.
+  const people = await knownPeople(db, {
+    campaignId: campaign.id,
+    party: campaign.party.map((member) => ({
+      characterId: member.characterId,
+      name: member.character.name,
+    })),
+  });
+
+  // Why the clock stands where it does. The position has been on screen since
+  // the clock was built; what put it there has not, and a rule you cannot check
+  // is a rule a child resents rather than learns. Chapter-scoped, because a new
+  // chapter starts the clock at nothing.
+  const moved = await clockMoves(campaign.id, campaign.currentActIndex);
+
+  // And what this player is quietly after, which the list above deliberately
+  // leaves out. `neededObjectives` feeds the television as well as this page, so
+  // a personal aim comes down its own viewer-scoped path — see `yourAims`.
+  const aims = await yourAims(campaign.id, user.id, campaign.turnCounter);
+
   // Somewhere worth going next. The gap a real evening found: the game could
   // put something in front of the party and had no way at all to point down a
   // road, so a family told to find a sky-map was left with a village and no
@@ -174,9 +200,19 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const leads = leadsFrom(turns);
 
   // And what they have already had a go at, so the same barn is not searched
-  // three times. Every one of these has been a row since the first turn and has
-  // never been shown as a list.
-  const tried = alreadyTried(turns);
+  // three times. Gathered across the whole chapter rather than the open scene:
+  // a scene ends when the party moves, so a family going in circles racks up
+  // several of them and a scene-scoped checklist empties itself exactly when it
+  // is most needed. See `alreadyTried`.
+  const attempts = await db.turnEvent.findMany({
+    where: {
+      type: "PLAYER_ACTION",
+      scene: { campaignId: campaign.id, actIndex: campaign.currentActIndex },
+    },
+    orderBy: [{ createdAt: "asc" }, { ordinal: "asc" }],
+    select: { type: true, content: true, metadata: true, sceneId: true },
+  });
+  const tried = alreadyTried(attempts, openScene?.id ?? null);
 
   // Whether the game should ask them to confer, and why. Worked out here rather
   // than in the browser because every input is already on this page — the
@@ -425,6 +461,17 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
             : "one shared screen"}
           {" · "}
           <QuestSummaryLink campaignId={campaign.id} quests={quests} />
+          {" · "}
+          {/* Not only at the end. A family picking this up on a school night
+              wants "where were we" answered before the first turn, and the way
+              in was previously behind the ending — which you reach by finishing
+              the adventure you were trying to remember. */}
+          <Link
+            href={`/campaigns/${campaign.id}/journal`}
+            className="underline hover:text-hearth-300"
+          >
+            read it back
+          </Link>
           {campaign.status === "COMPLETE" ? (
             <>
               {" · "}
@@ -483,6 +530,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               <PressureClock
                 name={campaign.storyline.pressureName}
                 {...pressureAt(campaign.pressure, pressureLimit(campaign.pacing))}
+                moves={moved}
               />
             </div>
 
@@ -549,6 +597,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               encounter={encounter}
               whatNow={whatNow}
               briefing={{ onTheTable, known, needed, leads, tried }}
+              yourAims={aims}
               talkNudge={nudge?.reason ?? null}
             />
           </>
@@ -578,6 +627,20 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                     </li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+
+            {/* Who they know from before, at the table. The storyteller has
+                been told this since acquaintances were built and the family
+                never has — so somebody could walk back in two adventures later
+                and be met with "who's that?", which is the opposite of what
+                remembering them is for. */}
+            {people.length > 0 ? (
+              <div>
+                <h3 className="mb-2 text-xs tracking-wide text-hearth-400 uppercase">
+                  People you know
+                </h3>
+                <KnownPeople people={people} compact />
               </div>
             ) : null}
 

@@ -13,6 +13,7 @@ import {
   worldRoll,
 } from "../lib/game/encounters.ts";
 import { QUEST_XP } from "../lib/game/rules.ts";
+import { worthKeeping } from "../lib/game/recap.ts";
 
 // ---- The track --------------------------------------------------------------
 
@@ -210,4 +211,21 @@ test("both endings are said out loud, and neither is a defeat", () => {
   const turned = endingNote("The Angry Customer", "TURNED");
   assert.match(turned, /the story goes on/);
   assert.doesNotMatch(turned, /lost|lose|fail/i);
+});
+
+test("an encounter's ending survives into the recap, both ways", () => {
+  // Checked here rather than assumed. `endingNote` is pushed onto the same
+  // milestone list as everything else a turn writes, and `recapFor` filters
+  // that list on the *shape of the sentence* — anything phrased like a spend
+  // ("Mira used Step In.") is dropped as not worth remembering a week later.
+  //
+  // An encounter ending is the biggest thing that happens in a chapter and is
+  // one rewording away from looking like a spend, so the guard is the wording
+  // itself: change it to "the Hollow Man used its last trick." and this fails
+  // rather than the chapter cards quietly losing their best line.
+  assert.equal(worthKeeping(endingNote("The Hollow Man", "THROUGH")), true);
+  assert.equal(worthKeeping(endingNote("The Hollow Man", "TURNED")), true);
+
+  // And the thing it is being told apart from still goes.
+  assert.equal(worthKeeping("Mira used Step In."), false);
 });
