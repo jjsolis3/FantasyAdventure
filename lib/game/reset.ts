@@ -32,24 +32,59 @@
  * and how close they have grown, which is earned. So the row stays and the
  * level goes back to nothing.
  *
- * **Her four numbers are given, not guessed.** Stats are built once from twelve
- * points and then only ever rise, and nothing in the game can edit them
+ * **Her numbers are given, not guessed.** Stats are built once from a fixed
+ * budget and then only ever rise, and nothing in the game can edit them
  * afterwards. That means the engine knows exactly how many points growth added
  * but has no idea *which* stats they went into — and a wrong guess here would
  * be unfixable without deleting her. So the caller supplies the spread, checked
  * against the same rule the builder uses. `suggestedBuild` offers a starting
  * point; a person confirms it.
+ *
+ * ## Two different things people call "resetting"
+ *
+ * The first version of this had one mode, and a household asking a perfectly
+ * reasonable question found the gap in it: *"should I reset their stats, and
+ * remove the newly received skills, so it can be applied with the new growth
+ * rules — I just don't want the current characters to be penalised for no
+ * reason."* Nothing here could do that. The only button available threw away
+ * four evenings to fix a spread of numbers.
+ *
+ * So there are two:
+ *
+ * **Start again** — the original. Back to the day she was built: level 1, no
+ * experience, nothing earned, and she picks her two starting skills on the way
+ * out so she leaves as finished an adventurer as the builder makes.
+ *
+ * **Re-lay her numbers** — she keeps everything. Level, experience, skills,
+ * knacks, pockets, keepsakes, the people she knows and how close her bonds have
+ * grown. What changes is the stat spread, re-laid against today's budget, and
+ * because `buildBudget` is written back at the same time, every point her
+ * experience has earned comes back as a point she may spend again on her own
+ * sheet. It is the tool for "the rules moved underneath her", and it costs her
+ * nothing.
+ *
+ * Level and experience are settable on that path, because the reason to reach
+ * for it is usually that one of them is wrong. Never below the level the
+ * experience already justifies, though — `levelReached` is a high-water mark
+ * everywhere else in the game, and a sheet that claimed level 2 on 400
+ * experience would be corrected by the next turn anybody played.
  */
 
 import { db } from "@/lib/db";
+import { ALL_SKILLS } from "@/lib/game/character-options";
 import {
+  MAX_LEVEL,
+  SKILLS_PER_CHARACTER,
   STATS,
   STAT_BUDGET,
   STAT_MAX,
   STAT_MIN,
+  levelFor,
   statColumns,
+  statPointsEarned,
   statsOf,
   validateStats,
+  xpForLevel,
   type StatBlock,
 } from "@/lib/game/rules";
 
@@ -57,6 +92,14 @@ import {
 export type ResetPreview = {
   characterId: string;
   name: string;
+  /**
+   * As written on her sheet, so every sentence on the page can be built from
+   * them. The screen said "Her numbers" over an adventurer called Orin whose
+   * player had chosen he/him — a small thing that reads as not having listened.
+   */
+  pronouns: string | null;
+  /** Drives the skill suggestions on the way out of a full reset. */
+  archetype: string;
   level: number;
   xp: number;
   stats: StatBlock;
@@ -84,6 +127,8 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
     select: {
       id: true,
       name: true,
+      pronouns: true,
+      archetype: true,
       level: true,
       xp: true,
       ...Object.fromEntries(STATS.map((stat) => [stat, true])),
@@ -110,6 +155,8 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
   return {
     characterId: character.id,
     name: character.name,
+    pronouns: character.pronouns,
+    archetype: character.archetype,
     level: character.level,
     xp: character.xp,
     stats: statsOf(character),
@@ -182,21 +229,150 @@ export function suggestedBuild(stats: StatBlock): StatBlock {
 export type ResetOutcome = { ok: true } | { ok: false; reason: string };
 
 /**
+ * Which of the two things somebody means by "reset".
+ *
+ * Named rather than a boolean because the two do almost opposite amounts of
+ * damage, and a call site reading `resetCharacter(id, { mode: "REBASELINE" })`
+ * cannot be misread the way `resetCharacter(id, build, false)` could.
+ */
+export type ResetMode = "START_AGAIN" | "RELAY_NUMBERS";
+
+export type ResetPlan = {
+  mode: ResetMode;
+  /** The spread, checked against the same rule the builder uses. */
+  build: StatBlock;
+  /**
+   * The skills she is built with. `START_AGAIN` only.
+   *
+   * Every skill row is deleted on that path, and the builder hands out two — so
+   * without this a reset adventurer walks away with none where a brand-new one
+   * has a pair, and the only way to notice is to go and find the offer on her
+   * own sheet. Stamped `chosenAtLevel: 1` exactly as the builder stamps them,
+   * or the level-up entitlement would count them as skills she practised into
+   * and hand her two extra choices she has already made.
+   */
+  skills?: string[];
+  /**
+   * Where to put her level. `RELAY_NUMBERS` only; omit to leave it alone.
+   *
+   * Floored by what her experience already justifies — see `plannedLevel`.
+   */
+  level?: number;
+  /** Where to put her experience. `RELAY_NUMBERS` only; omit to leave it alone. */
+  xp?: number;
+};
+
+/**
+ * The level a plan will actually write.
+ *
+ * Never below `levelFor(xp)`, because the stored level is a high-water mark
+ * everywhere else in the game: `levelReached` raises it when the curve says so
+ * and never lowers it. A sheet set to level 2 on 400 experience would be
+ * silently corrected by the next turn anybody played, which is worse than
+ * refusing — it looks like the setting did not take.
+ *
+ * Above that floor an administrator may put it anywhere, including higher than
+ * the experience justifies. That is the point of the tool: it exists for the
+ * cases the rules cannot work out on their own.
+ */
+export function plannedLevel(plan: { level?: number; xp?: number }, current: { level: number; xp: number }): number {
+  const xp = plan.xp ?? current.xp;
+  const asked = plan.level ?? current.level;
+  return Math.min(MAX_LEVEL, Math.max(levelFor(xp), Math.max(1, asked)));
+}
+
+/**
+ * Everything wrong with a plan, or nothing.
+ *
+ * Separate from `resetCharacter` so a form can ask the same question the
+ * database will, and so the rules are testable without a connection.
+ */
+export function validatePlan(plan: ResetPlan): ResetOutcome {
+  const legal = validateStats(plan.build);
+  if (!legal.ok) return legal;
+
+  if (plan.mode === "START_AGAIN") {
+    const skills = plan.skills ?? [];
+    if (skills.length > SKILLS_PER_CHARACTER) {
+      return {
+        ok: false,
+        reason: `Pick at most ${SKILLS_PER_CHARACTER} things she is good at to begin with.`,
+      };
+    }
+    const unknown = skills.find((skill) => !ALL_SKILLS.includes(skill));
+    if (unknown) return { ok: false, reason: `${unknown} is not one of the skills.` };
+    if (new Set(skills).size !== skills.length) {
+      return { ok: false, reason: "The same skill is in the list twice." };
+    }
+    return { ok: true };
+  }
+
+  // Re-laying her numbers. Both fields are optional; each is checked only if it
+  // was given, so "change her level and leave the experience" is expressible.
+  if (plan.level !== undefined) {
+    if (!Number.isInteger(plan.level) || plan.level < 1 || plan.level > MAX_LEVEL) {
+      return { ok: false, reason: `A level has to be a whole number between 1 and ${MAX_LEVEL}.` };
+    }
+  }
+  if (plan.xp !== undefined) {
+    if (!Number.isInteger(plan.xp) || plan.xp < 0) {
+      return { ok: false, reason: "Experience has to be a whole number, and never below nothing." };
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * What re-laying her numbers would hand back, so the screen can say so first.
+ *
+ * The interesting half of that mode and the easy half to miss: writing
+ * `buildBudget` back to today's budget means every point her experience has
+ * earned is unspent again. She does not lose the growth — she gets to place it
+ * somewhere else, which is exactly what "the rules moved underneath her" calls
+ * for.
+ */
+export function pointsHandedBack(xp: number): number {
+  return statPointsEarned(xp);
+}
+
+/**
  * Puts her back to the day she was built.
  *
  * One transaction, so a reset that fails halfway cannot leave a character with
  * her skills gone and her level still at four — which would be worse than
  * either doing it or not.
  */
-export async function resetCharacter(characterId: string, build: StatBlock): Promise<ResetOutcome> {
-  const legal = validateStats(build);
-  if (!legal.ok) return { ok: false, reason: legal.reason };
+export async function resetCharacter(characterId: string, plan: ResetPlan): Promise<ResetOutcome> {
+  const legal = validatePlan(plan);
+  if (!legal.ok) return legal;
 
   const character = await db.character.findUnique({
     where: { id: characterId },
-    select: { id: true },
+    select: { id: true, level: true, xp: true },
   });
   if (!character) return { ok: false, reason: "That adventurer no longer exists." };
+
+  // Re-laying her numbers touches three columns and nothing else. Written as
+  // its own short transaction rather than as a set of conditionals threaded
+  // through the destructive one, because the whole value of this mode is that
+  // it is obviously safe — and a reader should be able to see that it deletes
+  // nothing without holding the other path in their head.
+  if (plan.mode === "RELAY_NUMBERS") {
+    await db.character.update({
+      where: { id: characterId },
+      data: {
+        ...statColumns(plan.build),
+        xp: plan.xp ?? character.xp,
+        level: plannedLevel(plan, character),
+        // The line that hands her growth back. Measured from today's budget, so
+        // `statPointsUnspent` counts every point her experience earned as
+        // unspent again — hers to place somewhere else rather than lost.
+        buildBudget: STAT_BUDGET,
+      },
+    });
+    return { ok: true };
+  }
 
   await db.$transaction(async (tx) => {
     // Everything earned, in the order it was earned in. `deleteMany` rather
@@ -235,11 +411,21 @@ export async function resetCharacter(characterId: string, build: StatBlock): Pro
       data: {
         xp: 0,
         level: 1,
-        ...statColumns(build),
+        ...statColumns(plan.build),
         // Rebuilt under today's rules, so she is measured against them too.
         buildBudget: STAT_BUDGET,
       },
     });
+
+    // The two she begins with, put back. Inside the same transaction as the
+    // deletion above, so there is no instant in which an adventurer exists with
+    // her old skills gone and her new ones not yet arrived — and stamped at
+    // level 1 for the same reason the builder stamps them: left null they read
+    // as skills she practised into, and she would be owed two extra choices she
+    // has just made.
+    for (const name of plan.skills ?? []) {
+      await tx.characterSkill.create({ data: { characterId, name, chosenAtLevel: 1 } });
+    }
   });
 
   return { ok: true };

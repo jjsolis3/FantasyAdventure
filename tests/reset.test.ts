@@ -1,6 +1,11 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { suggestedBuild } from "../lib/game/reset.ts";
+import {
+  plannedLevel,
+  pointsHandedBack,
+  suggestedBuild,
+  validatePlan,
+} from "../lib/game/reset.ts";
 import { safeNext } from "../lib/auth/next-path.ts";
 import {
   browsableSkills,
@@ -10,10 +15,14 @@ import {
   suggestedSkills,
 } from "../lib/game/skill-offer.ts";
 import {
+  MAX_LEVEL,
+  POINTS_TO_SPEND,
   STATS,
   STAT_BUDGET,
   STAT_MAX,
   STAT_MIN,
+  XP_PER_STAT_POINT,
+  levelFor,
   nextSkillLevel,
   statBlock,
   validateStats,
@@ -213,4 +222,122 @@ test("skills: the server refuses what the form should not have offered", () => {
   assert.ok(!mayChoose("Climbing", held), "took a skill she already had");
   assert.ok(!mayChoose("Punching People", held), "took a skill that does not exist");
   assert.ok(mayChoose("Swimming", held), "refused a legal choice");
+});
+
+// ---- Two different things people call "resetting" ---------------------------
+//
+// A household asked whether they should reset two adventurers so the new growth
+// rules applied to them, and said plainly: *"I just don't want the current
+// characters to be penalised for no reason."* There was no way to do that. The
+// only button available threw away four evenings to fix a spread of numbers.
+
+const legalBuild = statBlock({ might: 3, wits: 3, heart: 3, spark: 3, grace: 2, luck: 3, grit: 2 });
+
+test("plan: the legal build is exactly the budget, floor and all", () => {
+  // The arithmetic the old screen showed and never explained: seven boxes
+  // adding up to nineteen under a sentence about twelve points.
+  assert.equal(total(legalBuild), STAT_BUDGET);
+  assert.equal(STAT_BUDGET, STATS.length * STAT_MIN + POINTS_TO_SPEND);
+});
+
+test("plan: an illegal spread is refused whichever mode it is in", () => {
+  const tooMany = statBlock({ might: 5, wits: 5, heart: 5, spark: 5, grace: 5, luck: 5, grit: 5 });
+
+  for (const mode of ["START_AGAIN", "RELAY_NUMBERS"] as const) {
+    const outcome = validatePlan({ mode, build: tooMany });
+    assert.equal(outcome.ok, false);
+  }
+});
+
+test("plan: starting again may hand back the two skills a builder would", () => {
+  assert.deepEqual(
+    validatePlan({ mode: "START_AGAIN", build: legalBuild, skills: ["Climbing", "Bargaining"] }),
+    { ok: true },
+  );
+});
+
+test("plan: and no more than that, and nothing invented", () => {
+  const tooMany = validatePlan({
+    mode: "START_AGAIN",
+    build: legalBuild,
+    skills: ["Climbing", "Bargaining", "Swimming"],
+  });
+  assert.equal(tooMany.ok, false);
+
+  const invented = validatePlan({
+    mode: "START_AGAIN",
+    build: legalBuild,
+    skills: ["Reading Minds"],
+  });
+  assert.equal(invented.ok, false);
+
+  const twice = validatePlan({
+    mode: "START_AGAIN",
+    build: legalBuild,
+    skills: ["Climbing", "Climbing"],
+  });
+  assert.equal(twice.ok, false);
+});
+
+test("plan: none at all is fine — she is offered two on her own sheet", () => {
+  assert.deepEqual(validatePlan({ mode: "START_AGAIN", build: legalBuild, skills: [] }), {
+    ok: true,
+  });
+  assert.deepEqual(validatePlan({ mode: "START_AGAIN", build: legalBuild }), { ok: true });
+});
+
+test("plan: re-laying her numbers may leave the level and experience alone", () => {
+  assert.deepEqual(validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild }), { ok: true });
+});
+
+test("plan: a level off the ladder is refused, and so is negative experience", () => {
+  assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild, level: 0 }).ok, false);
+  assert.equal(
+    validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild, level: MAX_LEVEL + 1 }).ok,
+    false,
+  );
+  assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild, xp: -1 }).ok, false);
+  assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild, xp: 2.5 }).ok, false);
+});
+
+// ---- Where the level actually lands -----------------------------------------
+
+test("level: omitting both leaves her exactly where she was", () => {
+  assert.equal(plannedLevel({}, { level: 4, xp: 45 }), 4);
+});
+
+test("level: it may be put above what the experience has paid for", () => {
+  // The reason the tool exists: it is for the cases the rules cannot work out.
+  assert.equal(plannedLevel({ level: 6 }, { level: 4, xp: 45 }), 6);
+});
+
+test("level: but never below it, because the next turn would raise it back", () => {
+  // 400 experience is level 6 on the ladder. Setting 2 would be a sheet that
+  // corrects itself the moment anybody plays, which looks like a broken form
+  // rather than a refused one.
+  assert.equal(plannedLevel({ level: 2, xp: 400 }, { level: 6, xp: 400 }), levelFor(400));
+  assert.ok(levelFor(400) > 2);
+});
+
+test("level: lowering the experience is allowed to lower the level with it", () => {
+  // The high-water mark is about play never taking a level away. An
+  // administrator saying "put him back to 40 experience" is not play, and the
+  // stored level has to follow or the sheet is a lie.
+  assert.equal(plannedLevel({ level: 1, xp: 40 }, { level: 6, xp: 400 }), levelFor(40));
+});
+
+test("level: it is clamped at the top of the ladder", () => {
+  assert.equal(plannedLevel({ level: 999 }, { level: 1, xp: 0 }), MAX_LEVEL);
+});
+
+// ---- What re-laying hands back ----------------------------------------------
+
+test("points: every point her experience earned comes back to spend again", () => {
+  // The interesting half of the safe mode, and the easy half to miss: writing
+  // `buildBudget` back to today's budget makes the growth unspent rather than
+  // lost.
+  assert.equal(pointsHandedBack(0), 0);
+  assert.equal(pointsHandedBack(XP_PER_STAT_POINT - 1), 0);
+  assert.equal(pointsHandedBack(XP_PER_STAT_POINT), 1);
+  assert.equal(pointsHandedBack(XP_PER_STAT_POINT * 3 + 5), 3);
 });

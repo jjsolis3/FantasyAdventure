@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useState } from "react";
 import { createCharacterAction, updateCharacterAction } from "@/lib/game/actions";
 import type { FormState } from "@/lib/auth/actions";
 import {
@@ -10,11 +10,9 @@ import {
   RACES,
   findArchetype,
   findRace,
-  skillGroupsFor,
 } from "@/lib/game/character-options";
 import {
   STAT_MIN,
-  SKILLS_PER_CHARACTER,
   STATS,
   type StatBlock,
   type StatKey,
@@ -23,6 +21,7 @@ import { generateName } from "@/lib/game/names";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { StatAllocator } from "./stat-allocator";
+import { SkillPicker } from "./skill-picker";
 
 const OTHER = "__other__";
 
@@ -152,25 +151,11 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
   const affinity: StatKey | null =
     findArchetype(archetype)?.affinity ?? findRace(race)?.affinity ?? null;
 
-  const suggested = useMemo(() => findArchetype(archetype)?.skills ?? [], [archetype]);
-  // Grouped rather than one long row. This used to be a flat list of the
-  // twenty-four skills the callings suggest, which was already a wall; with
-  // fifty-six it would be an unreadable one, and the general pool exists so a
-  // girl can be good at swimming or drawing, which is no use if she cannot find
-  // them. Her own calling's three come first and stay green.
-  const skillGroups = useMemo(() => skillGroupsFor(archetype), [archetype]);
-
-  const atSkillLimit = skills.length >= SKILLS_PER_CHARACTER;
-
-  function toggleSkill(skill: string) {
-    setSkills((current) =>
-      current.includes(skill)
-        ? current.filter((entry) => entry !== skill)
-        : current.length < SKILLS_PER_CHARACTER
-          ? [...current, skill]
-          : current,
-    );
-  }
+  // The grouping, the suggestions and the two-skill limit all live in
+  // `SkillPicker` now. There are two places an adventurer gets her starting
+  // skills — the builder and starting again — and one of them was handing out
+  // none at all, which is the kind of thing that happens when the same screen
+  // is written twice.
 
   return (
     <form action={formAction} className="space-y-8">
@@ -307,58 +292,9 @@ export function CharacterForm({ initial, mode }: { initial: CharacterDraft; mode
       ) : null}
 
       {mode === "create" ? (
-      <div className="border-t border-hearth-800/50 pt-6">
-        <div className="mb-3 flex items-baseline justify-between">
-          <span className="text-sm font-medium text-hearth-200">
-            Pick {SKILLS_PER_CHARACTER} things you are especially good at
-          </span>
-          <span className="text-sm text-hearth-400">
-            {skills.length}/{SKILLS_PER_CHARACTER}
-          </span>
+        <div className="border-t border-hearth-800/50 pt-6">
+          <SkillPicker archetype={archetype} skills={skills} onChange={setSkills} />
         </div>
-
-        <div className="space-y-4">
-          {skillGroups.map((group) => (
-            <div key={group.label}>
-              <p className="mb-1.5 text-xs uppercase tracking-wide text-hearth-500">
-                {group.label}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {group.skills.map((skill) => {
-                  const chosen = skills.includes(skill);
-                  const isSuggested = suggested.includes(skill);
-                  return (
-                    <button
-                      key={skill}
-                      type="button"
-                      onClick={() => toggleSkill(skill)}
-                      disabled={!chosen && atSkillLimit}
-                      className={`rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-30 ${
-                        chosen
-                          ? "border-hearth-500 bg-hearth-700/50 text-hearth-100"
-                          : isSuggested
-                            ? "border-moss-600/50 text-moss-400 hover:border-moss-600"
-                            : "border-hearth-800/70 text-hearth-300 hover:border-hearth-700"
-                      }`}
-                    >
-                      {skill}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-        {suggested.length > 0 ? (
-          <p className="mt-3 text-sm text-hearth-400">
-            Green ones suit a {archetype}, but you are free to pick any of them.
-          </p>
-        ) : null}
-
-        {skills.map((skill) => (
-          <input key={skill} type="hidden" name="skills" value={skill} />
-        ))}
-      </div>
       ) : null}
 
       <SubmitButton pendingLabel="Saving…">

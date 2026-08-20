@@ -15,8 +15,13 @@ export const dynamic = "force-dynamic";
  * A list rather than a set of controls. Starting somebody again is a page of
  * its own, behind a name typed out in full — see `[id]/page.tsx`.
  */
-export default async function AdventurersPage() {
+export default async function AdventurersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ done?: string; who?: string }>;
+}) {
   await requireAdmin();
+  const { done, who } = await searchParams;
 
   const characters = await db.character.findMany({
     orderBy: [{ user: { displayName: "asc" } }, { name: "asc" }],
@@ -51,6 +56,24 @@ export default async function AdventurersPage() {
         title="Adventurers"
         lead="Everyone in the house, and what they have earned so far."
       />
+
+      {/* Said out loud, because the alternative is what this used to do: finish
+          a destructive action by returning to a page that looks exactly like
+          one where nothing happened. */}
+      {done === "again" || done === "relaid" ? (
+        <div
+          role="status"
+          className={`mb-8 rounded-xl border px-4 py-3 text-sm ${
+            done === "again"
+              ? "border-rose-800/50 bg-rose-950/25 text-rose-100"
+              : "border-moss-800/50 bg-moss-900/15 text-moss-100"
+          }`}
+        >
+          {done === "again"
+            ? `${who ?? "That adventurer"} has been started again — level 1, and nothing earned since the day they were built.`
+            : `${who ?? "That adventurer"}'s numbers have been re-laid. Nothing else changed, and any points their experience has earned are theirs to spend again.`}
+        </div>
+      ) : null}
 
       <p className="mb-8">
         <Link href="/settings" className="text-sm text-hearth-400 underline hover:text-hearth-200">
