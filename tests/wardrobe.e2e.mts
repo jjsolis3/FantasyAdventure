@@ -235,9 +235,9 @@ async function main() {
   );
 
   const tried = alreadyTried(turns);
-  console.log(`     tried: ${tried.join(" | ")}`);
+  console.log(`     tried: ${tried.map((attempt) => attempt.text).join(" | ")}`);
   check("every attempt is on the checklist", tried.length === 4, String(tried.length));
-  check("newest first", tried[0] === "I count the doors as we pass them.", tried[0]);
+  check("newest first", tried[0]?.text === "I count the doors as we pass them.", tried[0]?.text);
 
   console.log("\n-- What would count --------------------------------------------");
   const needed = await neededObjectives(campaign.id);

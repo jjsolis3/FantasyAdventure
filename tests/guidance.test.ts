@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { whatWouldCount, looksLikeTheSameThing } from "../lib/game/finds.ts";
-import { alreadyTried, leadsFrom } from "../lib/game/briefing.ts";
+import { alreadyTried, leadsFrom, triedNote } from "../lib/game/briefing.ts";
 import { ledgerLine } from "../lib/game/recap.ts";
-import { summaryPrompt, extractionPrompt } from "../lib/ai/prompts.ts";
+import { summaryPrompt, extractionPrompt, narrationPrompt } from "../lib/ai/prompts.ts";
 
 /**
  * Telling a table what it is actually doing.
@@ -74,38 +74,100 @@ test("leads: a scene with none is empty rather than invented", () => {
 
 // ---- What they have already tried -------------------------------------------
 
-const tried = (content: string) => ({ type: "PLAYER_ACTION", content, metadata: null });
+const tried = (content: string, sceneId = "here") => ({
+  type: "PLAYER_ACTION",
+  content,
+  metadata: null,
+  sceneId,
+});
 const said = (content: string) => ({
   type: "PLAYER_ACTION",
   content,
   metadata: { spoken: true },
+  sceneId: "here",
 });
-const told = (content: string) => ({ type: "NARRATION", content, metadata: null });
+const told = (content: string) => ({ type: "NARRATION", content, metadata: null, sceneId: "here" });
+
+/** The list, as words, for the assertions that do not care where it happened. */
+const words = (turns: Parameters<typeof alreadyTried>[0], sceneId: string | null = null) =>
+  alreadyTried(turns, sceneId).map((attempt) => attempt.text);
 
 test("tried: attempts come back newest first", () => {
   const turns = [tried("I look under the loose board"), told("…"), tried("I check the barn")];
-  assert.deepEqual(alreadyTried(turns), ["I check the barn", "I look under the loose board"]);
+  assert.deepEqual(words(turns), ["I check the barn", "I look under the loose board"]);
 });
 
 test("tried: the same thing typed twice is one line", () => {
   const turns = [tried("I check the barn"), tried("I check the barn!")];
-  assert.deepEqual(alreadyTried(turns), ["I check the barn!"]);
+  assert.deepEqual(words(turns), ["I check the barn!"]);
 });
 
 test("tried: the words somebody actually typed are what is shown", () => {
   // Normalised only for the comparison. The list is theirs, punctuation and all.
-  assert.deepEqual(alreadyTried([tried("I check the barn — again")]), [
-    "I check the barn — again",
-  ]);
+  assert.deepEqual(words([tried("I check the barn — again")]), ["I check the barn — again"]);
 });
 
 test("tried: talking is not an attempt", () => {
   const turns = [said("Rowan, what did you see?"), tried("I open the cupboard")];
-  assert.deepEqual(alreadyTried(turns), ["I open the cupboard"]);
+  assert.deepEqual(words(turns), ["I open the cupboard"]);
 });
 
 test("tried: passages are not attempts", () => {
-  assert.deepEqual(alreadyTried([told("The barley shifts.")]), []);
+  assert.deepEqual(words([told("The barley shifts.")]), []);
+});
+
+// ---- …and across the whole chapter, not one room of it ----------------------
+
+test("tried: an attempt from an earlier scene survives the scene ending", () => {
+  // The sixteen-turn chapter, in miniature. A scene ends when the party moves,
+  // so a family going in circles racks up several — and the checklist used to
+  // empty itself at exactly the moment it was most needed.
+  const turns = [tried("I search the cellar", "cellar"), tried("I search the attic", "attic")];
+  assert.deepEqual(words(turns, "attic"), ["I search the attic", "I search the cellar"]);
+});
+
+test("tried: where it happened is marked rather than flattened", () => {
+  const turns = [tried("I search the cellar", "cellar"), tried("I search the attic", "attic")];
+  const list = alreadyTried(turns, "attic");
+
+  assert.equal(list[0].thisScene, true);
+  assert.equal(list[1].thisScene, false);
+});
+
+test("tried: the newest time a repeated attempt was made is the one marked", () => {
+  // She tried it two rooms ago and again just now. "Just now" is the answer to
+  // "have we done this?", so that is the one the flag has to describe.
+  const turns = [tried("I ring the bell", "cellar"), tried("I ring the bell", "attic")];
+  const list = alreadyTried(turns, "attic");
+
+  assert.equal(list.length, 1);
+  assert.equal(list[0].thisScene, true);
+});
+
+test("tried: the storyteller is told not to send them back, and not that they are banned", () => {
+  const note = triedNote(alreadyTried([tried("I search the cellar")], "here"));
+
+  assert.match(note, /ALREADY TRIED THIS CHAPTER/);
+  assert.match(note, /- I search the cellar/);
+  assert.match(note, /Do not have somebody suggest one of them/);
+  // The load-bearing half: a model told only "they are stuck" points them back
+  // down a corridor they have walked, which reads as help and costs a turn.
+  assert.match(note, /do not quietly make one work now that would not work before/);
+  assert.match(note, /If they try one again anyway, let it happen/);
+});
+
+test("tried: nothing tried says nothing at all", () => {
+  assert.equal(triedNote([]), "");
+});
+
+test("tried: it reaches the passage it is meant to change", () => {
+  const prompt = narrationPrompt({
+    context: "…",
+    actions: [{ character: "Orin", text: "I look around" }],
+    resolutions: "…",
+    tried: triedNote(alreadyTried([tried("I search the cellar")], "here")),
+  });
+  assert.match(prompt, /ALREADY TRIED THIS CHAPTER/);
 });
 
 // ---- The recap --------------------------------------------------------------

@@ -14,18 +14,36 @@
  * a clock at all, and that silence is the reward.
  */
 
+import type { ClockMove } from "@/lib/game/pressure";
+
 export function PressureClock({
   name,
   level,
   limit,
+  moves = [],
   className = "",
 }: {
   name: string;
   level: number;
   limit: number;
+  /**
+   * What moved it, newest first — see `lib/game/clock-log.ts`.
+   *
+   * The half that was missing. Notches taught a child *that* she was being
+   * charged and never *what for*, and a rule you cannot check is a rule you
+   * resent rather than learn. Folded away, because it is evidence rather than
+   * part of the story: opened when somebody says "why did that go up?", which
+   * is exactly the question this mechanic wants asked.
+   *
+   * Empty on the television, deliberately — see `screenView`. Four metres away
+   * a fold nobody can open is just a smaller clock.
+   */
+  moves?: ClockMove[];
   /** So the television can size it for a sofa. */
   className?: string;
 }) {
+  // Never for a clock at rest, even if there is history: a chapter that has
+  // just reset should not open with a list of everything the last one cost.
   if (level <= 0) return null;
 
   const full = level >= limit;
@@ -79,6 +97,36 @@ export function PressureClock({
             ? "One more wasted turn and it runs out."
             : "This moves when a turn goes nowhere. A good idea costs it nothing — and neither does a bad roll."}
       </p>
+
+      {moves.length > 0 ? (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-hearth-400">
+            What moved it ({moves.length})
+          </summary>
+          <ul className="mt-1.5 space-y-1.5">
+            {moves.map((move) => (
+              <li key={`${move.turn}-${move.level}-${move.spent}`} className="text-xs">
+                <span className={move.spent ? "text-red-300" : "text-hearth-300"}>
+                  Turn {move.turn}
+                  {move.spent
+                    ? " — it ran out"
+                    : ` — that turn went nowhere · ${move.level} of ${move.limit}`}
+                </span>
+
+                {/* Their own words, quoted rather than described. Naming what
+                    was tried is the difference between a receipt and a
+                    reprimand — the game is showing what the turn was, not
+                    grading it. */}
+                {move.tried.length > 0 ? (
+                  <span className="mt-0.5 block text-hearth-500 italic">
+                    {move.tried.join(" · ")}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

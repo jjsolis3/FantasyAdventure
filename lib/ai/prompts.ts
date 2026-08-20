@@ -329,6 +329,16 @@ export function narrationPrompt(options: {
    * particular thing*.
    */
   stuck?: string;
+  /**
+   * What the party has already had a go at this chapter.
+   *
+   * From `triedNote`. The companion to `stuck`, and the one that stops the
+   * cheapest bad answer to it: a model told a party is going in circles will
+   * point them back down a corridor they have already walked, because that
+   * looks like help and costs nothing to write. It reads as a hint, spends a
+   * turn, and teaches a family that the circling is their fault.
+   */
+  tried?: string;
 }): string {
   return `${options.context}
 ${correctionBlock(options.correction)}
@@ -337,7 +347,7 @@ ${options.actions.map((action) => `- ${action.character}: ${action.text}`).join(
 
 WHAT THE DICE DECIDED (you must narrate these outcomes exactly as given):
 ${options.resolutions}
-${options.encounter ? `\n${options.encounter}\n` : ""}${options.pressure ? `\n${options.pressure}\n` : ""}${options.stuck ? `\n${options.stuck}\n` : ""}
+${options.encounter ? `\n${options.encounter}\n` : ""}${options.pressure ? `\n${options.pressure}\n` : ""}${options.stuck ? `\n${options.stuck}\n` : ""}${options.tried ? `\n${options.tried}\n` : ""}
 Narrate what happens next, as ONE scene rather than one paragraph per person.
 Everybody's action must land somewhere in it, but let them run into each other:
 what one of them does happens in the room the others are standing in.

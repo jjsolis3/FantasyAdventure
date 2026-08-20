@@ -67,11 +67,14 @@ import {
   payoutFor,
   worldRoll,
 } from "@/lib/game/encounters";
+import { alreadyTried, triedNote } from "@/lib/game/briefing";
 import {
   advance,
+  clockMoveNote,
   pressureAt,
   pressureGuidance,
   pressureLimit,
+  TRIED_PER_MOVE,
   shouldTick,
 } from "@/lib/game/pressure";
 import {
@@ -88,6 +91,7 @@ import { abilitiesFor, unspentAbilities, windowKeyFor, type Ability } from "@/li
 import { pronounsOf } from "@/lib/game/pronouns";
 import {
   acquaintanceKey,
+  knownPeople,
   metMessage,
   whoComesHome,
   type KnownPerson,
@@ -481,40 +485,13 @@ async function personalAimsFor(campaignId: string): Promise<{ character: string;
  * somebody standing in front of it would be strange.
  */
 async function knownPeopleFor(campaign: LoadedCampaign): Promise<KnownPerson[]> {
-  const rows = await db.acquaintance.findMany({
-    where: {
-      characterId: { in: campaign.party.map((member) => member.characterId) },
-      NOT: { metInCampaignId: campaign.id },
-    },
-    orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }],
+  return knownPeople(db, {
+    campaignId: campaign.id,
+    party: campaign.party.map((member) => ({
+      characterId: member.characterId,
+      name: member.character.name,
+    })),
   });
-  if (rows.length === 0) return [];
-
-  const namesById = new Map(
-    campaign.party.map((member) => [member.characterId, member.character.name]),
-  );
-
-  const merged = new Map<string, KnownPerson>();
-  for (const row of rows) {
-    const existing = merged.get(row.key);
-    const who = namesById.get(row.characterId);
-
-    if (existing) {
-      if (who && !existing.knownBy.includes(who)) existing.knownBy.push(who);
-      existing.timesMet = Math.max(existing.timesMet, row.timesMet);
-      continue;
-    }
-
-    merged.set(row.key, {
-      name: row.name,
-      about: row.about,
-      metInCampaignTitle: row.metInCampaignTitle,
-      timesMet: row.timesMet,
-      knownBy: who ? [who] : [],
-    });
-  }
-
-  return [...merged.values()];
 }
 
 async function nextOrdinal(sceneId: string): Promise<number> {
@@ -1026,6 +1003,25 @@ export async function playTurn(
   });
   const stuck = stuckNote(stuckObjectives(openQuests, campaign.turnCounter));
 
+  // And what they have already had a go at, so the passage does not send them
+  // back down a corridor they have walked. The other half of noticing a stuck
+  // party: telling a model they are stuck without telling it what has been done
+  // invites the cheapest bad answer there is. Chapter-scoped, matching the span
+  // the chapter's objectives are open across. See `triedNote`.
+  const tried = triedNote(
+    alreadyTried(
+      await db.turnEvent.findMany({
+        where: {
+          type: "PLAYER_ACTION",
+          scene: { campaignId: campaign.id, actIndex: campaign.currentActIndex },
+        },
+        orderBy: [{ createdAt: "asc" }, { ordinal: "asc" }],
+        select: { type: true, content: true, metadata: true, sceneId: true },
+      }),
+      scene.id,
+    ),
+  );
+
   const openObjectives = (
     await db.questObjective.findMany({
       where: {
@@ -1177,6 +1173,7 @@ export async function playTurn(
       deflectionNote: flagged ? IN_FICTION_DEFLECTION : null,
       openDeeds: openObjectives,
       stuck,
+      tried,
   };
 
   // ---- The table's own dice ------------------------------------------------
@@ -1951,20 +1948,54 @@ export async function playTurn(
     // see lib/game/pressure.ts for why both have to agree before anything moves.
     // A new act starts the clock at nothing: a fresh problem should not open
     // with the fog already at the door because of how the last one went.
-    const nextPressure = advancesAct
-      ? 0
-      : advance(
-          clock,
-          shouldTick({
-            outcomes: result.checks.map((check) => check.outcome),
-            deedsDone: result.extraction.deedsDone.length,
-            itemsGained: result.extraction.itemsGained.length,
-            questsOpened: result.extraction.questsOpened.length,
-            sceneComplete: result.extraction.sceneComplete,
-            actComplete: result.extraction.actComplete,
-            storytellerSaysMoved: result.extraction.movedForward,
-          }),
-        );
+    const ticked = shouldTick({
+      outcomes: result.checks.map((check) => check.outcome),
+      deedsDone: result.extraction.deedsDone.length,
+      itemsGained: result.extraction.itemsGained.length,
+      questsOpened: result.extraction.questsOpened.length,
+      sceneComplete: result.extraction.sceneComplete,
+      actComplete: result.extraction.actComplete,
+      storytellerSaysMoved: result.extraction.movedForward,
+    });
+
+    const nextPressure = advancesAct ? 0 : advance(clock, ticked);
+
+    // The receipt for that movement, so the notch is not an accusation with no
+    // evidence attached. Written as an ordinary SYSTEM event carrying its detail
+    // in metadata — which means taking the turn back takes the movement back
+    // with it, for free. See `lib/game/clock-log.ts`.
+    //
+    // Nothing at all on a chapter turn: the clock resetting because a new act
+    // began is bookkeeping, not something the story did to anybody.
+    if (!advancesAct && (clock.owed || ticked)) {
+      const move = {
+        // A debt is collected before anything else can move, so a turn that
+        // pays one never also ticks — the two branches cannot both be true.
+        spent: clock.owed,
+        level: nextPressure,
+        limit: clock.limit,
+      };
+
+      await tx.turnEvent.create({
+        data: {
+          sceneId: scene.id,
+          ordinal: ordinal++,
+          type: "SYSTEM",
+          content: clockMoveNote(campaign.storyline.pressureName, move),
+          metadata: {
+            clock: move.spent ? "SPENT" : "TICK",
+            turn: turnCounter,
+            level: move.level,
+            limit: move.limit,
+            // In their own words. "I look around the room again", read back two
+            // turns later, explains the notch better than any sentence the game
+            // could write about it — and it says nothing about anybody being
+            // wrong, which is what keeps a clock fair.
+            tried: accepted.slice(0, TRIED_PER_MOVE).map((action) => action.text.trim()),
+          },
+        },
+      });
+    }
 
     await tx.campaign.update({
       where: { id: campaign.id },

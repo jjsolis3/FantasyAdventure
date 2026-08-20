@@ -22,7 +22,8 @@ import { useCampaignState } from "./use-campaign-state";
 import type { RoundView } from "@/lib/game/rounds";
 import { WhatsHere } from "./whats-here";
 import { TalkNudge } from "./talk-nudge";
-import type { TableBriefing } from "@/lib/game/briefing";
+import type { TableBriefing, YourAim } from "@/lib/game/briefing";
+import { YourAims } from "./your-aim";
 import { STAT_INFO, type StatKey } from "@/lib/game/rules";
 
 export type PlayCharacter = {
@@ -129,6 +130,7 @@ export function PlayClient({
   initialRound,
   whatNow,
   briefing,
+  yourAims,
   talkNudge,
   encounter,
 }: {
@@ -156,6 +158,14 @@ export function PlayClient({
   whatNow: string | null;
   /** What the table already knows — see `lib/game/briefing.ts`. */
   briefing: TableBriefing;
+  /**
+   * What this player is quietly after, and nobody else's.
+   *
+   * Kept out of `briefing` on purpose. That one also feeds the television, and
+   * a personal aim is the one thing on this screen that must never reach a
+   * display in the middle of a living room — see `yourAims`.
+   */
+  yourAims: YourAim[];
   /**
    * Why now would be a good moment to talk to each other, or null.
    *
@@ -677,6 +687,11 @@ export function PlayClient({
               tried={briefing.tried}
               known={briefing.known}
             />
+            {/* Under the shared board rather than over it. What the party owes
+                each other comes first; what she is quietly after comes second
+                — but it comes on the same screen, in the same glance, which is
+                the whole of the fix. */}
+            <YourAims aims={yourAims} />
           </>
         ) : null}
 
@@ -804,6 +819,7 @@ export function PlayClient({
             availableMoves={availableMoves}
             busy={telling}
             briefing={briefing}
+            yourAims={yourAims}
             talkNudge={talkNudge}
             onRound={applyRound}
             onTakeTurn={takeTurn}
@@ -814,6 +830,7 @@ export function PlayClient({
             campaignId={campaignId}
             talking={talking}
             briefing={briefing}
+            yourAims={yourAims}
             character={party[phase.index]}
             index={phase.index}
             total={party.length}
@@ -1123,6 +1140,7 @@ function AskCharacter({
   campaignId,
   talking,
   briefing,
+  yourAims,
   character,
   index,
   total,
@@ -1144,6 +1162,8 @@ function AskCharacter({
   talking: boolean;
   /** What the table already knows — see `lib/game/briefing.ts`. */
   briefing: TableBriefing;
+  /** Everybody's, filtered down to this one's below. */
+  yourAims: YourAim[];
   character: PlayCharacter;
   index: number;
   total: number;
@@ -1179,6 +1199,13 @@ function AskCharacter({
             : "Anything at all. Talk, look, try something silly — the storyteller will go with it."}
         </p>
       </div>
+
+      {/* Above the box, not below it. She is being asked what she does; if her
+          own aim is going to change that answer it has to be readable before
+          she starts typing rather than after. Not while the table is only
+          talking it over — nothing is being attempted, so nothing can advance
+          it. */}
+      {talking ? null : <YourAims aims={yourAims} characterId={character.id} />}
 
       <textarea
         ref={inputRef}

@@ -84,6 +84,14 @@ export type TurnInput = {
    */
   stuck?: string;
   /**
+   * What they have already had a go at this chapter.
+   *
+   * Narration only, like the clock and the stuck note. It changes what the
+   * passage is allowed to offer rather than what any die says — see
+   * `triedNote`.
+   */
+  tried?: string;
+  /**
    * What is standing in front of them, and how it is going.
    *
    * Reaches narration, and — unlike the act clock — the dice as well, because
@@ -539,6 +547,7 @@ async function finishTurn(
     resolutions: resolutions || "Nothing needed a dice roll this turn.",
     pressure: input.pressure,
     stuck: input.stuck,
+    tried: input.tried,
     encounter: input.encounter,
   });
 

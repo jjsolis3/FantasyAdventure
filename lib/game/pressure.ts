@@ -163,6 +163,66 @@ export function advance(state: PressureState, tick: boolean): number {
 }
 
 /**
+ * One movement of the clock, written down at the moment it happens.
+ *
+ * ## Why it is recorded at all
+ *
+ * The clock is on screen and has been since it was built — but only as a
+ * position. Four lit notches and the sentence *"this moves when a turn goes
+ * nowhere"* is a rule stated in the abstract, and a rule stated in the abstract
+ * is one a nine-year-old nods at and does not learn.
+ *
+ * What actually teaches it is the pairing: *that* turn moved it, and the next
+ * one did not. That pairing lasts about ninety seconds in anybody's memory and
+ * then the notch is just a notch — an accusation with no evidence attached,
+ * which is the worst version of this mechanic. So each movement keeps its own
+ * receipt.
+ *
+ * ## What is on the receipt
+ *
+ * The turn number, where the clock stood afterwards, and what the party actually
+ * had a go at — in their own words, because "I look around the room again" read
+ * back two turns later explains the notch better than any sentence the game
+ * could write about it.
+ *
+ * Deliberately not a judgement. Nowhere does this say anybody did anything
+ * wrong: it says the turn went nowhere, which is a fact about the story rather
+ * than about a child. The distinction is the whole reason a clock is fair.
+ */
+export type ClockMove = {
+  /** The turn it happened on, as the family counts turns. */
+  turn: number;
+  /** Where the clock stood once this movement was done. */
+  level: number;
+  limit: number;
+  /**
+   * True when this was the turn it ran out and the story took something.
+   *
+   * The clock resets to nothing afterwards, so without this the history would
+   * show a jump from full back to empty with no explanation of what happened in
+   * between — which is precisely the thing worth remembering.
+   */
+  spent: boolean;
+  /** What anybody had a go at on that turn, in their own words. */
+  tried: string[];
+};
+
+/** How many attempts are worth keeping against one movement. */
+export const TRIED_PER_MOVE = 3;
+
+/**
+ * The sentence a movement is filed under.
+ *
+ * Written in the story's own words for the same reason the clock is: *the fog
+ * came in* teaches a story, *pressure +1* teaches a spreadsheet. Kept to one
+ * line because it lands in the same transcript as every other milestone.
+ */
+export function clockMoveNote(name: string, move: Pick<ClockMove, "level" | "limit" | "spent">): string {
+  if (move.spent) return `${name} ran out — and the story went on from somewhere worse.`;
+  return `${name} moved — that turn went nowhere. ${move.level} of ${move.limit}.`;
+}
+
+/**
  * What the storyteller is told about the clock, or nothing at all.
  *
  * Three states, and each one is an instruction rather than a status, because a

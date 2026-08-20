@@ -24,6 +24,8 @@
  * never mentions them.
  */
 
+import type { Prisma } from "@/generated/prisma/client.ts";
+
 /** What a remembered NPC looks like coming out of the campaign's memory. */
 export type RememberedNpc = {
   key: string;
@@ -97,6 +99,71 @@ export type KnownPerson = {
   /** Which of the party know them, so the storyteller can be specific. */
   knownBy: string[];
 };
+
+/**
+ * Who this party knows, gathered across everybody travelling.
+ *
+ * Merged rather than listed twice, because "Mira and Rowan both know the
+ * beekeeper" is a different and better sentence than the same person appearing
+ * on two lines.
+ *
+ * Anybody met on *this* adventure is left out. For the storyteller that is
+ * because offering a reunion with somebody standing in front of it would be
+ * strange; for the family it is because this list answers "who do we know from
+ * before", and the woman they met an hour ago is not an answer to that.
+ *
+ * One loader for both readers on purpose. The storyteller is told this party
+ * knows the beekeeper and the family is shown the same sentence, so the two can
+ * never quietly disagree about who is out there.
+ */
+export async function knownPeople(
+  /**
+   * Narrowed to the one table it touches, in the same shape `questBoard` uses.
+   * Taking the client rather than importing it keeps this module free of a
+   * database connection, which is what lets the rest of it be unit-tested.
+   */
+  db: { acquaintance: Prisma.TransactionClient["acquaintance"] },
+  input: {
+    /** The adventure being played, so its own cast is excluded. */
+    campaignId: string;
+    party: { characterId: string; name: string }[];
+  },
+): Promise<KnownPerson[]> {
+  if (input.party.length === 0) return [];
+
+  const rows = await db.acquaintance.findMany({
+    where: {
+      characterId: { in: input.party.map((member) => member.characterId) },
+      NOT: { metInCampaignId: input.campaignId },
+    },
+    orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }],
+  });
+  if (rows.length === 0) return [];
+
+  const namesById = new Map(input.party.map((member) => [member.characterId, member.name]));
+  const merged = new Map<string, KnownPerson>();
+
+  for (const row of rows) {
+    const existing = merged.get(row.key);
+    const who = namesById.get(row.characterId);
+
+    if (existing) {
+      if (who && !existing.knownBy.includes(who)) existing.knownBy.push(who);
+      existing.timesMet = Math.max(existing.timesMet, row.timesMet);
+      continue;
+    }
+
+    merged.set(row.key, {
+      name: row.name,
+      about: row.about,
+      metInCampaignTitle: row.metInCampaignTitle,
+      timesMet: row.timesMet,
+      knownBy: who ? [who] : [],
+    });
+  }
+
+  return [...merged.values()];
+}
 
 /**
  * How many are put in front of the storyteller at once.
