@@ -415,15 +415,19 @@ try {
   await page.reload();
   await page.click('button:has-text("What do you do?")');
   await page.click('button:has-text("I don\'t know what to do")');
-  await page.waitForSelector('button:has-text("I creep closer and hold out my hand.")', {
-    timeout: 30_000,
-  });
+  // Nudges, not scripts. This waited for a button reading "I creep closer and
+  // held out my hand." and then clicked it to fill the box — which is exactly
+  // what the feature deliberately stopped doing. Ready-made first-person
+  // actions made the button the fastest route through the game, so they became
+  // things a child notices rather than things she taps in.
+  await page.waitForSelector("text=The barley is moving against the wind", { timeout: 30_000 });
   check("ideas are offered", true);
 
-  await page.click('button:has-text("I creep closer and hold out my hand.")');
+  const nudge = page.getByText("The barley is moving against the wind, not with it.");
+  check("and they are text to read, not a button to press", (await nudge.count()) > 0);
   check(
-    "picking an idea fills the box",
-    (await page.inputValue("textarea")).includes("creep closer"),
+    "so nothing writes her answer for her",
+    (await page.inputValue("textarea")).trim() === "",
   );
 
   // ---- Marking where the evening stopped ----------------------------------

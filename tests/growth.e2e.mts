@@ -20,7 +20,16 @@ import { PrismaClient } from "../generated/prisma/client.ts";
 import { buildCharacter } from "./e2e-helpers.mts";
 import { ATTEMPTS_TO_LEARN } from "../lib/game/practice.ts";
 import { STAT_CEILING, statModifier } from "../lib/game/rules.ts";
-import { signatureFor } from "../lib/game/character-options.ts";
+import { signaturesFor } from "../lib/game/character-options.ts";
+
+/**
+ * The first move a calling gives you.
+ *
+ * `signatureFor` became `signaturesFor` when a second signature was added at
+ * level five, and this file kept importing the old name — so it could not even
+ * load, and had been throwing on its very first line ever since.
+ */
+const firstSignature = (archetype: string) => signaturesFor(archetype)[0];
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -134,10 +143,10 @@ try {
   await page.goto(`${BASE}/characters/${mira.id}`);
   const fresh = (await page.textContent("main")) ?? "";
   check("a new adventurer has nothing to spend yet", !fresh.includes("points to spend"));
-  check("her calling gives her something only she can do", fresh.includes(signatureFor("Beastfriend")!.name));
+  check("her calling gives her something only she can do", fresh.includes(firstSignature("Beastfriend").name));
   check("and says so", fresh.includes("Beastfriend only"));
 
-  const guardianOnly = signatureFor("Guardian")!.name;
+  const guardianOnly = firstSignature("Guardian").name;
   check("which is not the same as somebody else's", !fresh.includes(guardianOnly), guardianOnly);
 
   // ---- Growth is spendable, and hers to place -------------------------------
