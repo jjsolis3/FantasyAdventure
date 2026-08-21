@@ -54,7 +54,7 @@ fi
 ALL=(
   auth characters campaigns play rounds invites quests loadout growth knacks
   acquaintances personal-quests progression settings admin screen bonds
-  briefing chapters chronicle encounters luck pressure rebalance reset
+  briefing chapters chronicle encounters levels luck pressure rebalance reset
   table-dice table-view talk ties wardrobe
 )
 

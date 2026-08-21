@@ -6,9 +6,21 @@ import { MAX_LEVEL, levelProgress } from "@/lib/game/rules";
  * The ring matters more than it looks: a child who cannot yet see their
  * experience going anywhere has no reason to care that a roll earned any. This
  * makes "nearly there" visible at a glance.
+ *
+ * `level` is `Character.level` and is not optional, because the number on the
+ * front of a child's sheet is the one thing here that must never be guessed.
+ * See `levelProgress` for what happened when it was.
  */
-export function LevelBadge({ xp, size = 64 }: { xp: number; size?: number }) {
-  const { level, into, needed } = levelProgress(xp);
+export function LevelBadge({
+  level: stored,
+  xp,
+  size = 64,
+}: {
+  level: number;
+  xp: number;
+  size?: number;
+}) {
+  const { level, into, needed } = levelProgress(xp, stored);
 
   // Geometry for the ring. strokeDasharray/offset draw an arc of the circle
   // proportional to progress, which needs no library and scales cleanly.
@@ -70,8 +82,8 @@ export function LevelBadge({ xp, size = 64 }: { xp: number; size?: number }) {
 }
 
 /** Compact inline variant for tight rows, such as the play screen's party bar. */
-export function LevelPip({ xp }: { xp: number }) {
-  const { level } = levelProgress(xp);
+export function LevelPip({ level: stored, xp }: { level: number; xp: number }) {
+  const { level } = levelProgress(xp, stored);
   return (
     <span
       className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-hearth-600/60 bg-hearth-800/60 px-1.5 text-xs text-hearth-200"
