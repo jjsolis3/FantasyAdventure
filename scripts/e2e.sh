@@ -69,6 +69,35 @@ mock_env_for() {
   esac
 }
 
+# Drops everything and rebuilds it.
+#
+# Loud on failure, because the first version of this hid the error. The reset
+# command it used had picked up flags that no longer exist, so it failed every
+# time, silently — sixteen tests then ran against whatever the previous one had
+# left behind, and the summary reported sixteen failures that were not real. A
+# harness that lies about the state it set up is worse than no harness.
+#
+# Plain SQL rather than `prisma migrate reset`, for two reasons: that command's
+# flags have changed between versions, and it now refuses to run unattended
+# without an explicit consent variable — which is right, and makes it the wrong
+# tool for a script somebody may run through an agent.
+reset_database() {
+  # `?schema=public` is Prisma's, not libpq's, and psql refuses a URI carrying
+  # it — so the query string comes off before this is handed over.
+  psql "${DATABASE_URL%%\?*}" -q -v ON_ERROR_STOP=1 \
+    -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;' || return 1
+
+  npx prisma migrate deploy > /tmp/e2e-migrate.log 2>&1 || {
+    echo "  migrate deploy failed — see /tmp/e2e-migrate.log" >&2
+    return 1
+  }
+
+  npm run seed > /tmp/e2e-seed.log 2>&1 || {
+    echo "  seed failed — see /tmp/e2e-seed.log" >&2
+    return 1
+  }
+}
+
 wait_for() {
   for _ in $(seq 1 40); do
     curl -s -o /dev/null "$1" && return 0
@@ -97,8 +126,11 @@ for test in "${TESTS[@]}"; do
 
   # A fresh database. Each of these registers the first household through the
   # bootstrap invite, so they need an empty accounts table and a seeded library.
-  npx prisma migrate reset --force --skip-generate --skip-seed >/dev/null 2>&1
-  npm run seed >/dev/null 2>&1
+  if ! reset_database; then
+    echo "  stopping rather than testing against a dirty database." >&2
+    RESULTS+=("ABORT ${test} — database reset failed")
+    break
+  fi
 
   # shellcheck disable=SC2046
   env $(mock_env_for "$test") setsid npx tsx tests/mock-model-server.mts "${MOCK_PORT}" \
