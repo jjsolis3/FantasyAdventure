@@ -58,7 +58,13 @@ async function main() {
   // Sisters, so the move names should come out in the sibling flavour.
   const [a, b] = mira.id < rowan.id ? [mira.id, rowan.id] : [rowan.id, mira.id];
   const relationship = await db.relationship.create({
-    data: { characterAId: a, characterBId: b, aToB: "SIBLING" },
+    // Confirmed on the spot, which is what the app does for a tie between two
+    // adventurers the same account already speaks for. Written straight into
+    // the row here, so it was left unconfirmed — and `deepen` deliberately
+    // pays nothing on an unconfirmed tie, because "your child is my
+    // character's sister" is a claim about somebody else's character until they
+    // say yes. Every bond check below was failing on correct behaviour.
+    data: { characterAId: a, characterBId: b, aToB: "SIBLING", confirmedAt: new Date() },
   });
 
   const storyline = await db.storyline.findFirstOrThrow({ where: { minPlayers: { lte: 2 } } });

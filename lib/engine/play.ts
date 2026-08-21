@@ -228,7 +228,20 @@ async function logAiCalls(campaignId: string, records: AiCallRecord[], repairs: 
         error: record.error ?? null,
         inputTokens: record.usage?.inputTokens ?? null,
         outputTokens: record.usage?.outputTokens ?? null,
-        promptPreview: record.prompt.slice(0, 2000),
+        // Eight thousand, not two.
+        //
+        // Two was chosen when a prompt was mostly the premise and the party.
+        // The context has since grown a chapter goal, its beats, the things to
+        // find, what each of them quietly wants, the people this family knows,
+        // the clock, what they have already tried — and the party sheet, which
+        // is what somebody debugging "why did it ignore her knack?" actually
+        // needs, now begins well past character two thousand.
+        //
+        // So the one screen that exists to answer that question had stopped
+        // being able to. A browser test noticed by looking for a knack name and
+        // not finding it; nothing else would have. The column is Postgres text
+        // and the page already scrolls, so the only cost is rows on disk.
+        promptPreview: record.prompt.slice(0, 8000),
         responsePreview: record.reply.slice(0, 2000),
       })),
     })

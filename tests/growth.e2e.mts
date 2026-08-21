@@ -17,9 +17,20 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { XP_PER_STAT_POINT } from "../lib/game/rules.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 import { ATTEMPTS_TO_LEARN } from "../lib/game/practice.ts";
 import { STAT_CEILING, statModifier } from "../lib/game/rules.ts";
-import { signatureFor } from "../lib/game/character-options.ts";
+import { signaturesFor } from "../lib/game/character-options.ts";
+
+/**
+ * The first move a calling gives you.
+ *
+ * `signatureFor` became `signaturesFor` when a second signature was added at
+ * level five, and this file kept importing the old name — so it could not even
+ * load, and had been throwing on its very first line ever since.
+ */
+const firstSignature = (archetype: string) => signaturesFor(archetype)[0];
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -60,13 +71,6 @@ async function chooseOption(page: Page, selectId: string, hiddenName: string, va
   throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
 }
 
-async function buildCharacter(page: Page, name: string, race: string, archetype: string) {
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', name);
-  await chooseOption(page, "select#choice-race", "race", race);
-  await chooseOption(page, "select#choice-archetype", "archetype", archetype);
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
-}
 
 async function takeTurn(page: Page, campaignId: string, said: string[], expected: number) {
   await page.goto(`${BASE}/campaigns/${campaignId}/play`);
@@ -140,20 +144,24 @@ try {
   await page.goto(`${BASE}/characters/${mira.id}`);
   const fresh = (await page.textContent("main")) ?? "";
   check("a new adventurer has nothing to spend yet", !fresh.includes("points to spend"));
-  check("her calling gives her something only she can do", fresh.includes(signatureFor("Beastfriend")!.name));
+  check("her calling gives her something only she can do", fresh.includes(firstSignature("Beastfriend").name));
   check("and says so", fresh.includes("Beastfriend only"));
 
-  const guardianOnly = signatureFor("Guardian")!.name;
+  const guardianOnly = firstSignature("Guardian").name;
   check("which is not the same as somebody else's", !fresh.includes(guardianOnly), guardianOnly);
 
   // ---- Growth is spendable, and hers to place -------------------------------
   // Experience is written straight in rather than ground out over twenty turns;
   // what is under test is what a point *does*, not how slowly it arrives.
-  await db.character.update({ where: { id: mira.id }, data: { xp: 30, level: 3 } });
+  // Three points, whatever a point costs. This said 30, which was three points
+  // when experience bought one every ten — the rebalance made it one every
+  // forty, so thirty bought nothing and the Raise button never appeared.
+  const threePoints = XP_PER_STAT_POINT * 3;
+  await db.character.update({ where: { id: mira.id }, data: { xp: threePoints, level: 3 } });
 
   await page.goto(`${BASE}/characters/${mira.id}`);
   const grown = (await page.textContent("main")) ?? "";
-  check("thirty experience is three points", grown.includes("3 points to spend"), grown.slice(0, 0));
+  check(`${threePoints} experience is three points`, grown.includes("3 points to spend"));
   check("the sheet shows what a stat is worth on the dice", grown.includes("to rolls"));
 
   await page.click('button[aria-label="Put a point into Heart"]');

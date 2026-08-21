@@ -126,7 +126,16 @@ async function main() {
     rolled.length = 0;
     rolled.push(...events.map((event) => event.metadata as unknown as DiceMetadata));
 
-    if (rolled.some((dice) => dice.luck)) break;
+    // Both, or the turns run out. This used to stop at the first lucky break,
+    // which puts two checks in tension: one wants a lucky nudge, the other
+    // wants a plain success somewhere in the sample. When luck landed on turn
+    // one the sample was a single roll, and whether the suite went green came
+    // down to that one die.
+    const gotLuck = rolled.some((dice) => dice.luck);
+    const gotSuccess = rolled.some(
+      (dice) => dice.outcome === "SUCCESS" || dice.outcome === "CRITICAL",
+    );
+    if (gotLuck && gotSuccess) break;
   }
 
   console.log(`\n${rolled.length} checks rolled, Luck ${STAT_CEILING} → ${luckChance(STAT_CEILING)}%\n`);

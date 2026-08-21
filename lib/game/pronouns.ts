@@ -89,3 +89,16 @@ export function toBe(subject: string): string {
 export function toHave(subject: string): string {
   return isPlural(subject) ? "have" : "has";
 }
+
+/**
+ * "she was" / "they were".
+ *
+ * The past tense turns up more than it looks like it will, because most of what
+ * these screens say about a character is about something that already happened
+ * — *the day she was built*, *how he was made*. Without it, `toBe` gets reached
+ * for and the sentence comes out as "the day he is built", which reads as
+ * machine-made in exactly the way this file exists to prevent.
+ */
+export function toBePast(subject: string): string {
+  return isPlural(subject) ? "were" : "was";
+}

@@ -262,7 +262,10 @@ async function main() {
   // STAT_BUDGET. A row created straight through Prisma carries the schema
   // default of 3 everywhere, which is 21 and two over.
   const legalBuild = { might: 5, wits: 4, heart: 3, spark: 1, grace: 1, luck: 1, grit: 4 };
-  const reset = await resetCharacter(orin.id, legalBuild);
+  // Starting again, in so many words. `resetCharacter` used to take a bare
+  // stat block; it takes a plan now, because there are two things people mean
+  // by resetting and only one of them costs an evening.
+  const reset = await resetCharacter(orin.id, { mode: "START_AGAIN", build: legalBuild });
   check("the reset itself went through", reset.ok === true, reset.ok ? "" : reset.reason);
   const afterReset = await db.relationship.findUniqueOrThrow({ where: { id: proposal.id } });
   console.log(`     bond xp ${before.bondXp} → ${afterReset.bondXp}`);

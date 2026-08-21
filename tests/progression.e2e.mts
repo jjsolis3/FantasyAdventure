@@ -8,6 +8,12 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import {
+  kindFromPerspective,
+  moveNamesFor,
+  movesUnlockedBetween,
+} from "../lib/game/rules.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -91,13 +97,11 @@ try {
     ["Mira", "Halfling", "Beastfriend"],
     ["Rowan", "Human", "Guardian"],
   ] as const) {
-    await page.goto(`${BASE}/characters/new`);
-    await page.fill('input[name="name"]', name);
-    await chooseOption(page, "select#choice-race", "race", race);
-    await chooseOption(page, "select#choice-archetype", "archetype", arch);
-    // Mira needs the skill the mock adjudicator will name.
-    if (name === "Mira") await page.click('button:has-text("Speak with Animals")');
-    await submitAndSettle(page, 'button:has-text("Create adventurer")');
+    // Mira needs the skill the mock adjudicator will name; the second is
+    // whatever her calling suggests.
+    await buildCharacter(page, name, race, arch, {
+      skills: name === "Mira" ? ["Speak with Animals", "Track and Follow"] : undefined,
+    });
   }
 
   const [mira, rowan] = await db.character.findMany({
@@ -201,11 +205,25 @@ try {
   const bond = await db.relationship.findFirstOrThrow();
   check("three helpful moments reach bond level 1", bond.bondLevel === 1, `xp=${bond.bondXp} level=${bond.bondLevel}`);
 
+  // Derived rather than named. A move is called different things depending on
+  // who is helping whom — a daughter helping her father and a father helping
+  // his daughter are the same mechanic and not the same sentence — so this
+  // asked for "Lend a Hand" and the pair in question were told "Shove Over".
+  // The mechanic was working; the assertion had a name in it that only fits
+  // one kind of tie.
+  const unlocked = movesUnlockedBetween(0, bond.bondLevel);
+  const expected = unlocked.map(
+    (move) => moveNamesFor(kindFromPerspective(bond, bond.characterAId), move).name,
+  );
+
   const unlockEvents = await db.turnEvent.findMany({ where: { type: "SYSTEM" } });
   check(
     "unlocking a Family Move is announced",
-    unlockEvents.some((event) => /can now use Lend a Hand together/.test(event.content)),
-    unlockEvents.map((event) => event.content).join(" | "),
+    expected.length > 0 &&
+      expected.some((name) =>
+        unlockEvents.some((event) => event.content.includes(`can now use ${name} together`)),
+      ),
+    `expected one of [${expected.join(", ")}] in: ${unlockEvents.map((event) => event.content).join(" | ")}`,
   );
 
   // ---- The unlocked move is offered and works -----------------------------

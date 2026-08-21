@@ -84,19 +84,23 @@ async function main() {
     { characterId: mira.id, text: "I hum to whatever is in the barley." },
   ]);
 
-  check("the turn stopped and asked", "awaiting" in stopped);
-  if (!("awaiting" in stopped)) {
+  // The value, not the key. `"awaiting" in stopped` is true even when the
+  // property is there and undefined, so this neither narrowed the type nor
+  // actually asserted that any dice were asked for.
+  const awaiting = stopped.awaiting ?? [];
+  check("the turn stopped and asked", awaiting.length > 0, `${awaiting.length} asked for`);
+  if (awaiting.length === 0) {
     console.log("\nnothing more can be checked.\n");
     process.exitCode = 1;
     return;
   }
 
   console.log(
-    `\nasked for: ${stopped.awaiting.map((roll) => `${roll.characterName} (${roll.stat})`).join(", ")}\n`,
+    `\nasked for: ${awaiting.map((roll) => `${roll.characterName} (${roll.stat})`).join(", ")}\n`,
   );
 
-  check("it named who is rolling and what for", stopped.awaiting[0].characterName === "Mira");
-  check("and what she is trying to do", stopped.awaiting[0].intent.length > 0, stopped.awaiting[0].intent);
+  check("it named who is rolling and what for", awaiting[0].characterName === "Mira");
+  check("and what she is trying to do", awaiting[0].intent.length > 0, awaiting[0].intent);
 
   // ---- And nothing happened while it waited --------------------------------
   const turnsWhileWaiting = await db.turnEvent.count({ where: { scene: { campaignId: campaign.id } } });
@@ -112,8 +116,8 @@ async function main() {
   const seenElsewhere = await awaitedRolls(campaign.id, user.id);
   check(
     "a phone that reloads sees the same ask",
-    seenElsewhere.length === stopped.awaiting.length,
-    `${seenElsewhere.length} of ${stopped.awaiting.length}`,
+    seenElsewhere.length === awaiting.length,
+    `${seenElsewhere.length} of ${awaiting.length}`,
   );
 
   // ---- A number that is not on a d20 ---------------------------------------

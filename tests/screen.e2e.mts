@@ -17,6 +17,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -74,11 +75,9 @@ try {
   await submitAndSettle(page);
   await page.waitForURL(`${BASE}/`);
 
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', "Mira");
-  await chooseOption(page, "select#choice-race", "race", "HUMAN");
-  await chooseOption(page, "select#choice-archetype", "archetype", "SCOUT");
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
+  // "HUMAN" and "SCOUT" were the shapes of these values long ago; the builder
+  // takes the labels a family reads, and there has been no Scout for some time.
+  await buildCharacter(page, "Mira", "Human", "Trickster");
 
   const storyline = await db.storyline.findFirstOrThrow();
   const owner = await db.user.findUniqueOrThrow({ where: { email: "parent@example.com" } });
@@ -92,7 +91,9 @@ try {
       joinCode: `PARTY-TEST-${Date.now().toString(36).toUpperCase().slice(-4)}`,
       tone: storyline.defaultTone,
       readingLevel: storyline.readingLevel,
-      party: { create: { characterId: mira.id, seatOrder: 1 } },
+      // "seatOrder" became "position" when rounds arrived, and it is required
+      // — so this create had been throwing rather than seating anybody.
+      party: { create: { characterId: mira.id, position: 0 } },
     },
   });
 
@@ -226,7 +227,7 @@ try {
     data: { userId: guest.id, name: "Tam", race: "HUMAN", archetype: "SCOUT" },
   });
   await db.partyMember.create({
-    data: { campaignId: campaign.id, characterId: guestCharacter.id, seatOrder: 2 },
+    data: { campaignId: campaign.id, characterId: guestCharacter.id, position: 1 },
   });
 
   const second = await fetch(`${BASE}/api/screen/register`, { method: "POST" });

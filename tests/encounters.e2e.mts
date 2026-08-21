@@ -59,7 +59,12 @@ async function main() {
   ]);
 
   const [a, b] = mira.id < rowan.id ? [mira.id, rowan.id] : [rowan.id, mira.id];
-  await db.relationship.create({ data: { characterAId: a, characterBId: b, aToB: "SIBLING" } });
+  // Confirmed, as the app confirms a tie between two adventurers one account
+  // already speaks for. Left pending, `deepen` pays nothing — correctly — and
+  // the bond check below fails on right behaviour. Same trap as bonds.e2e.
+  await db.relationship.create({
+    data: { characterAId: a, characterBId: b, aToB: "SIBLING", confirmedAt: new Date() },
+  });
 
   const storyline = await db.storyline.findFirstOrThrow({ where: { minPlayers: { lte: 2 } } });
   const campaign = await db.campaign.create({

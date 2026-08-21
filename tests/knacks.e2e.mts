@@ -18,6 +18,8 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { statsOf } from "../lib/game/rules.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 import { KNACKS_OFFERED, knackByKey, offerFor } from "../lib/game/knacks.ts";
 import { SUPPLIES_PER_CHARACTER } from "../lib/game/loadout.ts";
 
@@ -60,13 +62,6 @@ async function chooseOption(page: Page, selectId: string, hiddenName: string, va
   throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
 }
 
-async function buildCharacter(page: Page, name: string, race: string, archetype: string) {
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', name);
-  await chooseOption(page, "select#choice-race", "race", race);
-  await chooseOption(page, "select#choice-archetype", "archetype", archetype);
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
-}
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
@@ -98,8 +93,12 @@ try {
 
   // ---- Level one offers nothing ---------------------------------------------
   await page.goto(`${BASE}/characters/${mira.id}`);
-  const fresh = (await page.textContent("main")) ?? "";
-  check("a brand new adventurer is offered nothing", !fresh.includes("Something new"));
+  // Asked of the heading rather than of the page text. The sheet also carries
+  // "Something new to be good at at level 4." — the line that says when her
+  // next chosen skill arrives — so a substring search for "Something new" has
+  // been finding the wrong thing since the levelling rebalance.
+  const offerHeading = page.getByRole("heading", { name: "Something new", exact: true });
+  check("a brand new adventurer is offered nothing", (await offerHeading.count()) === 0);
 
   // ---- Reaching a level offers three ----------------------------------------
   // Written straight in rather than ground out over twenty turns; what is under
@@ -108,7 +107,10 @@ try {
 
   await page.goto(`${BASE}/characters/${mira.id}`);
   const levelled = (await page.textContent("main")) ?? "";
-  check("a level offers something new", levelled.includes("Something new"));
+  // Also asked of the heading. This passed either way, but it would have gone
+  // on passing if the offer vanished entirely — the skill line alone satisfies
+  // a substring search.
+  check("a level offers something new", (await offerHeading.count()) === 1);
 
   const buttons = await page.locator('button[aria-label^="Take "]').count();
   check("three of them", buttons === KNACKS_OFFERED, String(buttons));
@@ -137,12 +139,9 @@ try {
   const expected = offerFor({
     characterId: rowanNow.id,
     level: rowanNow.level,
-    stats: {
-      might: rowanNow.might,
-      wits: rowanNow.wits,
-      heart: rowanNow.heart,
-      spark: rowanNow.spark,
-    },
+    // Read off the row rather than named one by one, which is how this came
+    // to be handing four stats to something that wants seven.
+    stats: statsOf(rowanNow),
     practices: rowanNow.practices,
     taken: [],
   });
@@ -174,7 +173,10 @@ try {
 
   await page.goto(`${BASE}/characters/${rowan.id}`);
   const afterTaking = (await page.textContent("main")) ?? "";
-  check("the offer is gone once it is spent", !afterTaking.includes("Something new"));
+  check(
+    "the offer is gone once it is spent",
+    (await page.getByRole("heading", { name: "Something new", exact: true }).count()) === 0,
+  );
   // The heading follows the character's own pronouns now, so match on the part
   // of it that is not one.
   check("and it is on the sheet", /What (she|he|they) (has|have) picked up/.test(afterTaking));
@@ -194,12 +196,7 @@ try {
     const stillOffered = offerFor({
       characterId: rowanNow.id,
       level: 3,
-      stats: {
-        might: rowanNow.might,
-        wits: rowanNow.wits,
-        heart: rowanNow.heart,
-        spark: rowanNow.spark,
-      },
+      stats: statsOf(rowanNow),
       practices: rowanNow.practices,
       taken: ["sure_footed"],
     }).map((knack) => knack.key);
