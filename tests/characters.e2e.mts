@@ -134,7 +134,13 @@ try {
   await page.click('button:has-text("Speak with Animals")');
   await page.click('button:has-text("Soothe the Wild")');
 
-  const thirdSkill = page.locator('button:has-text("Patch Up")');
+  // Any skill she has not taken, rather than a named one. This asked about
+  // "Patch Up" — which is a Healer skill, and Mira is a Beastfriend. The picker
+  // used to be a flat list of every calling's skills; since it started showing
+  // her own calling plus the general pool, that button has not been on the page
+  // at all, and the assertion was waiting thirty seconds for it before the
+  // whole test gave up.
+  const thirdSkill = page.getByRole("button", { name: "Climbing", exact: true });
   check("a third skill cannot be selected", await thirdSkill.isDisabled());
 
   await submitAndSettle(page, 'button:has-text("Create adventurer")');
