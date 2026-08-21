@@ -415,6 +415,14 @@ try {
   await page.reload();
   await page.click('button:has-text("What do you do?")');
   await page.click('button:has-text("I don\'t know what to do")');
+
+  // Two steps now, not one. Asking for help first shows where you are — what
+  // is in front of you and what you already know — and only offers a nudge if
+  // that was not enough. The recap is the cheaper answer and comes first on
+  // purpose, so a child rereads before anybody suggests anything.
+  await page.waitForSelector("text=Here is where you are", { timeout: 15_000 });
+  check("being stuck shows you where you are first", true);
+  await page.click('button:has-text("Still stuck")');
   // Nudges, not scripts. This waited for a button reading "I creep closer and
   // held out my hand." and then clicked it to fill the box — which is exactly
   // what the feature deliberately stopped doing. Ready-made first-person
@@ -425,6 +433,10 @@ try {
 
   const nudge = page.getByText("The barley is moving against the wind, not with it.");
   check("and they are text to read, not a button to press", (await nudge.count()) > 0);
+  check(
+    "said as something noticed rather than something to do",
+    ((await page.textContent("body")) ?? "").includes("What you do about them is up to you"),
+  );
   check(
     "so nothing writes her answer for her",
     (await page.inputValue("textarea")).trim() === "",

@@ -17,6 +17,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { XP_PER_STAT_POINT } from "../lib/game/rules.ts";
 import { buildCharacter } from "./e2e-helpers.mts";
 import { ATTEMPTS_TO_LEARN } from "../lib/game/practice.ts";
 import { STAT_CEILING, statModifier } from "../lib/game/rules.ts";
@@ -152,11 +153,15 @@ try {
   // ---- Growth is spendable, and hers to place -------------------------------
   // Experience is written straight in rather than ground out over twenty turns;
   // what is under test is what a point *does*, not how slowly it arrives.
-  await db.character.update({ where: { id: mira.id }, data: { xp: 30, level: 3 } });
+  // Three points, whatever a point costs. This said 30, which was three points
+  // when experience bought one every ten — the rebalance made it one every
+  // forty, so thirty bought nothing and the Raise button never appeared.
+  const threePoints = XP_PER_STAT_POINT * 3;
+  await db.character.update({ where: { id: mira.id }, data: { xp: threePoints, level: 3 } });
 
   await page.goto(`${BASE}/characters/${mira.id}`);
   const grown = (await page.textContent("main")) ?? "";
-  check("thirty experience is three points", grown.includes("3 points to spend"), grown.slice(0, 0));
+  check(`${threePoints} experience is three points`, grown.includes("3 points to spend"));
   check("the sheet shows what a stat is worth on the dice", grown.includes("to rolls"));
 
   await page.click('button[aria-label="Put a point into Heart"]');
