@@ -91,7 +91,9 @@ try {
       joinCode: `PARTY-TEST-${Date.now().toString(36).toUpperCase().slice(-4)}`,
       tone: storyline.defaultTone,
       readingLevel: storyline.readingLevel,
-      party: { create: { characterId: mira.id, seatOrder: 1 } },
+      // "seatOrder" became "position" when rounds arrived, and it is required
+      // — so this create had been throwing rather than seating anybody.
+      party: { create: { characterId: mira.id, position: 0 } },
     },
   });
 
