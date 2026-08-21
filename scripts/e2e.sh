@@ -20,7 +20,12 @@
 # objective happened, or to play a table going in circles. The mock takes its
 # behaviour from the environment when it starts, so a single shared one cannot
 # satisfy all of them. Each test's own header documents what it needs; that is
-# mirrored in `mock_env_for` below, and the two must stay in step.
+# mirrored in `passes_for` below, and the two must stay in step.
+#
+# One file is run more than once for the same reason. `pressure` proves both
+# that a table getting on with things is not charged and that a table going in
+# circles is, and those want opposite storytellers — so it is two runs against
+# two mocks, not one.
 #
 # Usage:
 #   DATABASE_URL=postgres://…  ./scripts/e2e.sh            # everything
@@ -56,16 +61,28 @@ ALL=(
 TESTS=("$@")
 [ ${#TESTS[@]} -eq 0 ] && TESTS=("${ALL[@]}")
 
-# What each test needs the storyteller to be doing. Kept beside the list rather
-# than inside the tests, because it configures a process the tests do not start.
-mock_env_for() {
+# What each test needs the storyteller to be doing, as one line per run of the
+# file. Most want a single run; `pressure` is two, because its two halves need
+# the storyteller behaving in opposite ways and one process cannot do both.
+#
+# The setting is exported to the test as well as to the mock. That matters for
+# `pressure`, which reads MOCK_IDLE itself to choose which half to check: give
+# it to only the mock and the test checks the busy half against an idle
+# storyteller, so every turn is charged for going in circles and the clock reads
+# full where the test wanted nought. It looks exactly like a product bug, and it
+# is not one — which is why the variable now goes to both.
+#
+# Kept beside the list rather than inside the tests, because it configures a
+# process the tests do not start. Each test's own header documents what it
+# needs, and the two must stay in step.
+passes_for() {
   case "$1" in
-    luck)       echo "MOCK_STAT=grace" ;;
-    encounters) echo "MOCK_ENCOUNTER=1" ;;
-    rebalance)  echo "MOCK_TICK=1" ;;
-    table-view) echo "MOCK_IDLE=1" ;;
-    pressure)   echo "MOCK_IDLE=1" ;;
-    *)          echo "" ;;
+    pressure)   printf '%s\n' "" "MOCK_IDLE=1" ;;
+    luck)       printf '%s\n' "MOCK_STAT=grace" ;;
+    encounters) printf '%s\n' "MOCK_ENCOUNTER=1" ;;
+    rebalance)  printf '%s\n' "MOCK_TICK=1" ;;
+    table-view) printf '%s\n' "MOCK_IDLE=1" ;;
+    *)          printf '%s\n' "" ;;
   esac
 }
 
@@ -120,33 +137,46 @@ for test in "${TESTS[@]}"; do
     continue
   fi
 
-  echo "════════════════ ${test} ════════════════"
-  cleanup
-  sleep 1
+  mapfile -t PASSES < <(passes_for "$test")
 
-  # A fresh database. Each of these registers the first household through the
-  # bootstrap invite, so they need an empty accounts table and a seeded library.
-  if ! reset_database; then
-    echo "  stopping rather than testing against a dirty database." >&2
-    RESULTS+=("ABORT ${test} — database reset failed")
-    break
-  fi
+  for envs in "${PASSES[@]}"; do
+    # Only worth distinguishing when there is more than one, and then it is the
+    # setting that tells them apart rather than a number.
+    label="$test"
+    [ "${#PASSES[@]}" -gt 1 ] && label="${test} [${envs:-no switches}]"
+    slug="${label//[^a-zA-Z0-9]/-}"
 
-  # shellcheck disable=SC2046
-  env $(mock_env_for "$test") setsid npx tsx tests/mock-model-server.mts "${MOCK_PORT}" \
-    > "/tmp/e2e-mock-${test}.log" 2>&1 < /dev/null &
-  disown
-  wait_for "http://127.0.0.1:${MOCK_PORT}/v1/models" || echo "  (the mock never came up)"
+    echo "════════════════ ${label} ════════════════"
+    cleanup
+    sleep 1
 
-  setsid npx next start -p "${PORT}" > "/tmp/e2e-server-${test}.log" 2>&1 < /dev/null &
-  disown
-  wait_for "${E2E_BASE_URL}/login" || echo "  (the app never came up)"
+    # A fresh database. Each of these registers the first household through the
+    # bootstrap invite, so they need an empty accounts table and a seeded
+    # library — and a second pass of the same file needs it every bit as much as
+    # the first, since the pass before it has already filled a clock.
+    if ! reset_database; then
+      echo "  stopping rather than testing against a dirty database." >&2
+      RESULTS+=("ABORT ${label} — database reset failed")
+      break 2
+    fi
 
-  if npx tsx "$file"; then
-    RESULTS+=("PASS  ${test}")
-  else
-    RESULTS+=("FAIL  ${test}")
-  fi
+    # shellcheck disable=SC2046
+    env $envs setsid npx tsx tests/mock-model-server.mts "${MOCK_PORT}" \
+      > "/tmp/e2e-mock-${slug}.log" 2>&1 < /dev/null &
+    disown
+    wait_for "http://127.0.0.1:${MOCK_PORT}/v1/models" || echo "  (the mock never came up)"
+
+    setsid npx next start -p "${PORT}" > "/tmp/e2e-server-${slug}.log" 2>&1 < /dev/null &
+    disown
+    wait_for "${E2E_BASE_URL}/login" || echo "  (the app never came up)"
+
+    # shellcheck disable=SC2046
+    if env $envs npx tsx "$file"; then
+      RESULTS+=("PASS  ${label}")
+    else
+      RESULTS+=("FAIL  ${label}")
+    fi
+  done
 done
 
 echo

@@ -10,14 +10,23 @@
  * the clock cannot show the consequence — that passage was written before the
  * game had read it — so the fill is a debt and the *next* passage collects.
  *
- * Usage:
- *   1. Scratch Postgres, migrated and seeded.
- *   2. MOCK_IDLE=1 npx tsx tests/mock-model-server.mts 11499 &
- *   3. AI_BASE_URL=http://127.0.0.1:11499/v1 npx tsx tests/pressure.e2e.mts
+ * ## This file is two runs, not one
  *
- * The mock must be restarted without MOCK_IDLE for the second half; this script
- * prints when to do it, or set MOCK_IDLE_PORT and MOCK_BUSY_PORT to run both at
- * once.
+ * The two halves need the storyteller behaving in opposite ways, so they cannot
+ * share a process. MOCK_IDLE therefore has to be set on *both* the mock and this
+ * test: the mock reads it to decide how to play, and the branch below reads it
+ * to decide which half to check. Setting it on only one of the two is the
+ * failure worth naming, because it looks like a product bug rather than a
+ * harness one — the busy half runs against an idle mock, every turn is charged
+ * for going in circles, and the clock reads full when the test wanted nought.
+ *
+ * Usage — a fresh database for each, since each fills a clock:
+ *   1. Scratch Postgres, migrated and seeded.
+ *   2. npx tsx tests/mock-model-server.mts 11499 &
+ *      AI_BASE_URL=http://127.0.0.1:11499/v1 npx tsx tests/pressure.e2e.mts
+ *   3. Reset the database, then the same again with MOCK_IDLE=1 on both.
+ *
+ * `scripts/e2e.sh` does exactly that; run it rather than doing this by hand.
  *
  * Destructive — point it at a scratch database, never a real one.
  */
