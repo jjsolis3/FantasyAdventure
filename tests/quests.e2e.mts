@@ -17,6 +17,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -57,13 +58,6 @@ async function chooseOption(page: Page, selectId: string, hiddenName: string, va
   throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
 }
 
-async function buildCharacter(page: Page, name: string, race: string, archetype: string) {
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', name);
-  await chooseOption(page, "select#choice-race", "race", race);
-  await chooseOption(page, "select#choice-archetype", "archetype", archetype);
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
-}
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",

@@ -17,6 +17,7 @@
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 import { generateInviteCode } from "../lib/auth/invites.ts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
@@ -58,48 +59,6 @@ async function chooseOption(page: Page, selectId: string, hiddenName: string, va
   throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
 }
 
-async function buildCharacter(
-  page: Page,
-  name: string,
-  race: string,
-  archetype: string,
-  // Said out loud rather than left to the default, because one of the checks
-  // below is about the sentence the table is shown when an aim is finished —
-  // and that sentence is built from these.
-  pronouns = "she/her",
-) {
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', name);
-  await page.fill('input[name="pronouns"]', pronouns);
-  await chooseOption(page, "select#choice-race", "race", race);
-  await chooseOption(page, "select#choice-archetype", "archetype", archetype);
-
-  // Stats and skills, both of which the builder has required since the round
-  // that gave every adventurer seven stats and a catalogue to pick from. A form
-  // posted without them fails validation on the server and creates nothing —
-  // which is how this helper came to be quietly building no adventurers at all
-  // while still looking like it had.
-  //
-  // Spent by clicking every enabled Raise until there are none left. The button
-  // disables itself at a stat's ceiling and when the budget runs out, so this
-  // lands exactly on budget whatever the numbers happen to be — which is the
-  // point, given that changing those numbers is what broke it last time.
-  for (let guard = 0; guard < 80; guard += 1) {
-    const raise = page.locator('button[aria-label^="Raise "]:not([disabled])').first();
-    if ((await raise.count()) === 0) break;
-    await raise.click();
-  }
-
-  const skillArea = page
-    .locator("div.border-t", { hasText: "things you are especially good at" })
-    .last();
-  const pickable = skillArea.locator('button[type="button"]');
-  await pickable.nth(0).click();
-  await pickable.nth(1).click();
-
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
-}
-
 async function register(context: BrowserContext, code: string, name: string, email: string) {
   const page = await context.newPage();
   await page.goto(`${BASE}/register`);
@@ -129,7 +88,7 @@ try {
   // Two in this household, one in the other. That covers both tables at once:
   // the parent sees every aim belonging to an adventurer they own, and none
   // belonging to the household next door.
-  await buildCharacter(host, "Mira", "Halfling", "Beastfriend");
+  await buildCharacter(host, "Mira", "Halfling", "Beastfriend", { pronouns: "she/her" });
   await buildCharacter(host, "Fen", "Human", "Guardian");
   const [mira, fen] = await db.character.findMany({
     where: { userId: hostUser.id },
@@ -142,7 +101,7 @@ try {
   const guestContext = await browser.newContext();
   const guest = await register(guestContext, invite.code, "Aunt", "aunt@example.com");
   const guestUser = await db.user.findUniqueOrThrow({ where: { email: "aunt@example.com" } });
-  await buildCharacter(guest, "Rowan", "Human", "Trickster", "he/him");
+  await buildCharacter(guest, "Rowan", "Human", "Trickster", { pronouns: "he/him" });
   const rowan = await db.character.findFirstOrThrow({ where: { userId: guestUser.id } });
 
   const dragon = await db.storyline.findUniqueOrThrow({

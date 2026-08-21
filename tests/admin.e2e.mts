@@ -13,6 +13,7 @@
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 import { generateInviteCode } from "../lib/auth/invite-code.ts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
@@ -73,19 +74,7 @@ try {
 
   // Built before anything looks at the adventure-setup page: with no adventurers
   // in the household, that page sends you away to build one.
-  await admin.goto(`${BASE}/characters/new`);
-  await admin.fill('input[name="name"]', "Mira");
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await admin.selectOption("select#choice-race", "Halfling");
-    if ((await admin.inputValue('input[name="race"]')) === "Halfling") break;
-    await admin.waitForTimeout(150);
-  }
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await admin.selectOption("select#choice-archetype", "Beastfriend");
-    if ((await admin.inputValue('input[name="archetype"]')) === "Beastfriend") break;
-    await admin.waitForTimeout(150);
-  }
-  await submitAndSettle(admin, 'button:has-text("Create adventurer")');
+  await buildCharacter(admin, "Mira", "Halfling", "Beastfriend");
   const mira = await db.character.findFirstOrThrow({ where: { name: "Mira" } });
 
   // ---- The hub is for administrators ---------------------------------------

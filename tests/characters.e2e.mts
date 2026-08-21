@@ -11,6 +11,8 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { pickSkills, spendStatBudget } from "./e2e-helpers.mts";
+import { POINTS_TO_SPEND, STATS, STAT_BUDGET } from "../lib/game/rules.ts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3300";
 const connectionString =
@@ -104,11 +106,29 @@ try {
   await page.click('button:has-text("she/her")');
   await page.fill('textarea[name="description"]', "Freckles and a too-big coat.");
 
-  check("the builder starts with the budget fully spent", (await page.textContent("body"))?.includes("All points spent") === true);
+  // The builder opens at the floor with everything still to spend. It used to
+  // open on the whole budget already allocated, which made the interesting move
+  // taking points *away* from things — this assertion is the one that noticed
+  // when that changed, and it was reading the old wording until now.
+  check(
+    "the builder starts with everything still to spend",
+    (await page.textContent("body"))?.includes(`${POINTS_TO_SPEND} points left`) === true,
+  );
 
-  // Move two points from Might into Heart: still exactly the budget.
-  await adjustStat(page, "Might", "Lower", 2);
-  await adjustStat(page, "Heart", "Raise", 2);
+  // Nothing can come out of a stat sitting on the floor.
+  check(
+    "a stat at the floor cannot be lowered",
+    await page.locator('button[aria-label="Lower Might"]').isDisabled(),
+  );
+
+  // Four into Heart, and the rest wherever they will go.
+  await adjustStat(page, "Heart", "Raise", 4);
+  await spendStatBudget(page);
+
+  check(
+    "the budget cannot be overspent",
+    await page.locator('button[aria-label="Raise Wits"]').isDisabled(),
+  );
 
   // Pick two skills.
   await page.click('button:has-text("Speak with Animals")');
@@ -125,8 +145,16 @@ try {
   check("calling saved", mira?.archetype === "Beastfriend", mira?.archetype);
   check("age band saved", mira?.ageBand === "CHILD", mira?.ageBand);
   check("pronouns saved", mira?.pronouns === "she/her", mira?.pronouns);
-  check("stats reallocated", mira?.might === 1 && mira?.heart === 5, `might=${mira?.might} heart=${mira?.heart}`);
-  check("stats still total the budget", (mira?.might ?? 0) + (mira?.wits ?? 0) + (mira?.heart ?? 0) + (mira?.spark ?? 0) === 12);
+  check("the points went where they were put", mira?.heart === 5, `heart=${mira?.heart}`);
+  // Summed over STATS rather than four named columns, which is how this came to
+  // be asserting a total of twelve across seven stats long after the budget
+  // stopped being twelve.
+  check(
+    "and the whole budget was spent",
+    mira !== null && STATS.reduce((sum, stat) => sum + mira[stat], 0) === STAT_BUDGET,
+    mira ? String(STATS.reduce((sum, stat) => sum + mira[stat], 0)) : "no character",
+  );
+  check("built under today's budget", mira?.buildBudget === STAT_BUDGET, String(mira?.buildBudget));
   check("two skills saved", mira?.skills.length === 2, mira?.skills.map((s) => s.name).join(", "));
   check("starts at level 1 with no xp", mira?.level === 1 && mira?.xp === 0);
 
@@ -137,6 +165,8 @@ try {
   await page.fill('input[placeholder="Type your own"]', "Cloud Baker");
   await chooseOption(page, "select#choice-archetype", "archetype", "Maker");
   await page.selectOption('select[name="ageBand"]', "GROWNUP");
+  await spendStatBudget(page);
+  await pickSkills(page, "Maker");
   await submitAndSettle(page, 'button:has-text("Create adventurer")');
 
   const pip = await db.character.findFirst({ where: { userId: user.id, name: "Pip" } });

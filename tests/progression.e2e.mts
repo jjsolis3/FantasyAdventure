@@ -8,6 +8,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -91,13 +92,11 @@ try {
     ["Mira", "Halfling", "Beastfriend"],
     ["Rowan", "Human", "Guardian"],
   ] as const) {
-    await page.goto(`${BASE}/characters/new`);
-    await page.fill('input[name="name"]', name);
-    await chooseOption(page, "select#choice-race", "race", race);
-    await chooseOption(page, "select#choice-archetype", "archetype", arch);
-    // Mira needs the skill the mock adjudicator will name.
-    if (name === "Mira") await page.click('button:has-text("Speak with Animals")');
-    await submitAndSettle(page, 'button:has-text("Create adventurer")');
+    // Mira needs the skill the mock adjudicator will name; the second is
+    // whatever her calling suggests.
+    await buildCharacter(page, name, race, arch, {
+      skills: name === "Mira" ? ["Speak with Animals", "Track and Follow"] : undefined,
+    });
   }
 
   const [mira, rowan] = await db.character.findMany({

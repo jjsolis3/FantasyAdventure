@@ -17,6 +17,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 import { ATTEMPTS_TO_LEARN } from "../lib/game/practice.ts";
 import { STAT_CEILING, statModifier } from "../lib/game/rules.ts";
 import { signatureFor } from "../lib/game/character-options.ts";
@@ -60,13 +61,6 @@ async function chooseOption(page: Page, selectId: string, hiddenName: string, va
   throw new Error(`${selectId} never accepted ${value} — hydration may have failed.`);
 }
 
-async function buildCharacter(page: Page, name: string, race: string, archetype: string) {
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', name);
-  await chooseOption(page, "select#choice-race", "race", race);
-  await chooseOption(page, "select#choice-archetype", "archetype", archetype);
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
-}
 
 async function takeTurn(page: Page, campaignId: string, said: string[], expected: number) {
   await page.goto(`${BASE}/campaigns/${campaignId}/play`);

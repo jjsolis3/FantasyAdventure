@@ -17,6 +17,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { buildCharacter } from "./e2e-helpers.mts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -74,11 +75,9 @@ try {
   await submitAndSettle(page);
   await page.waitForURL(`${BASE}/`);
 
-  await page.goto(`${BASE}/characters/new`);
-  await page.fill('input[name="name"]', "Mira");
-  await chooseOption(page, "select#choice-race", "race", "HUMAN");
-  await chooseOption(page, "select#choice-archetype", "archetype", "SCOUT");
-  await submitAndSettle(page, 'button:has-text("Create adventurer")');
+  // "HUMAN" and "SCOUT" were the shapes of these values long ago; the builder
+  // takes the labels a family reads, and there has been no Scout for some time.
+  await buildCharacter(page, "Mira", "Human", "Trickster");
 
   const storyline = await db.storyline.findFirstOrThrow();
   const owner = await db.user.findUniqueOrThrow({ where: { email: "parent@example.com" } });
