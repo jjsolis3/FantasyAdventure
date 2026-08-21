@@ -18,6 +18,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { statsOf } from "../lib/game/rules.ts";
 import { buildCharacter } from "./e2e-helpers.mts";
 import { KNACKS_OFFERED, knackByKey, offerFor } from "../lib/game/knacks.ts";
 import { SUPPLIES_PER_CHARACTER } from "../lib/game/loadout.ts";
@@ -138,12 +139,9 @@ try {
   const expected = offerFor({
     characterId: rowanNow.id,
     level: rowanNow.level,
-    stats: {
-      might: rowanNow.might,
-      wits: rowanNow.wits,
-      heart: rowanNow.heart,
-      spark: rowanNow.spark,
-    },
+    // Read off the row rather than named one by one, which is how this came
+    // to be handing four stats to something that wants seven.
+    stats: statsOf(rowanNow),
     practices: rowanNow.practices,
     taken: [],
   });
@@ -198,12 +196,7 @@ try {
     const stillOffered = offerFor({
       characterId: rowanNow.id,
       level: 3,
-      stats: {
-        might: rowanNow.might,
-        wits: rowanNow.wits,
-        heart: rowanNow.heart,
-        spark: rowanNow.spark,
-      },
+      stats: statsOf(rowanNow),
       practices: rowanNow.practices,
       taken: ["sure_footed"],
     }).map((knack) => knack.key);

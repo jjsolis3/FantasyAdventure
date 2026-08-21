@@ -35,6 +35,16 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    // The browser tests, which were not typechecked by anything.
+    //
+    // Three of them had rotted in ways the compiler would have caught in
+    // seconds: one imported `signatureFor` after it became `signaturesFor`,
+    // one called `resetCharacter` with the argument shape it had before it
+    // took a plan, and one wrote `seatOrder` on a party member long after that
+    // column became `position`. All three failed at runtime instead — two of
+    // them before a browser had even opened — and because nothing ran the
+    // suite, nobody found out.
+    "**/*.mts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

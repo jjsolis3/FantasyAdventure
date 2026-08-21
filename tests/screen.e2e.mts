@@ -227,7 +227,7 @@ try {
     data: { userId: guest.id, name: "Tam", race: "HUMAN", archetype: "SCOUT" },
   });
   await db.partyMember.create({
-    data: { campaignId: campaign.id, characterId: guestCharacter.id, seatOrder: 2 },
+    data: { campaignId: campaign.id, characterId: guestCharacter.id, position: 1 },
   });
 
   const second = await fetch(`${BASE}/api/screen/register`, { method: "POST" });
