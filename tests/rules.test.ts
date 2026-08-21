@@ -273,6 +273,32 @@ test("a level is a high-water mark and never falls", () => {
   assert.equal(levelReached(2100, 4), MAX_LEVEL);
 });
 
+test("every screen showing a level shows the same one", () => {
+  // The high-water mark was applied to every writer of Character.level and to
+  // none of the three components that only draw it, so an adventurer ahead of
+  // the curve had two different levels on screen at once: his own sheet said 4
+  // — which is what his knacks were granted under — and the list linking to it
+  // said 2. Both were reading the same row.
+  const orin = { xp: 58, level: 4 };
+
+  assert.equal(levelProgress(orin.xp, orin.level).level, 4, "what the badge draws");
+  assert.equal(levelReached(orin.xp, orin.level), 4, "what the game plays him as");
+  assert.equal(levelFor(orin.xp), 2, "and the bare curve still says 2, which is why this matters");
+
+  // Ahead of the curve means none of the way to the next one — not a negative
+  // arc, which is what the ring drew before it was clamped.
+  const { into, needed } = levelProgress(orin.xp, orin.level);
+  assert.equal(into, 0);
+  assert.equal(needed, xpForLevel(5) - xpForLevel(4));
+
+  // Somebody the curve has caught up with is measured from where they stand.
+  assert.deepEqual(levelProgress(200, 4), { level: 4, into: 20, needed: 100 });
+
+  // And asking about experience alone is unchanged, which is what keeps the
+  // default honest rather than merely convenient.
+  assert.equal(levelProgress(58).level, levelFor(58));
+});
+
 test("the sheet fills up at about the same time the levels run out", () => {
   // 49 points of growth across seven stats, from the build cap of 5 to the
   // ceiling of 12. If these two drift apart, one of them stops meaning anything

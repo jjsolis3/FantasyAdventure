@@ -81,6 +81,7 @@ export function ResetAdventurer({
   const left = STAT_BUDGET - spent;
 
   const starting = mode === "START_AGAIN";
+  const changed = STATS.some((stat) => build[stat] !== suggested[stat]);
 
   // What the numbers in the boxes would actually become. Worked out here so the
   // screen can promise it before anybody agrees, rather than leaving somebody to
@@ -96,6 +97,17 @@ export function ResetAdventurer({
   const floorLevel = legalNumbers ? levelFor(askedXp) : level;
   const willBeLevel = legalNumbers ? Math.max(floorLevel, askedLevel) : level;
   const handedBack = legalNumbers ? statPointsEarned(askedXp) : statPointsEarned(xp);
+
+  // The single reason the button will not press, in the order somebody would
+  // meet them. Null means it presses.
+  const blocking =
+    left > 0
+      ? `Place the last ${left} point${left === 1 ? "" : "s"} above — this turns on once all ${POINTS_TO_SPEND} are spent.`
+      : left < 0
+        ? `That is ${-left} point${left === -1 ? "" : "s"} more than the ${POINTS_TO_SPEND} available.`
+        : !starting && !legalNumbers
+          ? `Give a level between 1 and ${MAX_LEVEL}, and experience of nought or more.`
+          : null;
 
   return (
     <form action={action} className="space-y-6">
@@ -220,16 +232,36 @@ export function ResetAdventurer({
             above a floor of one in everything; the number written on the sheet
             is that plus the floor. Saying only one of them is what made this
             screen look broken — "all 12 spent" over boxes adding up to 19. */}
-        <p
-          className={`mt-3 text-sm ${left === 0 ? "text-moss-400" : "text-amber-300"}`}
-          aria-live="polite"
-        >
-          {left === 0
-            ? `All ${POINTS_TO_SPEND} spent — ${STAT_BUDGET} in total, counting the ${STAT_MIN} every stat starts at.`
-            : left > 0
-              ? `${left} point${left === 1 ? "" : "s"} still to spend.`
-              : `${-left} point${left === -1 ? "" : "s"} too many.`}
-        </p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p
+            className={`text-sm ${left === 0 ? "text-moss-400" : "text-amber-300"}`}
+            aria-live="polite"
+          >
+            {left === 0
+              ? `All ${POINTS_TO_SPEND} spent — ${STAT_BUDGET} in total, counting the ${STAT_MIN} every stat starts at.`
+              : left > 0
+                ? `${left} point${left === 1 ? "" : "s"} still to spend.`
+                : `${-left} point${left === -1 ? "" : "s"} too many.`}
+          </p>
+
+          {/* The way back.
+           *
+           * The form opens on a legal spread, so every point has to be taken
+           * off something before it can go on something else — and somebody
+           * redistributing all seven ends up at the floor with twelve points
+           * loose and a dead button at the bottom of a long page. That is a
+           * corner with no way out of it except twelve more clicks, or knowing
+           * to reload. This is the way out. */}
+          {changed ? (
+            <button
+              type="button"
+              onClick={() => setBuild(suggested)}
+              className="rounded-md border border-hearth-700 px-3 py-1 text-xs text-hearth-300 hover:border-hearth-600 hover:text-hearth-100"
+            >
+              Put the suggested spread back
+            </button>
+          ) : null}
+        </div>
 
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-hearth-500">
           {STATS.map((stat) => (
@@ -279,21 +311,40 @@ export function ResetAdventurer({
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={pending || left !== 0 || (!starting && !legalNumbers)}
-        className={`rounded-lg border px-5 py-2.5 font-medium disabled:opacity-40 ${
-          starting
-            ? "border-rose-700/60 bg-rose-900/30 text-rose-100 hover:bg-rose-900/50"
-            : "border-hearth-600 bg-hearth-700/40 text-hearth-100 hover:bg-hearth-700/60"
-        }`}
-      >
-        {pending
-          ? "Saving…"
-          : starting
-            ? `Start ${name} again`
-            : `Re-lay ${they.possessive} numbers`}
-      </button>
+      <div>
+        <button
+          type="submit"
+          disabled={pending || blocking !== null}
+          className={`rounded-lg border px-5 py-2.5 font-medium disabled:opacity-40 ${
+            starting
+              ? "border-rose-700/60 bg-rose-900/30 text-rose-100 hover:bg-rose-900/50"
+              : "border-hearth-600 bg-hearth-700/40 text-hearth-100 hover:bg-hearth-700/60"
+          }`}
+        >
+          {pending
+            ? "Saving…"
+            : starting
+              ? `Start ${name} again`
+              : `Re-lay ${they.possessive} numbers`}
+        </button>
+
+        {/* Why it will not press.
+         *
+         * It was disabled with nothing beside it, and the one thing that
+         * disables it sits several hundred pixels up the page — above the skill
+         * list on the destructive path, so on a phone it is not merely far away
+         * but off-screen entirely. A household reported this as the reset being
+         * broken, which from where they were sitting is exactly what it looked
+         * like: a form that had been filled in, and a button that did nothing
+         * and said nothing.
+         *
+         * Under the button, where the hand already is. */}
+        {blocking ? (
+          <p className="mt-2 text-sm text-amber-300" aria-live="polite">
+            {blocking}
+          </p>
+        ) : null}
+      </div>
     </form>
   );
 }

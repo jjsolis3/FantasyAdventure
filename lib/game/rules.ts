@@ -573,14 +573,35 @@ export const MAX_LEVEL = LEVEL_THRESHOLDS.length - 1;
  *
  * `needed` is null at the cap, so callers can render "as far as it goes"
  * rather than a full bar that never moves.
+ *
+ * ## Pass the stored level. Always.
+ *
+ * `stored` defaults to 1 only so that callers asking a question purely about
+ * experience — "what does 400 buy?" — need not invent one. Anything drawing a
+ * *particular adventurer* must hand over `Character.level`, because that column
+ * is the high-water mark and this function has no other way to see it.
+ *
+ * Leaving it out is how the badge on the adventurers list came to disagree with
+ * the sheet it links to. The level ladder was made four times steeper and every
+ * writer of the column was moved onto `levelReached`; the three components that
+ * only *display* a level were not, so they went on recomputing from experience
+ * against the new ladder. Orin's sheet said level 4 — what he had actually
+ * reached, and what his knacks were granted under — while the list beside it
+ * said 2. Both numbers came from the same row.
  */
-export function levelProgress(xp: number): { level: number; into: number; needed: number | null } {
-  const level = levelFor(xp);
+export function levelProgress(
+  xp: number,
+  stored = 1,
+): { level: number; into: number; needed: number | null } {
+  const level = levelReached(xp, stored);
   if (level >= MAX_LEVEL) return { level, into: 0, needed: null };
 
   const floor = LEVEL_THRESHOLDS[level];
   const ceiling = LEVEL_THRESHOLDS[level + 1];
-  return { level, into: xp - floor, needed: ceiling - floor };
+  // A character the curve has not caught up with yet has earned none of the way
+  // to the next level. Without the clamp that is a negative arc, which draws as
+  // a ring running backwards.
+  return { level, into: Math.max(0, xp - floor), needed: ceiling - floor };
 }
 
 export function levelFor(xp: number): number {

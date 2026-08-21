@@ -194,7 +194,7 @@ export default async function CharactersPage() {
                       ) : null}
                     </div>
 
-                    <LevelBadge xp={character.xp} />
+                    <LevelBadge level={character.level} xp={character.xp} />
                   </div>
                 </Card>
               </li>

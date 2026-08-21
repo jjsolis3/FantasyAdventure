@@ -11,6 +11,8 @@ export type PartySheet = {
   pronouns: string;
   description: string | null;
   xp: number;
+  /** `Character.level` — the high-water mark, never recomputed from xp here. */
+  level: number;
   stats: Record<StatKey, number>;
   skills: { name: string; rank: number }[];
   inventory: { name: string; quantity: number; description: string | null }[];
@@ -93,7 +95,7 @@ export function PartySheets({ sheets }: { sheets: PartySheet[] }) {
           </summary>
 
           <div className="mt-4 flex flex-wrap items-start gap-6">
-            <LevelBadge xp={sheet.xp} size={56} />
+            <LevelBadge level={sheet.level} xp={sheet.xp} size={56} />
 
             <dl className="flex flex-wrap gap-x-6 gap-y-2">
               {STATS.map((stat) => (

@@ -293,6 +293,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     pronouns: member.character.pronouns,
     description: member.character.description,
     xp: member.character.xp,
+    level: member.character.level,
     stats: Object.fromEntries(STATS.map((stat) => [stat, member.character[stat]])) as Record<
       (typeof STATS)[number],
       number
@@ -497,7 +498,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               <li key={member.id} className="text-sm">
                 <span className="text-hearth-100">{member.character.name}</span>
                 <span className="ml-2 align-middle">
-                  <LevelPip xp={member.character.xp} />
+                  <LevelPip level={member.character.level} xp={member.character.xp} />
                 </span>
                 <span className="ml-2 text-hearth-400">
                   {STATS.map(
