@@ -611,6 +611,7 @@ async function finishTurn(
     // place to fall back to.
     waysOn: [],
     rivalMet: null,
+    companionFound: null,
     questsOpened: [],
     whatNow: null,
     onTheTable: [],

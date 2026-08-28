@@ -255,6 +255,7 @@ model Character {
   questFinds    QuestObjective[]
   personalQuests Quest[]         @relation("PersonalQuests")
   dreams        Dream[]
+  companion     Companion?
   partyMemberships PartyMember[]
   partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
@@ -569,6 +570,63 @@ model Fork {
   /// One turning between any two chapters. A second would mean two open
   /// questions and no way to tell which the story answered.
   @@unique([campaignId, afterActIndex])
+}
+
+/// Something small that comes along.
+///
+/// ## Why this is not a Character, and not an item either
+///
+/// `PET` has existed as a relationship kind since ties were built — but ties
+/// run between two `Character` rows, so having a wooden owl meant building the
+/// owl in the full seven-stat builder, giving it a race and a calling and a
+/// spread of numbers. Nobody was ever going to do that, which is why nobody
+/// had one.
+///
+/// The other wrong answer is an `InventoryItem`, and the engine already refuses
+/// it in as many words: a companion is not a thing in a pocket. Putting a
+/// living creature on the same list as a length of rope is how a game teaches a
+/// child that their friend is equipment.
+///
+/// So: its own small row. A name, what it is, the one thing it is good at, and
+/// a number that goes up the longer they travel together.
+///
+/// ## It is never in danger
+///
+/// The safety contract covers the party; it has to cover this too, and more
+/// loudly, because a companion is exactly the thing a storyteller reaches for
+/// when it wants stakes without hurting a child's character. Nothing happens to
+/// it. It does not get taken, lost, hurt or left behind. See `companionNote`.
+model Companion {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name String
+  /// What it is: "a wooden owl", "a three-legged fox", "a very serious goose".
+  kind String
+  /// The one thing it is good at, in a few words. Honoured by the storyteller
+  /// in the telling; it never touches the dice.
+  knack String
+
+  /// How long they have travelled together, in chapters. Not a stat and never
+  /// a bonus — a number that says "this has been going on a while", which is
+  /// the whole of what a child wants from it.
+  closeness Int @default(0)
+
+  /// Where it came from, kept both ways so the story survives the adventure
+  /// being deleted.
+  foundInCampaignId    String?
+  foundInCampaignTitle String
+  /// The chapter its closeness was last counted in, so travelling together is
+  /// counted once per chapter rather than once per turn.
+  countedActIndex      Int?
+  countedCampaignId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One at a time. A menagerie is a list; one companion is a friend.
+  @@unique([characterId])
 }
 
 enum DreamStatus {

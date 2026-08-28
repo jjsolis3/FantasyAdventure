@@ -18,6 +18,7 @@ import {
 } from "@/lib/game/rules";
 import { Growth } from "@/components/character/growth";
 import { Dream } from "@/components/character/dream";
+import { Companion } from "@/components/character/companion";
 import { KnackOffer, KnacksHeld } from "@/components/character/knacks";
 import { knacksUnspent, offerFor } from "@/lib/game/knacks";
 import { SkillOffer } from "@/components/character/skill-offer";
@@ -69,6 +70,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
         orderBy: { createdAt: "desc" },
         include: { echoes: { orderBy: { atTurn: "asc" } } },
       },
+      companion: true,
     },
   });
   if (!character) notFound();
@@ -286,6 +288,25 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
           currentCampaignId={
             character.partyMemberships.find((member) => member.campaign.status === "ACTIVE")
               ?.campaign.id
+          }
+        />
+
+        {/* Under the wish and above the numbers. A companion is a character
+            fact, not a piece of equipment — putting it near the pockets is
+            exactly the mistake the schema exists to avoid. */}
+        <Companion
+          characterId={character.id}
+          yours
+          companion={
+            character.companion
+              ? {
+                  name: character.companion.name,
+                  kind: character.companion.kind,
+                  knack: character.companion.knack,
+                  closeness: character.companion.closeness,
+                  foundInCampaignTitle: character.companion.foundInCampaignTitle,
+                }
+              : null
           }
         />
 

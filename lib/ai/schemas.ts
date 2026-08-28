@@ -138,6 +138,21 @@ export const extractionSchema = z.object({
   deedsDone: z.array(z.string().min(1).max(200)).max(4).default([]),
 
   /**
+   * Somebody gaining a small creature or made thing that stays with them.
+   *
+   * Rare, and refused server-side for anybody who already has one — a
+   * menagerie is a list, and one companion is a friend.
+   */
+  companionFound: z
+    .object({
+      character: z.string().min(1),
+      name: z.string().min(1).max(40),
+      kind: z.string().min(1).max(60),
+      knack: z.string().min(1).max(80),
+    })
+    .nullish(),
+
+  /**
    * The moment the party and the person who keeps turning up crossed paths.
    *
    * Null on almost every turn. Whether they met at all is a fact about the

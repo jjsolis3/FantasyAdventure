@@ -10,6 +10,7 @@
 import { STAT_INFO, STATS, type StatKey } from "@/lib/game/rules";
 import { FORK_INSTRUCTION } from "@/lib/game/forks";
 import { RIVAL_INSTRUCTION } from "@/lib/game/rivals";
+import { COMPANION_INSTRUCTION } from "@/lib/game/companions";
 
 export type ToneKey = "COZY" | "ADVENTUROUS" | "SPOOKY";
 export type ReadingLevelKey = "EARLY_READER" | "MIDDLE_GRADE" | "TEEN" | "FAMILY_MIXED";
@@ -497,6 +498,7 @@ Reply with ONLY this JSON, no other text:
   "dreamEchoes": [{"character": "<character>", "note": "<how the passage brushed against their long wish, if it did>"}],
   "waysOn": [{"where": "<somewhere they could go next>", "why": "<what draws them there>"}],
   "rivalMet": null,
+  "companionFound": null,
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "onTheTable": ["<a thing the passage put within their reach>"],
@@ -543,6 +545,7 @@ Rules:
     they are working toward away from them.
 - ${FORK_INSTRUCTION}
 - ${RIVAL_INSTRUCTION}
+- ${COMPANION_INSTRUCTION}
 - dreamEchoes is for a long wish listed above, and ONLY if this passage really
   touched it — a rumour, a half-answer, somebody who once knew, a thing that
   looks like it might be connected. Almost every passage touches none, and []

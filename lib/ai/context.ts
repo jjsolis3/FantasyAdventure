@@ -19,6 +19,7 @@ import { narrativeHints } from "@/lib/game/knacks";
 import { renderKnownPeople, type KnownPerson } from "@/lib/game/acquaintances";
 import { dreamNote } from "@/lib/game/dreams";
 import { rivalNote } from "@/lib/game/rivals";
+import { companionNote } from "@/lib/game/companions";
 import { abilityHints } from "@/lib/game/practice";
 
 /** Rough token estimate. Four characters per token is close enough for
@@ -142,6 +143,14 @@ export type ContextInput = {
     partyAhead: number;
     rivalAhead: number;
   } | null;
+  /**
+   * The small things travelling with them, and who each belongs to.
+   *
+   * Never filtered or rationed, unlike the dreams and the rival: a companion is
+   * present in every scene by definition, and a storyteller that forgets it is
+   * there is the failure worth avoiding.
+   */
+  companions?: { owner: string; name: string; kind: string; knack: string }[];
   /**
    * People this party met on earlier adventures and might run into again.
    *
@@ -340,6 +349,7 @@ export function buildContext(input: ContextInput): BuiltContext {
     // with a running score attached and a great deal more said about what they
     // are not allowed to be.
     input.rival ? rivalNote(input.rival) : "",
+    companionNote(input.companions ?? []),
     "",
     "THE PARTY:",
     renderParty(input.party, input.bonds),

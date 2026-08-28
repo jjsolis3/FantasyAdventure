@@ -81,6 +81,7 @@ import {
 import { ECHO_LIMIT_PER_TURN, mayEcho } from "@/lib/game/dreams";
 import { optionsUsable } from "@/lib/game/forks";
 import { isRivalOutcome, mayAppear } from "@/lib/game/rivals";
+import { countsTowardCloseness } from "@/lib/game/companions";
 import {
   abilityUnlockedAt,
   hasRequirement,
@@ -438,6 +439,7 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     personalAims: await personalAimsFor(campaign.id),
     dreams: await dreamsFor(campaign),
     rival: await rivalFor(campaign),
+    companions: await companionsFor(campaign),
     knownPeople: await knownPeopleFor(campaign),
     party: partyContext(campaign, await spentAbilityNames(campaign, openScene?.id)),
     bonds: bondContext(campaign),
@@ -534,6 +536,28 @@ async function dreamsFor(campaign: LoadedCampaign): Promise<{ character: string;
  * with a "not again" — the same reasoning as a cooling dream. A model told
  * about somebody it must not use will find a way to use them.
  */
+/**
+ * The small things travelling with the party.
+ *
+ * Never rationed, unlike the dreams and the rival. A companion is present in
+ * every scene by definition, and a storyteller that forgets it is there is the
+ * failure worth avoiding — a wooden owl that vanishes for three chapters and
+ * comes back is worse than one that was never mentioned.
+ */
+async function companionsFor(campaign: LoadedCampaign) {
+  const companions = await db.companion.findMany({
+    where: { characterId: { in: campaign.party.map((member) => member.characterId) } },
+    include: { character: { select: { name: true } } },
+  });
+
+  return companions.map((companion) => ({
+    owner: companion.character.name,
+    name: companion.name,
+    kind: companion.kind,
+    knack: companion.knack,
+  }));
+}
+
 async function rivalFor(campaign: LoadedCampaign) {
   const rival = await db.rival.findUnique({ where: { ownerId: campaign.ownerId } });
   if (!rival) return null;
@@ -1950,6 +1974,56 @@ export async function playTurn(
           : undefined,
       })),
     );
+
+    // Somebody gaining something small that travels with them from now on.
+    //
+    // Refused for anybody who already has one, which is the unique index's job
+    // as well — but caught here so the turn does not fail on a constraint the
+    // storyteller had no way to know about.
+    const found = result.extraction.companionFound;
+    if (found) {
+      const member = campaign.party.find((entry) => entry.character.name === found.character);
+      if (member) {
+        const already = await tx.companion.findUnique({
+          where: { characterId: member.characterId },
+        });
+        if (!already) {
+          await tx.companion.create({
+            data: {
+              characterId: member.characterId,
+              name: found.name.trim(),
+              kind: found.kind.trim(),
+              knack: found.knack.trim(),
+              foundInCampaignId: campaign.id,
+              foundInCampaignTitle: campaign.title,
+            },
+          });
+          milestones.push(
+            `${found.name.trim()} is coming with ${member.character.name} from now on.`,
+          );
+        }
+      }
+    }
+
+    // Time served. Counted once per chapter rather than per turn, so a long
+    // sitting and a short one are worth the same — closeness measures how much
+    // story they have been through together, not how many buttons were pressed.
+    for (const member of campaign.party) {
+      const companion = await tx.companion.findUnique({
+        where: { characterId: member.characterId },
+      });
+      if (!companion) continue;
+      if (!countsTowardCloseness(companion, campaign.id, campaign.currentActIndex)) continue;
+
+      await tx.companion.update({
+        where: { id: companion.id },
+        data: {
+          closeness: { increment: 1 },
+          countedCampaignId: campaign.id,
+          countedActIndex: campaign.currentActIndex,
+        },
+      });
+    }
 
     // The rival turning up, and who came off better.
     //

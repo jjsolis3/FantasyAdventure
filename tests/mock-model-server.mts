@@ -57,6 +57,7 @@ const idle = process.env.MOCK_IDLE === "1";
  */
 const encounter = process.env.MOCK_ENCOUNTER === "1";
 let encountersOpened = 0;
+let companionsGiven = 0;
 let narrationCount = 0;
 
 /**
@@ -233,6 +234,13 @@ const server = createServer((request, response) => {
         // The rival turning up, and reporting it on every turn the storyteller
         // is told about them — the same worst case as MOCK_DREAM, for the same
         // reason. Once a chapter is the game's rule, not the model's.
+        // Somebody finding something small on the very first turn, so the
+        // whole life of a companion — arriving, being carried into the
+        // storyteller's context, and counting a chapter — fits one test.
+        (process.env.MOCK_COMPANION === "1" && companionsGiven++ === 0
+          ? '"companionFound":{"character":"Mira","name":"Woody","kind":"a wooden owl",' +
+            '"knack":"seeing in the dark"},'
+          : "") +
         (process.env.MOCK_RIVAL === "1" &&
         /SOMEBODY WHO KEEPS TURNING UP: (.+)/.test(prompt)
           ? '"rivalMet":{"note":"He was already there, holding it, and said so twice.",' +
