@@ -200,7 +200,18 @@ const server = createServer((request, response) => {
           '"movedForward":false,"actComplete":false,"sceneComplete":false}'
         : ending
         ? '{"sceneTitle":"The Last of It","location":"the barley field","memories":[],' +
-          '"bondMoments":[],"itemsGained":[],"actComplete":true,"sceneComplete":true}'
+          '"bondMoments":[],"itemsGained":[],' +
+          // Two genuinely different ways on, offered exactly where a chapter
+          // turns. MOCK_SAMEWAY makes them the same place worded twice — the
+          // failure a real small model produces when asked for variety at the
+          // moment it has least to go on, and the one `optionsUsable` throws
+          // away rather than putting a meaningless choice in front of a child.
+          (process.env.MOCK_SAMEWAY === "1"
+            ? '"waysOn":[{"where":"the mill","why":"the wheel is still turning"},' +
+              '{"where":"The Mill","why":"somebody is up there"}],'
+            : '"waysOn":[{"where":"the drowned mill","why":"the wheel is still turning with nobody there"},' +
+              '{"where":"the bell-ringer\'s cottage","why":"she kept the old charts"}],') +
+          '"actComplete":true,"sceneComplete":true}'
         :
         '{"sceneTitle":"The Barley Field","location":"the barley field","memories":' +
         '[{"kind":"NPC","key":"the creature","content":"It settles when someone hums.","importance":4}],' +

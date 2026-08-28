@@ -8,6 +8,7 @@
  */
 
 import { STAT_INFO, STATS, type StatKey } from "@/lib/game/rules";
+import { FORK_INSTRUCTION } from "@/lib/game/forks";
 
 export type ToneKey = "COZY" | "ADVENTUROUS" | "SPOOKY";
 export type ReadingLevelKey = "EARLY_READER" | "MIDDLE_GRADE" | "TEEN" | "FAMILY_MIXED";
@@ -479,6 +480,7 @@ Reply with ONLY this JSON, no other text:
   "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>", "requiresSkill": null, "requiresRank": null}],
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
   "dreamEchoes": [{"character": "<character>", "note": "<how the passage brushed against their long wish, if it did>"}],
+  "waysOn": [{"where": "<somewhere they could go next>", "why": "<what draws them there>"}],
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "onTheTable": ["<a thing the passage put within their reach>"],
@@ -523,6 +525,7 @@ Rules:
   - "Finished" means finished. Being close, being told where it is, or wanting
     it very much is not finished, and reporting it here would take the thing
     they are working toward away from them.
+- ${FORK_INSTRUCTION}
 - dreamEchoes is for a long wish listed above, and ONLY if this passage really
   touched it — a rumour, a half-answer, somebody who once knew, a thing that
   looks like it might be connected. Almost every passage touches none, and []

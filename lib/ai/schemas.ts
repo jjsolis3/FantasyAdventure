@@ -138,6 +138,24 @@ export const extractionSchema = z.object({
   deedsDone: z.array(z.string().min(1).max(200)).max(4).default([]),
 
   /**
+   * Two places the story could go, when a chapter is ending.
+   *
+   * Exactly two or none. One way on is a corridor, three is a menu, and both
+   * are worse than the single choice this exists to offer. Anything that is not
+   * a clean pair is dropped rather than repaired — a fork is only worth putting
+   * in front of a family when the storyteller genuinely had two ideas.
+   */
+  waysOn: z
+    .array(
+      z.object({
+        where: z.string().min(1).max(80),
+        why: z.string().min(1).max(160),
+      }),
+    )
+    .max(2)
+    .default([]),
+
+  /**
    * A moment the passage brushed against somebody's long wish.
    *
    * Proposed here and *filtered* server-side, never taken at face value. The

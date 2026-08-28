@@ -92,6 +92,7 @@ model User {
   sessions       AuthSession[]
   characters     Character[]
   campaigns      Campaign[]
+  forksChosen    Fork[]
   uploadedImages CampaignImage[]
   chapterImages  ChapterImage[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
@@ -437,6 +438,58 @@ model RoadEntry {
   @@unique([characterId, campaignId])
   @@index([characterId])
   @@index([campaignId])
+}
+
+/// Two ways on, offered when a chapter closes, chosen by the table.
+///
+/// ## Why a chapter needs one
+///
+/// The story was good and it was never theirs. A chapter ended, the next one
+/// began, and the only thing anybody had chosen all evening was what their own
+/// character did in a scene somebody else had set. `whatNow` asks a question at
+/// the end of a turn, but nothing has ever branched on the answer.
+///
+/// This is the smallest thing that changes "the story happened to us" into "we
+/// picked this" — and it gives two sisters something to argue about between
+/// Saturday and the following Saturday, which is worth more than either branch.
+///
+/// ## It blocks
+///
+/// Deliberately. A fork nobody has to answer is a poll, and a poll is
+/// decoration. The next turn will not run until somebody has chosen, exactly as
+/// a pending dice roll stops the story until a number is typed in.
+///
+/// It only exists when the storyteller actually offered two ways — a passage
+/// that names none creates no row, and the adventure carries on as it always
+/// did. So the failure mode is the old behaviour, never a stuck campaign.
+model Fork {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// The chapter that just closed. A fork belongs to the turning between two
+  /// chapters rather than to either side of it.
+  afterActIndex Int
+
+  /// Where it leads, and what draws them — one line each, in the storyteller's
+  /// words. Two, always: one way on is a corridor and three is a menu.
+  whereA String
+  whyA   String
+  whereB String
+  whyB   String
+
+  /// "A" or "B", null until the table says. Nothing else may write this.
+  chosen     String?
+  chosenAt   DateTime?
+  /// The household that pressed it, so the journal can say who decided.
+  chosenById String?
+  chosenBy   User?     @relation(fields: [chosenById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  /// One turning between any two chapters. A second would mean two open
+  /// questions and no way to tell which the story answered.
+  @@unique([campaignId, afterActIndex])
 }
 
 enum DreamStatus {
@@ -891,6 +944,7 @@ model Campaign {
   screens  ScreenPairing[]
   abilityUses AbilityUse[]
   images      CampaignImage[]
+  forks       Fork[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)

@@ -79,6 +79,7 @@ import {
   shouldTick,
 } from "@/lib/game/pressure";
 import { ECHO_LIMIT_PER_TURN, mayEcho } from "@/lib/game/dreams";
+import { CHOSEN_ROAD_KEY, chosenRoadNote, isForkChoice, optionsUsable } from "@/lib/game/forks";
 import {
   abilityUnlockedAt,
   hasRequirement,
@@ -998,6 +999,19 @@ export async function playTurn(
   const scene = campaign.scenes.find((entry) => entry.status === "OPEN");
   if (!scene) throw new Error("There is no open scene.");
 
+  // A fork nobody has to answer is a poll, and a poll is decoration. So the
+  // story waits here, exactly as it waits for a dice roll typed in from the
+  // table. There is no way to reach this state without two ways on already
+  // being on screen — a chapter that ended without offering a choice creates no
+  // row at all — so the block can never be a dead end.
+  const unanswered = await db.fork.findFirst({
+    where: { campaignId, chosen: null },
+    orderBy: { afterActIndex: "desc" },
+  });
+  if (unanswered) {
+    throw new Error("The party has not said which way they are going yet.");
+  }
+
   const partyIds = new Set(campaign.party.map((member) => member.characterId));
   const accepted = actions.filter((action) => partyIds.has(action.characterId) && action.text.trim());
   if (accepted.length === 0) throw new Error("Nobody said what they were doing.");
@@ -1908,6 +1922,39 @@ export async function playTurn(
           : undefined,
       })),
     );
+
+    // Two ways on, when the storyteller had two ideas and there is a chapter
+    // left to spend them on. Created after the chapter has actually turned, so
+    // a fork can never appear beside a chapter that carried on.
+    //
+    // `optionsUsable` is the gate. A small model asked for variety at the exact
+    // moment it has least to go on will happily offer "go to the mill" and
+    // "head for the mill", and a fork like that is worse than none — it asks a
+    // child to choose and then makes the choice meaningless. Better no fork.
+    if (advancesAct && result.extraction.waysOn.length === 2) {
+      const [a, b] = result.extraction.waysOn;
+      if (optionsUsable(a, b)) {
+        await tx.fork.upsert({
+          where: {
+            campaignId_afterActIndex: {
+              campaignId: campaign.id,
+              afterActIndex: campaign.currentActIndex,
+            },
+          },
+          create: {
+            campaignId: campaign.id,
+            afterActIndex: campaign.currentActIndex,
+            whereA: a.where.trim(),
+            whyA: a.why.trim(),
+            whereB: b.where.trim(),
+            whyB: b.why.trim(),
+          },
+          // A chapter can only close once, so this is belt and braces against a
+          // retried turn rather than a real path.
+          update: {},
+        });
+      }
+    }
 
     // The next chapter's personal aims open only after all that has settled.
     // Opened any earlier they would be in the list `advanceQuests` just walked,

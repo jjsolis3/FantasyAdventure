@@ -600,6 +600,10 @@ async function finishTurn(
     // Empty when extraction failed, which is the right way for this to fail: a
     // turn nobody could read is not one to spend a whisper on.
     dreamEchoes: [],
+    // Likewise: no fork rather than a broken one. A chapter that ends without
+    // offering a choice is the old behaviour, and the old behaviour is a safe
+    // place to fall back to.
+    waysOn: [],
     questsOpened: [],
     whatNow: null,
     onTheTable: [],
