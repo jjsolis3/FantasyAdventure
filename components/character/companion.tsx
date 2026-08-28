@@ -92,6 +92,12 @@ export function Companion({
           ) : null}
         </>
       ) : (
+        /* The field names are prefixed, and not for tidiness. This card sits on
+           the character sheet, which already carries an edit form with its own
+           `input[name="name"]` — and two inputs called "name" on one page are
+           ambiguous to anything selecting by name. The browser suite found it
+           the hard way: a rename filled this box instead of the one it meant,
+           and the character quietly kept its old name. */
         <form action={save} className="mt-2 space-y-2">
           <input type="hidden" name="characterId" value={characterId} />
           <p className="text-sm text-hearth-300/80">
@@ -100,21 +106,21 @@ export function Companion({
             never taken and never lost.
           </p>
           <input
-            name="name"
+            name="companionName"
             maxLength={NAME_MAX}
             defaultValue={companion?.name ?? ""}
             placeholder="Woody"
             className="w-full rounded-lg border border-hearth-700 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-700"
           />
           <input
-            name="kind"
+            name="companionKind"
             maxLength={KIND_MAX}
             defaultValue={companion?.kind ?? ""}
             placeholder="a wooden owl who rides on her shoulder"
             className="w-full rounded-lg border border-hearth-700 bg-hearth-950/60 px-3 py-2 text-hearth-100 placeholder:text-hearth-700"
           />
           <input
-            name="knack"
+            name="companionKnack"
             maxLength={KNACK_MAX}
             defaultValue={companion?.knack ?? ""}
             placeholder="seeing in the dark"

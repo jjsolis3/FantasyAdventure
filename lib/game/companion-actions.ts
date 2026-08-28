@@ -44,9 +44,9 @@ export async function saveCompanionAction(
 
   const parsed = companionSchema.safeParse({
     characterId: formData.get("characterId"),
-    name: formData.get("name"),
-    kind: formData.get("kind"),
-    knack: formData.get("knack"),
+    name: formData.get("companionName"),
+    kind: formData.get("companionKind"),
+    knack: formData.get("companionKnack"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "That will not do." };

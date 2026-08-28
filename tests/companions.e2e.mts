@@ -151,7 +151,7 @@ try {
 
   // ---- One at a time --------------------------------------------------------
   await page.getByRole("button", { name: /Change them/ }).click();
-  await page.fill('input[name="name"]', "Woodrow");
+  await page.fill('input[name="companionName"]', "Woodrow");
   await page.getByRole("button", { name: /Save them/ }).click();
   await page.locator("text=/Woodrow/").first().waitFor({ timeout: 15_000 });
 
