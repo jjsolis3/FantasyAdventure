@@ -579,6 +579,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               tone={campaign.tone}
               readingLevel={campaign.readingLevel}
               pacing={campaign.pacing}
+              challenge={campaign.challenge}
+              manner={campaign.manner}
               inputMode={campaign.inputMode}
               diceMode={campaign.diceMode}
             />

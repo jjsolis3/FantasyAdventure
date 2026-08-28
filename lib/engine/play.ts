@@ -18,6 +18,7 @@ import {
   suggestionPrompt,
   summaryPrompt,
   systemPrompt,
+  type MannerKey,
   type ReadingLevelKey,
   type ToneKey,
 } from "@/lib/ai/prompts";
@@ -565,6 +566,7 @@ export async function beginCampaign(
   const system = systemPrompt({
     tone: campaign.tone as ToneKey,
     readingLevel: campaign.readingLevel as ReadingLevelKey,
+    manner: campaign.manner as MannerKey,
   });
 
   onProgress?.({ type: "stage", stage: "narrating" });
@@ -1121,6 +1123,10 @@ export async function playTurn(
       context: built.text,
       tone: campaign.tone as ToneKey,
       readingLevel: campaign.readingLevel as ReadingLevelKey,
+      // Two different destinations, on purpose. The manner reaches the narrator
+      // and nothing else; the challenge reaches the dice and no prompt at all.
+      manner: campaign.manner as MannerKey,
+      challenge: campaign.challenge,
       sceneText: lastNarration?.content ?? campaign.storyline.hook,
       party: campaign.party.map((member) => ({
         id: member.characterId,
@@ -2233,6 +2239,7 @@ export async function talkTurn(
   const system = systemPrompt({
     tone: campaign.tone as ToneKey,
     readingLevel: campaign.readingLevel as ReadingLevelKey,
+    manner: campaign.manner as MannerKey,
   });
 
   let reply = await calls.prose(system, conversationPrompt({ context: built.text, said: named }));

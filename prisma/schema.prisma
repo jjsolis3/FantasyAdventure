@@ -687,6 +687,41 @@ enum Pacing {
   LEISURELY
 }
 
+/// How hard the dice are.
+///
+/// Deliberately NOT an instruction to the storyteller. It moves the target
+/// numbers and how forgiving a near miss is, both server-side, so the effect is
+/// exact, testable, and visible in the check preview before anything is rolled.
+/// Telling a small local model to "be harder on them" would be none of those,
+/// and would fight the rule forbidding it to invent difficulty.
+enum Challenge {
+  /// Lower bars and a wide near-miss. For a table that wants to get on with it.
+  GENTLE
+  BALANCED
+  /// Real teeth. A miss is usually a miss.
+  TOUGH
+}
+
+/// How the storyteller plays, which is not the same question as `Tone`.
+///
+/// Tone is what the world is like; this is the manner of the person telling it.
+/// The two are independent: spooky played straight is horror, spooky played
+/// madcap is Goosebumps, and a family should be able to ask for either.
+///
+/// Reaches the narrator only. The adjudicator — the call that decides what
+/// needs a roll — never sees it, because a storyteller told to be wilder starts
+/// inventing wilder versions of what a child actually wrote, and then failing
+/// her at something she never tried. That has happened once already.
+enum GmManner {
+  /// What you wrote is what happens. Dry, unhurried, no embroidery.
+  STRAIGHT
+  BALANCED
+  /// Comic timing, small absurdities, things that escalate amusingly.
+  PLAYFUL
+  /// The world says yes to almost anything. Cheerfully ridiculous.
+  MADCAP
+}
+
 enum CampaignStatus {
   /// Created, party chosen, but the first scene has not been narrated yet.
   SETUP
@@ -783,6 +818,10 @@ model Campaign {
   /// Copied onto the campaign at setup, like tone and reading level, so
   /// changing your mind later cannot rewrite an adventure already under way.
   pacing       Pacing    @default(STANDARD)
+  /// Both default to the behaviour that was there before them, so every
+  /// adventure already under way plays exactly as it did.
+  challenge    Challenge @default(BALANCED)
+  manner       GmManner  @default(BALANCED)
   snapshot     TurnSnapshot?
   /// Set when the final act closes, so a finished adventure reads as finished
   /// rather than as one nobody has opened in a while.

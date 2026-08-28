@@ -17,7 +17,7 @@
 import type { Adjudication, Extraction } from "@/lib/ai/schemas";
 import { adjudicationSchema, extractionSchema, validator } from "@/lib/ai/schemas";
 import { requestStructured, StructuredOutputError } from "@/lib/ai/json";
-import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
+import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, type MannerKey, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
 import { checkNarration, safetyReminder } from "@/lib/ai/safety";
 import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type Difficulty } from "@/lib/engine/dice";
 import type { SignatureEffect } from "@/lib/game/character-options";
@@ -40,6 +40,10 @@ export type TurnInput = {
   context: string;
   tone: ToneKey;
   readingLevel: ReadingLevelKey;
+  /** How the storyteller plays. Narration only — see `MANNER_GUIDANCE`. */
+  manner?: MannerKey;
+  /** How hard the dice are. Reaches `resolveCheck`, never a prompt. */
+  challenge?: string;
   sceneText: string;
   party: {
     id: string;
@@ -452,6 +456,9 @@ async function finishTurn(
       characterName: member.name,
       stat: requested.stat as StatKey,
       difficulty: requested.difficulty as Difficulty,
+      // The model chose the band, which is a judgement about the scene. What
+      // that band costs belongs to the table, and is settled here.
+      challenge: input.challenge,
       intent: requested.intent,
       skillRank: skill?.rank,
       skillName: skill?.name,
@@ -539,7 +546,11 @@ async function finishTurn(
     ...adjudication.automatic.map((entry) => `${entry.character}: ${entry.effect} (happens automatically)`),
   ].join("\n\n");
 
-  const system = systemPrompt({ tone: input.tone, readingLevel: input.readingLevel });
+  const system = systemPrompt({
+    tone: input.tone,
+    readingLevel: input.readingLevel,
+    manner: input.manner,
+  });
   const basePrompt = narrationPrompt({
       correction: input.correction,
     context: input.context,
