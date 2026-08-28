@@ -79,7 +79,8 @@ import {
   shouldTick,
 } from "@/lib/game/pressure";
 import { ECHO_LIMIT_PER_TURN, mayEcho } from "@/lib/game/dreams";
-import { CHOSEN_ROAD_KEY, chosenRoadNote, isForkChoice, optionsUsable } from "@/lib/game/forks";
+import { optionsUsable } from "@/lib/game/forks";
+import { isRivalOutcome, mayAppear } from "@/lib/game/rivals";
 import {
   abilityUnlockedAt,
   hasRequirement,
@@ -436,6 +437,7 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     itemsHeld: await heldItemNames(campaign.id),
     personalAims: await personalAimsFor(campaign.id),
     dreams: await dreamsFor(campaign),
+    rival: await rivalFor(campaign),
     knownPeople: await knownPeopleFor(campaign),
     party: partyContext(campaign, await spentAbilityNames(campaign, openScene?.id)),
     bonds: bondContext(campaign),
@@ -519,6 +521,31 @@ async function dreamsFor(campaign: LoadedCampaign): Promise<{ character: string;
   return dreams
     .filter((dream) => mayEcho(dream.echoes[0]?.atTurn ?? null, campaign.turnCounter))
     .map((dream) => ({ character: dream.character.name, wish: dream.wish }));
+}
+
+/**
+ * The person who keeps turning up, when this chapter has not used them yet.
+ *
+ * Belongs to the household that owns the adventure rather than to a character:
+ * one rival everybody groans about together beats one each, and two sisters
+ * racing the same insufferable boy have something to be on the same side of.
+ *
+ * Left out entirely once this chapter has had its meeting, rather than listed
+ * with a "not again" — the same reasoning as a cooling dream. A model told
+ * about somebody it must not use will find a way to use them.
+ */
+async function rivalFor(campaign: LoadedCampaign) {
+  const rival = await db.rival.findUnique({ where: { ownerId: campaign.ownerId } });
+  if (!rival) return null;
+  if (!mayAppear(rival, campaign.id, campaign.currentActIndex)) return null;
+
+  return {
+    name: rival.name,
+    about: rival.about,
+    wants: rival.wants,
+    partyAhead: rival.partyAhead,
+    rivalAhead: rival.rivalAhead,
+  };
 }
 
 /**
@@ -1177,6 +1204,7 @@ export async function playTurn(
       // the context, and it is the one being asked whether a wish was touched.
       // Both reads use the same turn counter, so they cannot disagree.
       dreams: await dreamsFor(campaign),
+      rivalName: (await rivalFor(campaign))?.name ?? null,
       sceneText: lastNarration?.content ?? campaign.storyline.hook,
       party: campaign.party.map((member) => ({
         id: member.characterId,
@@ -1922,6 +1950,53 @@ export async function playTurn(
           : undefined,
       })),
     );
+
+    // The rival turning up, and who came off better.
+    //
+    // Gated on the way in as well as here: the storyteller is only told about
+    // them in a chapter that has not used them, so a second meeting is a model
+    // reporting somebody it was never handed. Refused at the write for the same
+    // reason the dream cooldown is — the gate nearest the row is the one that
+    // counts.
+    const met = result.extraction.rivalMet;
+    if (met) {
+      const rival = await tx.rival.findUnique({ where: { ownerId: campaign.ownerId } });
+      if (rival && mayAppear(rival, campaign.id, campaign.currentActIndex)) {
+        const outcome = isRivalOutcome(met.outcome) ? met.outcome : "NEITHER";
+
+        await tx.rivalMeeting.create({
+          data: {
+            rivalId: rival.id,
+            note: met.note.trim(),
+            outcome,
+            campaignId: campaign.id,
+            campaignTitle: campaign.title,
+            actIndex: campaign.currentActIndex,
+          },
+        });
+
+        await tx.rival.update({
+          where: { id: rival.id },
+          data: {
+            // A draw moves neither score, which is what makes the tally worth
+            // reading: most crossings of paths settle nothing.
+            partyAhead: outcome === "PARTY" ? { increment: 1 } : undefined,
+            rivalAhead: outcome === "RIVAL" ? { increment: 1 } : undefined,
+            lastSeenCampaignId: campaign.id,
+            lastSeenCampaignTitle: campaign.title,
+            lastSeenActIndex: campaign.currentActIndex,
+          },
+        });
+
+        milestones.push(
+          outcome === "PARTY"
+            ? `You got there before ${rival.name}.`
+            : outcome === "RIVAL"
+              ? `${rival.name} got there first.`
+              : `${rival.name} turned up again.`,
+        );
+      }
+    }
 
     // Two ways on, when the storyteller had two ideas and there is a chapter
     // left to spend them on. Created after the chapter has actually turned, so

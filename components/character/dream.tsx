@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   answerDreamAction,
   setAsideDreamAction,
@@ -66,6 +66,12 @@ export function Dream({
   const [setState, setAction] = useActionState<FormState, FormData>(setDreamAction, null);
   const [answerState, answerAction] = useActionState<FormState, FormData>(answerDreamAction, null);
   const [asideState, asideAction] = useActionState<FormState, FormData>(setAsideDreamAction, null);
+
+  // Same reason as the rival card: `writing` is client state, and a saved
+  // change left the form open looking like nothing had happened.
+  useEffect(() => {
+    if (setState?.error === "") setWriting(false);
+  }, [setState]);
 
   const error = setState?.error || answerState?.error || asideState?.error;
 

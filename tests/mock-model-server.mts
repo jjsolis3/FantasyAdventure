@@ -230,6 +230,14 @@ const server = createServer((request, response) => {
         '"leads":["the bell-ringer keeps the old charts"],' +
         `"deedsDone":${deeds},` +
         echoes +
+        // The rival turning up, and reporting it on every turn the storyteller
+        // is told about them — the same worst case as MOCK_DREAM, for the same
+        // reason. Once a chapter is the game's rule, not the model's.
+        (process.env.MOCK_RIVAL === "1" &&
+        /SOMEBODY WHO KEEPS TURNING UP: (.+)/.test(prompt)
+          ? '"rivalMet":{"note":"He was already there, holding it, and said so twice.",' +
+            '"outcome":"RIVAL"},'
+          : "") +
         (encounter && encountersOpened++ === 0
           ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
             '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +

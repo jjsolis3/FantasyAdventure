@@ -18,6 +18,7 @@ import { signaturesFor } from "@/lib/game/character-options";
 import { narrativeHints } from "@/lib/game/knacks";
 import { renderKnownPeople, type KnownPerson } from "@/lib/game/acquaintances";
 import { dreamNote } from "@/lib/game/dreams";
+import { rivalNote } from "@/lib/game/rivals";
 import { abilityHints } from "@/lib/game/practice";
 
 /** Rough token estimate. Four characters per token is close enough for
@@ -126,6 +127,21 @@ export type ContextInput = {
    * way to get it used.
    */
   dreams?: { character: string; wish: string }[];
+  /**
+   * The person who keeps turning up, when this household has one and this
+   * chapter has not used them yet.
+   *
+   * Absent rather than forbidden when the chapter has already had its meeting —
+   * the same reasoning as a cooling dream. A model told about somebody it must
+   * not use will use them.
+   */
+  rival?: {
+    name: string;
+    about: string;
+    wants: string;
+    partyAhead: number;
+    rivalAhead: number;
+  } | null;
   /**
    * People this party met on earlier adventures and might run into again.
    *
@@ -320,6 +336,10 @@ export function buildContext(input: ContextInput): BuiltContext {
     // Offered rather than required. A chapter bent around an old acquaintance
     // because the prompt insisted is worse than one that never mentions them.
     renderKnownPeople(input.knownPeople ?? []),
+    // Beside the people they know, because that is what this is — one of them,
+    // with a running score attached and a great deal more said about what they
+    // are not allowed to be.
+    input.rival ? rivalNote(input.rival) : "",
     "",
     "THE PARTY:",
     renderParty(input.party, input.bonds),

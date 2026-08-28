@@ -138,6 +138,20 @@ export const extractionSchema = z.object({
   deedsDone: z.array(z.string().min(1).max(200)).max(4).default([]),
 
   /**
+   * The moment the party and the person who keeps turning up crossed paths.
+   *
+   * Null on almost every turn. Whether they met at all is a fact about the
+   * passage and safe to ask a model for; *how often* they are allowed to is
+   * not, and is settled server-side by `mayAppear`.
+   */
+  rivalMet: z
+    .object({
+      note: z.string().min(1).max(200),
+      outcome: z.enum(["PARTY", "RIVAL", "NEITHER"]).default("NEITHER"),
+    })
+    .nullish(),
+
+  /**
    * Two places the story could go, when a chapter is ending.
    *
    * Exactly two or none. One way on is a corridor, three is a menu, and both

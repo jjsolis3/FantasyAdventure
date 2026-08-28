@@ -55,6 +55,7 @@ ALL=(
   auth characters campaigns play rounds invites quests loadout growth knacks
   acquaintances personal-quests progression settings admin screen bonds
   briefing chapters chronicle dials dreams encounters forks levels luck pressure rebalance reset
+  rivals
   table-dice table-view talk ties wardrobe
 )
 
@@ -80,6 +81,7 @@ passes_for() {
     pressure)   printf '%s\n' "" "MOCK_IDLE=1" ;;
     dreams)     printf '%s\n' "MOCK_DREAM=1" ;;
     forks)      printf '%s\n' "" "MOCK_SAMEWAY=1" ;;
+    rivals)     printf '%s\n' "MOCK_RIVAL=1" ;;
     luck)       printf '%s\n' "MOCK_STAT=grace" ;;
     encounters) printf '%s\n' "MOCK_ENCOUNTER=1" ;;
     rebalance)  printf '%s\n' "MOCK_TICK=1" ;;

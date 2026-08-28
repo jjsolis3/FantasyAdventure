@@ -93,6 +93,7 @@ model User {
   characters     Character[]
   campaigns      Campaign[]
   forksChosen    Fork[]
+  rival          Rival?
   uploadedImages CampaignImage[]
   chapterImages  ChapterImage[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
@@ -438,6 +439,84 @@ model RoadEntry {
   @@unique([characterId, campaignId])
   @@index([characterId])
   @@index([campaignId])
+}
+
+/// Somebody who keeps turning up and is after the same thing they are.
+///
+/// ## A foil, never a threat
+///
+/// The core contract forbids a villain — nobody is hurt, nothing catches them,
+/// nobody is taken — and that is not being relaxed here. What it does not
+/// forbid is somebody *infuriating*: who gets there first, takes the credit,
+/// is unbearably pleased about it, and turns up again three adventures later
+/// still going on about it. Children adore that, and it costs the safety
+/// promise nothing.
+///
+/// The distinction is written into the prompt in as many words, because
+/// "nemesis" is a word that invites a small model to reach for a monster.
+///
+/// ## Household-level, on purpose
+///
+/// One rival everybody groans about together beats one each. Two sisters
+/// racing the same insufferable boy have something to be on the same side of,
+/// which is worth more to them than a private antagonist would be.
+///
+/// ## The scoreboard is the point
+///
+/// A recurring NPC is set dressing. A recurring NPC with a running tally of who
+/// got there first is a rivalry — and it is the tally, not the character, that
+/// makes a ten-year-old want the next adventure.
+model Rival {
+  id      String @id @default(cuid())
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name String
+  /// What they are like, in a sentence.
+  about String
+  /// What they are always after. The reason they collide with the party at all,
+  /// and the thing that keeps them a rival rather than an enemy.
+  wants String
+
+  /// How often each side has got there first.
+  partyAhead Int @default(0)
+  rivalAhead Int @default(0)
+
+  /// Where they last turned up, so they can be kept to once a chapter. Held as
+  /// a title too, because the id goes when an adventure is deleted and the fact
+  /// that they were there should not.
+  lastSeenCampaignId    String?
+  lastSeenCampaignTitle String?
+  lastSeenActIndex      Int?
+
+  meetings RivalMeeting[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One per household. A second rival is a cast, and a cast dilutes the one
+  /// face they are meant to recognise.
+  @@unique([ownerId])
+}
+
+/// One time the party and their rival crossed paths.
+model RivalMeeting {
+  id      String @id @default(cuid())
+  rivalId String
+  rival   Rival  @relation(fields: [rivalId], references: [id], onDelete: Cascade)
+
+  /// What happened, in the storyteller's words.
+  note String
+  /// Who came off better. NEITHER is a real and common answer.
+  outcome String
+
+  campaignId    String?
+  campaignTitle String
+  actIndex      Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@index([rivalId, createdAt])
 }
 
 /// Two ways on, offered when a chapter closes, chosen by the table.

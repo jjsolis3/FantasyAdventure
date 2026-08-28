@@ -9,6 +9,7 @@
 
 import { STAT_INFO, STATS, type StatKey } from "@/lib/game/rules";
 import { FORK_INSTRUCTION } from "@/lib/game/forks";
+import { RIVAL_INSTRUCTION } from "@/lib/game/rivals";
 
 export type ToneKey = "COZY" | "ADVENTUROUS" | "SPOOKY";
 export type ReadingLevelKey = "EARLY_READER" | "MIDDLE_GRADE" | "TEEN" | "FAMILY_MIXED";
@@ -453,9 +454,23 @@ export function extractionPrompt(options: {
    * rather than forbidden. Nothing here can end one; see `dreamEchoes`.
    */
   dreams?: { character: string; wish: string }[];
+  /**
+   * The person who keeps turning up, when this household has one and this
+   * chapter is allowed to use them.
+   *
+   * Only the name, here. Extraction is being asked whether they were in the
+   * passage, not who they are — that belongs in the narration context, and
+   * repeating their whole character would be spending tokens on a question
+   * nobody is asking.
+   */
+  rivalName?: string | null;
 }): string {
   const deeds = options.openDeeds?.length
     ? `\nWHAT THE PARTY IS STILL TRYING TO DO OR GET HOLD OF:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
+    : "";
+
+  const rival = options.rivalName
+    ? `\nSOMEBODY WHO KEEPS TURNING UP: ${options.rivalName}\n`
     : "";
 
   const wishes = options.dreams?.length
@@ -470,7 +485,7 @@ PASSAGE:
 ${options.narration}
 
 The characters in the party are: ${options.partyNames.join(", ")}.
-${deeds}${wishes}
+${deeds}${wishes}${rival}
 Reply with ONLY this JSON, no other text:
 {
   "sceneTitle": "<short title, or null if unchanged>",
@@ -481,6 +496,7 @@ Reply with ONLY this JSON, no other text:
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
   "dreamEchoes": [{"character": "<character>", "note": "<how the passage brushed against their long wish, if it did>"}],
   "waysOn": [{"where": "<somewhere they could go next>", "why": "<what draws them there>"}],
+  "rivalMet": null,
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "onTheTable": ["<a thing the passage put within their reach>"],
@@ -526,6 +542,7 @@ Rules:
     it very much is not finished, and reporting it here would take the thing
     they are working toward away from them.
 - ${FORK_INSTRUCTION}
+- ${RIVAL_INSTRUCTION}
 - dreamEchoes is for a long wish listed above, and ONLY if this passage really
   touched it — a rumour, a half-answer, somebody who once knew, a thing that
   looks like it might be connected. Almost every passage touches none, and []

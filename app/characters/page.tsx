@@ -11,6 +11,7 @@ import {
 } from "@/lib/game/rules";
 import { AGE_BANDS } from "@/lib/game/character-options";
 import { LevelBadge } from "@/components/character/level-badge";
+import { Rival } from "@/components/campaign/rival";
 import { waitingPointsFor } from "@/lib/game/waiting-points";
 import { CONFIRMED_TIES } from "@/lib/game/ties";
 import { Face } from "@/components/character/face";
@@ -43,6 +44,13 @@ export default async function CharactersPage() {
       },
     },
     orderBy: { createdAt: "asc" },
+  });
+
+  // The last few crossings, newest first. Enough to show a pattern without
+  // turning the card into a log.
+  const rival = await db.rival.findUnique({
+    where: { ownerId: user.id },
+    include: { meetings: { orderBy: { createdAt: "desc" }, take: 5 } },
   });
 
   // Where each adventurer is wanted, so this list can say so.
@@ -202,6 +210,13 @@ export default async function CharactersPage() {
           })}
         </ul>
       )}
+
+      {/* Below the adventurers, because they are the point and he is not — but
+          on this page rather than buried in settings, because a scoreboard
+          nobody walks past is a scoreboard nobody plays for. */}
+      <div className="mt-10">
+        <Rival rival={rival} />
+      </div>
     </main>
   );
 }

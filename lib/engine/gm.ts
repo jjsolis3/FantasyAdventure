@@ -52,6 +52,12 @@ export type TurnInput = {
    * whether a wish was brushed against.
    */
   dreams?: { character: string; wish: string }[];
+  /**
+   * The name of the person who keeps turning up, when this chapter may use
+   * them. Reaches extraction so it can report whether they were in the passage;
+   * the rest of who they are lives in the narration context.
+   */
+  rivalName?: string | null;
   sceneText: string;
   party: {
     id: string;
@@ -604,6 +610,7 @@ async function finishTurn(
     // offering a choice is the old behaviour, and the old behaviour is a safe
     // place to fall back to.
     waysOn: [],
+    rivalMet: null,
     questsOpened: [],
     whatNow: null,
     onTheTable: [],
@@ -627,6 +634,7 @@ async function finishTurn(
             openDeeds: input.openDeeds,
             appetite: input.appetite,
             dreams: input.dreams,
+            rivalName: input.rivalName,
           }),
           hint,
         ),
