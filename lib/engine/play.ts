@@ -78,6 +78,7 @@ import {
   TRIED_PER_MOVE,
   shouldTick,
 } from "@/lib/game/pressure";
+import { ECHO_LIMIT_PER_TURN, mayEcho } from "@/lib/game/dreams";
 import {
   abilityUnlockedAt,
   hasRequirement,
@@ -433,6 +434,7 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     actSeeks: act?.seeks ?? [],
     itemsHeld: await heldItemNames(campaign.id),
     personalAims: await personalAimsFor(campaign.id),
+    dreams: await dreamsFor(campaign),
     knownPeople: await knownPeopleFor(campaign),
     party: partyContext(campaign, await spentAbilityNames(campaign, openScene?.id)),
     bonds: bondContext(campaign),
@@ -487,6 +489,35 @@ async function personalAimsFor(campaignId: string): Promise<{ character: string;
       character: quest.secretFor!.name,
       aim: quest.objectives[0]?.text ?? quest.summary,
     }));
+}
+
+/**
+ * The long wishes the storyteller is allowed to touch this turn.
+ *
+ * The cooldown is applied *here*, on the way in, rather than when an echo comes
+ * back. A dream still cooling is left out of the prompt entirely, so the model
+ * is never told about a thing it must not use — which is the reliable way to
+ * get it used. What it cannot see, it cannot reach for.
+ *
+ * Only adventurers actually travelling in this campaign. A sister at home has a
+ * dream too, and a world that whispers about it while she is not there is
+ * whispering to nobody.
+ */
+async function dreamsFor(campaign: LoadedCampaign): Promise<{ character: string; wish: string }[]> {
+  const dreams = await db.dream.findMany({
+    where: {
+      status: "ACTIVE",
+      characterId: { in: campaign.party.map((member) => member.characterId) },
+    },
+    include: {
+      character: { select: { name: true } },
+      echoes: { orderBy: { atTurn: "desc" }, take: 1, select: { atTurn: true } },
+    },
+  });
+
+  return dreams
+    .filter((dream) => mayEcho(dream.echoes[0]?.atTurn ?? null, campaign.turnCounter))
+    .map((dream) => ({ character: dream.character.name, wish: dream.wish }));
 }
 
 /**
@@ -1127,6 +1158,11 @@ export async function playTurn(
       // and nothing else; the challenge reaches the dice and no prompt at all.
       manner: campaign.manner as MannerKey,
       challenge: campaign.challenge,
+      // Asked for a second time rather than threaded out of the context, and
+      // the repetition is the point: extraction is its own call that never sees
+      // the context, and it is the one being asked whether a wish was touched.
+      // Both reads use the same turn counter, so they cannot disagree.
+      dreams: await dreamsFor(campaign),
       sceneText: lastNarration?.content ?? campaign.storyline.hook,
       party: campaign.party.map((member) => ({
         id: member.characterId,
@@ -1694,6 +1730,42 @@ export async function playTurn(
     // one of them being kind, and until now it was worth nothing at all.
     for (const plan of result.plans) {
       for (const [a, b] of pairsIn(plan)) await deepenOnce(a, b);
+    }
+
+    // The world saying something about a long wish.
+    //
+    // Gated twice, deliberately. Once on the way out, by leaving a cooling
+    // dream out of the prompt; and again here, because the two calls of a turn
+    // are far apart and a model that was handed nothing can still decide to
+    // report something. The gate that matters is the one nearest the write.
+    //
+    // Capped per turn as well as per dream: a passage that brushed against
+    // three of them touched none of them, and recording all three would teach a
+    // family in one evening that these are cheap.
+    let echoed = 0;
+    for (const echo of result.extraction.dreamEchoes) {
+      if (echoed >= ECHO_LIMIT_PER_TURN) break;
+
+      const member = campaign.party.find((entry) => entry.character.name === echo.character);
+      if (!member) continue; // Somebody the model invented.
+
+      const dream = await tx.dream.findFirst({
+        where: { characterId: member.characterId, status: "ACTIVE" },
+        include: { echoes: { orderBy: { atTurn: "desc" }, take: 1, select: { atTurn: true } } },
+      });
+      if (!dream) continue;
+      if (!mayEcho(dream.echoes[0]?.atTurn ?? null, turnCounter)) continue;
+
+      await tx.dreamEcho.create({
+        data: {
+          dreamId: dream.id,
+          note: echo.note.trim(),
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          atTurn: turnCounter,
+        },
+      });
+      echoed += 1;
     }
 
     // Something the passage put in front of them, standing there until dealt

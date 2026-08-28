@@ -17,6 +17,7 @@ import {
   type StatBlock,
 } from "@/lib/game/rules";
 import { Growth } from "@/components/character/growth";
+import { Dream } from "@/components/character/dream";
 import { KnackOffer, KnacksHeld } from "@/components/character/knacks";
 import { knacksUnspent, offerFor } from "@/lib/game/knacks";
 import { SkillOffer } from "@/components/character/skill-offer";
@@ -61,9 +62,20 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
       knacks: { orderBy: { createdAt: "asc" } },
       acquaintances: { orderBy: [{ timesMet: "desc" }, { updatedAt: "desc" }] },
       practices: { select: { key: true, label: true, attempts: true } },
+      // Newest echo last, so the trail reads in the order it happened. Answered
+      // wishes come back too — a shelf of them is the strongest argument there
+      // is for writing down another.
+      dreams: {
+        orderBy: { createdAt: "desc" },
+        include: { echoes: { orderBy: { atTurn: "asc" } } },
+      },
     },
   });
   if (!character) notFound();
+
+  // One at a time — see `DREAMS_AT_ONCE`. Set-aside ones stay in the row but
+  // never come back to the page; what she wanted at nine is kept, not shown.
+  const activeDream = character.dreams.find((entry) => entry.status === "ACTIVE") ?? null;
 
   const stats: StatBlock = statsOf(character);
   // The same sentence the storyteller is given and the drawing model is asked
@@ -241,6 +253,41 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
             {look ? "Change how they look" : "Dress them"}
           </Link>
         </Card>
+
+        {/* High on the page, and above the numbers, because it is the answer to
+            "why am I playing" — and burying that under seven stats would say
+            the opposite of what it is for. */}
+        <Dream
+          characterId={character.id}
+          name={character.name}
+          pronouns={character.pronouns}
+          yours
+          dream={
+            activeDream
+              ? {
+                  id: activeDream.id,
+                  wish: activeDream.wish,
+                  echoes: activeDream.echoes.map((echo) => ({
+                    id: echo.id,
+                    note: echo.note,
+                    campaignTitle: echo.campaignTitle,
+                  })),
+                }
+              : null
+          }
+          answered={character.dreams
+            .filter((entry) => entry.status === "ANSWERED")
+            .map((entry) => ({
+              id: entry.id,
+              wish: entry.wish,
+              answeredNote: entry.answeredNote,
+              answeredInCampaignTitle: entry.answeredInCampaignTitle,
+            }))}
+          currentCampaignId={
+            character.partyMemberships.find((member) => member.campaign.status === "ACTIVE")
+              ?.campaign.id
+          }
+        />
 
         {offered.length > 0 ? (
           <Card>

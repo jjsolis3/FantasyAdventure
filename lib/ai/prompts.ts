@@ -439,9 +439,28 @@ export function extractionPrompt(options: {
    * than a threshold, because its reader is a small language model.
    */
   appetite?: string;
+  /**
+   * The long wishes the world is allowed to have touched this turn.
+   *
+   * Repeated here rather than inherited, because extraction is its own call and
+   * never sees the campaign context the narration was written from. Without
+   * this the model is asked whether a passage brushed against a dream it has
+   * never been told about — which it answers, wrongly, by inventing one or by
+   * always saying no.
+   *
+   * Already filtered by `mayEcho` upstream, so a wish still cooling is absent
+   * rather than forbidden. Nothing here can end one; see `dreamEchoes`.
+   */
+  dreams?: { character: string; wish: string }[];
 }): string {
   const deeds = options.openDeeds?.length
     ? `\nWHAT THE PARTY IS STILL TRYING TO DO OR GET HOLD OF:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
+    : "";
+
+  const wishes = options.dreams?.length
+    ? `\nWHAT THEY HAVE ALWAYS WANTED, older than this adventure:\n${options.dreams
+        .map((dream) => `- ${dream.character}: ${dream.wish}`)
+        .join("\n")}\n`
     : "";
 
   return `Read this passage from a story and extract what should be remembered.
@@ -450,7 +469,7 @@ PASSAGE:
 ${options.narration}
 
 The characters in the party are: ${options.partyNames.join(", ")}.
-${deeds}
+${deeds}${wishes}
 Reply with ONLY this JSON, no other text:
 {
   "sceneTitle": "<short title, or null if unchanged>",
@@ -459,6 +478,7 @@ Reply with ONLY this JSON, no other text:
   "bondMoments": [{"from": "<character>", "to": "<character>", "why": "<what they did for them>"}],
   "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>", "requiresSkill": null, "requiresRank": null}],
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
+  "dreamEchoes": [{"character": "<character>", "note": "<how the passage brushed against their long wish, if it did>"}],
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "onTheTable": ["<a thing the passage put within their reach>"],
@@ -503,6 +523,14 @@ Rules:
   - "Finished" means finished. Being close, being told where it is, or wanting
     it very much is not finished, and reporting it here would take the thing
     they are working toward away from them.
+- dreamEchoes is for a long wish listed above, and ONLY if this passage really
+  touched it — a rumour, a half-answer, somebody who once knew, a thing that
+  looks like it might be connected. Almost every passage touches none, and []
+  is the right answer nearly every time.
+  - NEVER report one because a dream is listed and you have not mentioned it in
+    a while. The game keeps its own count and will throw away anything too soon.
+  - A dream is never finished here. If a passage looks like it answered one, it
+    did not: say what it revealed and leave the ending to the family.
 - questsOpened is for a NEW errand the passage introduced that the party could
   choose to take on — a neighbour's missing cat, a promise made, a debt owed.
   Only when it is a real, findable thing somebody asked for. Never restate what

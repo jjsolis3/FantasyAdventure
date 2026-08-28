@@ -179,6 +179,21 @@ const server = createServer((request, response) => {
         : "";
       const deeds = listed ? JSON.stringify([listed]) : "[]";
 
+      // A storyteller brushing against somebody's long wish, and doing it on
+      // every single turn it is given the chance — which is exactly what a real
+      // small model does when handed "mention this occasionally", and the
+      // reason the cooldown is enforced by the server rather than by asking
+      // nicely. The name is read back out of the prompt, so an echo only
+      // appears for a dream the context actually offered.
+      const wishing = process.env.MOCK_DREAM === "1";
+      const dreamer = wishing
+        ? (prompt.match(/WHAT THEY HAVE ALWAYS WANTED[\s\S]*?\n- ([^:]+):/)?.[1] ?? "")
+        : "";
+      const echoes = dreamer
+        ? `"dreamEchoes":[{"character":${JSON.stringify(dreamer)},` +
+          '"note":"A pedlar mentions a basket left at a door, years ago."}],'
+        : "";
+
       content = idle
         ? '{"sceneTitle":null,"location":null,"memories":[],"bondMoments":[],"itemsGained":[],' +
           '"deedsDone":[],"questsOpened":[],"whatNow":"You are still standing in the barley. Now what?",' +
@@ -203,6 +218,7 @@ const server = createServer((request, response) => {
         // has to be the thing that de-duplicates it.
         '"leads":["the bell-ringer keeps the old charts"],' +
         `"deedsDone":${deeds},` +
+        echoes +
         (encounter && encountersOpened++ === 0
           ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
             '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +

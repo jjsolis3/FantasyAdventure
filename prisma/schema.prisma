@@ -252,6 +252,7 @@ model Character {
   keepsakes     Keepsake[]
   questFinds    QuestObjective[]
   personalQuests Quest[]         @relation("PersonalQuests")
+  dreams        Dream[]
   partyMemberships PartyMember[]
   partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
@@ -436,6 +437,88 @@ model RoadEntry {
   @@unique([characterId, campaignId])
   @@index([characterId])
   @@index([campaignId])
+}
+
+enum DreamStatus {
+  ACTIVE
+  /// It came true. Said by the family, never by the storyteller.
+  ANSWERED
+  /// She changed her mind. Kept rather than deleted, because what a child
+  /// wanted at nine is worth being able to read back at eleven.
+  SET_ASIDE
+}
+
+/// The one thing an adventurer wants that no single adventure can give her.
+///
+/// ## Why this exists
+///
+/// Everything else in this game is bounded by one story. Quests are born and
+/// die inside a campaign; even a personal aim is `campaignId`-scoped. So a
+/// child had nothing she was working toward across a whole autumn — each
+/// Saturday started from nothing and finished finished.
+///
+/// A dream is the opposite: declared once, in her own words, and answered
+/// whenever it is answered. *"I want to find out who left me on the step."*
+/// The storyteller learns it and is told to brush against it rarely — a rumour,
+/// a half-answer, somebody who knew — which is what makes the next session
+/// worth turning up to.
+///
+/// ## The storyteller may never end one
+///
+/// Only the family marks a dream answered. This is the whole feature: a model
+/// that resolves it in turn three has spent the thing that was making Tuesday
+/// matter on Saturday, and there is no getting it back. The prompt says so, and
+/// no extraction field can set `ANSWERED` — the only route is a person pressing
+/// a button.
+model Dream {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// In her own words, and kept in them. Never tidied by the game.
+  wish String
+
+  status DreamStatus @default(ACTIVE)
+
+  /// Where it came true. The title as well as the id, because the id goes when
+  /// a campaign is deleted and the fact that it happened should not.
+  answeredAt              DateTime?
+  answeredInCampaignId    String?
+  answeredInCampaignTitle String?
+  /// How it came true, in whoever's words closed it.
+  answeredNote            String?
+
+  echoes DreamEcho[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([characterId, status])
+}
+
+/// A moment the world brushed against a dream without answering it.
+///
+/// The visible progress. Three of these on a sheet is a child being able to see
+/// that the world has not forgotten what she asked for — which is the whole
+/// difference between a long ambition and a sentence typed once and never
+/// mentioned again.
+model DreamEcho {
+  id      String @id @default(cuid())
+  dreamId String
+  dream   Dream  @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+
+  /// What happened, in the storyteller's words.
+  note String
+
+  /// Which adventure, kept both ways for the same reason as `answeredIn`.
+  campaignId    String?
+  campaignTitle String
+  /// The turn it landed on, so the cooldown can be enforced without a clock.
+  atTurn        Int    @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([dreamId, createdAt])
 }
 
 model Keepsake {

@@ -17,6 +17,7 @@ import { STAT_INFO, STATS, RELATIONSHIP_LABELS, type RelationshipKind } from "@/
 import { signaturesFor } from "@/lib/game/character-options";
 import { narrativeHints } from "@/lib/game/knacks";
 import { renderKnownPeople, type KnownPerson } from "@/lib/game/acquaintances";
+import { dreamNote } from "@/lib/game/dreams";
 import { abilityHints } from "@/lib/game/practice";
 
 /** Rough token estimate. Four characters per token is close enough for
@@ -116,6 +117,15 @@ export type ContextInput = {
    * one table are not all pushing on the same one.
    */
   personalAims?: { character: string; aim: string }[];
+  /**
+   * The long wishes, older than this adventure.
+   *
+   * Only the ones the world is currently allowed to touch — see `mayEcho`. A
+   * dream on cooldown is left out entirely rather than listed with a "not yet",
+   * because telling a small model about a thing it must not use is the reliable
+   * way to get it used.
+   */
+  dreams?: { character: string; wish: string }[];
   /**
    * People this party met on earlier adventures and might run into again.
    *
@@ -295,6 +305,18 @@ export function buildContext(input: ContextInput): BuiltContext {
           .map((entry) => `- ${entry.character}: ${entry.aim}`)
           .join("\n")}`
       : "",
+    // Placed straight after the personal aims, because the two are the same
+    // shape of secret and the difference between them matters: an aim is for
+    // this chapter and wants an opening, a dream is for the year and wants
+    // almost nothing. Reading them side by side is what keeps the second from
+    // being played like the first.
+    dreamNote(
+      (input.dreams ?? []).map((entry) => ({
+        characterName: entry.character,
+        wish: entry.wish,
+        lastEchoTurn: null,
+      })),
+    ),
     // Offered rather than required. A chapter bent around an old acquaintance
     // because the prompt insisted is worse than one that never mentions them.
     renderKnownPeople(input.knownPeople ?? []),

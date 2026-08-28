@@ -44,6 +44,14 @@ export type TurnInput = {
   manner?: MannerKey;
   /** How hard the dice are. Reaches `resolveCheck`, never a prompt. */
   challenge?: string;
+  /**
+   * The long wishes the world may touch this turn, already past the cooldown.
+   *
+   * Reaches extraction as well as the context, because extraction is its own
+   * call that has never seen the context — and it is the one being asked
+   * whether a wish was brushed against.
+   */
+  dreams?: { character: string; wish: string }[];
   sceneText: string;
   party: {
     id: string;
@@ -589,6 +597,9 @@ async function finishTurn(
     bondMoments: [],
     itemsGained: [],
     deedsDone: [],
+    // Empty when extraction failed, which is the right way for this to fail: a
+    // turn nobody could read is not one to spend a whisper on.
+    dreamEchoes: [],
     questsOpened: [],
     whatNow: null,
     onTheTable: [],
@@ -611,6 +622,7 @@ async function finishTurn(
             partyNames: input.party.map((member) => member.name),
             openDeeds: input.openDeeds,
             appetite: input.appetite,
+            dreams: input.dreams,
           }),
           hint,
         ),
