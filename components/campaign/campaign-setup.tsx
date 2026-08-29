@@ -6,7 +6,8 @@ import { createCampaignAction } from "@/lib/game/campaign-actions";
 import type { FormState } from "@/lib/auth/actions";
 import { Alert, Field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { INPUT_MODE_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { INPUT_MODE_OPTIONS, MANNER_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { CHALLENGE_OPTIONS } from "@/lib/game/challenge";
 import { PACING_OPTIONS } from "@/lib/game/pacing";
 import type { InviteCandidate } from "@/lib/game/invites";
 
@@ -52,6 +53,9 @@ export function CampaignSetup({
   const [tone, setTone] = useState<string | null>(null);
   const [readingLevel, setReadingLevel] = useState<string | null>(null);
   const [pacing, setPacing] = useState("STANDARD");
+  // Both default to what the game did before they existed.
+  const [challenge, setChallenge] = useState<string>("BALANCED");
+  const [manner, setManner] = useState<string>("BALANCED");
   const [inputMode, setInputMode] = useState("SHARED_SCREEN");
   const [partyIds, setPartyIds] = useState<string[]>([]);
   const [inviteIds, setInviteIds] = useState<string[]>([]);
@@ -98,6 +102,8 @@ export function CampaignSetup({
       <input type="hidden" name="tone" value={tone ?? "COZY"} />
       <input type="hidden" name="readingLevel" value={readingLevel ?? defaultReadingLevel} />
       <input type="hidden" name="pacing" value={pacing} />
+      <input type="hidden" name="challenge" value={challenge} />
+      <input type="hidden" name="manner" value={manner} />
       <input type="hidden" name="inputMode" value={inputMode} />
 
       {/* ---- 1. The adventure ------------------------------------------- */}
@@ -385,6 +391,62 @@ export function CampaignSetup({
                   onClick={() => setPacing(option.key)}
                   className={`block w-full rounded-lg border p-3 text-left transition-colors ${
                     pacing === option.key
+                      ? "border-hearth-500 bg-hearth-800/40"
+                      : "border-hearth-800/60 hover:border-hearth-700"
+                  }`}
+                >
+                  <span className="block text-hearth-100">{option.label}</span>
+                  <span className="block text-sm text-hearth-400">{option.blurb}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {/* Both of these can be changed on the campaign page afterwards, and
+              in practice that is where they will be — nobody knows before the
+              first scene whether it is too easy or the storyteller is too
+              solemn. They are offered here so the choice exists, and defaulted
+              so nobody has to make it. */}
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-hearth-200">
+              How hard should it be?
+            </legend>
+            <div className="space-y-2">
+              {CHALLENGE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setChallenge(option.value)}
+                  className={`block w-full rounded-lg border p-3 text-left transition-colors ${
+                    challenge === option.value
+                      ? "border-hearth-500 bg-hearth-800/40"
+                      : "border-hearth-800/60 hover:border-hearth-700"
+                  }`}
+                >
+                  <span className="block text-hearth-100">{option.label}</span>
+                  <span className="block text-sm text-hearth-400">{option.blurb}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-hearth-200">
+              How should the storyteller play it?
+            </legend>
+            <p className="mb-2 text-sm text-hearth-400">
+              Not the same as tone. Tone is what the world is like; this is the manner of the
+              person telling it — and spooky told deadpan is a different evening from spooky told
+              daft.
+            </p>
+            <div className="space-y-2">
+              {MANNER_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setManner(option.value)}
+                  className={`block w-full rounded-lg border p-3 text-left transition-colors ${
+                    manner === option.value
                       ? "border-hearth-500 bg-hearth-800/40"
                       : "border-hearth-800/60 hover:border-hearth-700"
                   }`}

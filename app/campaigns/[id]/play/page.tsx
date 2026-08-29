@@ -45,6 +45,7 @@ import { lookOf, lookSentence } from "@/lib/game/wardrobe";
 import { characterPicture } from "@/lib/game/character-picture";
 import { chapterCard, recapsFor } from "@/lib/game/recap";
 import { ChapterCard } from "@/components/play/chapter-card";
+import { Fork } from "@/components/play/fork";
 
 export const dynamic = "force-dynamic";
 
@@ -431,6 +432,15 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     ? campaign.storyline.acts.find((entry) => entry.index === campaign.currentActIndex - 1)
     : undefined;
 
+  // The turning, if one is still open. Blocks the turn, so it is fetched every
+  // render rather than only when a chapter has just closed — a family who
+  // refreshed, or came back the next evening, must still find it waiting.
+  const openFork = await db.fork.findFirst({
+    where: { campaignId: campaign.id, chosen: null },
+    orderBy: { afterActIndex: "desc" },
+    select: { id: true, whereA: true, whyA: true, whereB: true, whyB: true },
+  });
+
   const card = finishedAct
     ? await chapterCard({
         campaignId: campaign.id,
@@ -539,6 +549,11 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
                 turned, this is what the table is actually looking at. */}
             {card ? <ChapterCard card={card} /> : null}
 
+            {/* The turning, when there is one. Above the recap and above the
+                story, because it is the only thing that can be pressed until
+                somebody answers it. */}
+            {openFork ? <Fork fork={openFork} /> : null}
+
             {recap.length > 0 ? (
               <details className="mb-8 rounded-xl border border-hearth-800/60 bg-hearth-900/30 p-4">
                 <summary className="cursor-pointer text-sm text-hearth-300">
@@ -574,6 +589,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               </details>
             ) : null}
 
+            {openFork ? null : (
             <PlayClient
               campaignId={campaign.id}
               campaignTitle={campaign.title}
@@ -601,6 +617,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               yourAims={aims}
               talkNudge={nudge?.reason ?? null}
             />
+            )}
           </>
         }
         party={<PartySheets sheets={sheets} />}

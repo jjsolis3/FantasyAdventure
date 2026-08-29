@@ -138,6 +138,76 @@ export const extractionSchema = z.object({
   deedsDone: z.array(z.string().min(1).max(200)).max(4).default([]),
 
   /**
+   * Somebody gaining a small creature or made thing that stays with them.
+   *
+   * Rare, and refused server-side for anybody who already has one — a
+   * menagerie is a list, and one companion is a friend.
+   */
+  companionFound: z
+    .object({
+      character: z.string().min(1),
+      name: z.string().min(1).max(40),
+      kind: z.string().min(1).max(60),
+      knack: z.string().min(1).max(80),
+    })
+    .nullish(),
+
+  /**
+   * The moment the party and the person who keeps turning up crossed paths.
+   *
+   * Null on almost every turn. Whether they met at all is a fact about the
+   * passage and safe to ask a model for; *how often* they are allowed to is
+   * not, and is settled server-side by `mayAppear`.
+   */
+  rivalMet: z
+    .object({
+      note: z.string().min(1).max(200),
+      outcome: z.enum(["PARTY", "RIVAL", "NEITHER"]).default("NEITHER"),
+    })
+    .nullish(),
+
+  /**
+   * Two places the story could go, when a chapter is ending.
+   *
+   * Exactly two or none. One way on is a corridor, three is a menu, and both
+   * are worse than the single choice this exists to offer. Anything that is not
+   * a clean pair is dropped rather than repaired — a fork is only worth putting
+   * in front of a family when the storyteller genuinely had two ideas.
+   */
+  waysOn: z
+    .array(
+      z.object({
+        where: z.string().min(1).max(80),
+        why: z.string().min(1).max(160),
+      }),
+    )
+    .max(2)
+    .default([]),
+
+  /**
+   * A moment the passage brushed against somebody's long wish.
+   *
+   * Proposed here and *filtered* server-side, never taken at face value. The
+   * model has no idea how long it has been since the last one, and a small one
+   * asked "did you touch her dream?" every turn will find a way to say yes
+   * every turn — which turns a year-long ambition into a running joke. See
+   * `mayEcho`, which counts the turns the model cannot see.
+   *
+   * Note what is absent: there is no way to report that a dream was *answered*.
+   * That is deliberate and load-bearing. A dream ends when the family says so.
+   */
+  dreamEchoes: z
+    .array(
+      z.object({
+        character: z.string().min(1),
+        /** What the world said or showed, in one sentence. */
+        note: z.string().min(1).max(200),
+      }),
+    )
+    .max(2)
+    .default([]),
+
+  /**
    * Errands the storyteller has just introduced and would like on the board.
    *
    * Bounded hard. A model asked "did you start anything?" every single turn

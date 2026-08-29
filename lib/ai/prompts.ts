@@ -8,9 +8,13 @@
  */
 
 import { STAT_INFO, STATS, type StatKey } from "@/lib/game/rules";
+import { FORK_INSTRUCTION } from "@/lib/game/forks";
+import { RIVAL_INSTRUCTION } from "@/lib/game/rivals";
+import { COMPANION_INSTRUCTION } from "@/lib/game/companions";
 
 export type ToneKey = "COZY" | "ADVENTUROUS" | "SPOOKY";
 export type ReadingLevelKey = "EARLY_READER" | "MIDDLE_GRADE" | "TEEN" | "FAMILY_MIXED";
+export type MannerKey = "STRAIGHT" | "BALANCED" | "PLAYFUL" | "MADCAP";
 
 const READING_LEVEL_GUIDANCE: Record<ReadingLevelKey, string> = {
   EARLY_READER:
@@ -152,15 +156,60 @@ WHAT A GOOD ROLL IS ALLOWED TO GIVE — read this before you write a CRITICAL:
 - NEVER hand the players the answer because they are stuck. Give them a new way to look — a sound, a smell, somebody who knows something, a door nobody has tried. Never the thing itself. Solving it for them is the one way to spoil this game.
 - That rule is about the SOLUTION and nothing else. It is never a reason to be vague, to withhold a detail, or to describe a room without putting anything in it. Tell them everything; let them work out what to do with it.`;
 
+/**
+ * How the storyteller plays, which is a different question from what the world
+ * is like.
+ *
+ * Tone says whether the woods are cosy or watching. This says whether the
+ * person describing them plays it deadpan or camps it up, and the two really
+ * are independent: spooky played straight is horror, spooky played madcap is
+ * Goosebumps, and a family should be able to ask for either.
+ *
+ * **This reaches the narrator only.** It is deliberately absent from the
+ * adjudication prompt. A storyteller told to be wilder starts inventing wilder
+ * versions of what a child actually wrote — "I go back to the table" becomes
+ * "sneaking back to the table" — and then rolls her against the invention. That
+ * happened once, and the standing order against it in `adjudicationPrompt` is
+ * the scar. Making the world sillier must never make the reading of a girl's
+ * own sentence looser.
+ *
+ * Each entry is two or three short imperatives, because that is what a 7B model
+ * follows. BALANCED says nothing at all: an empty instruction is more reliable
+ * than an instruction to be ordinary, which reads as a request for blandness.
+ */
+const MANNER_GUIDANCE: Record<MannerKey, string> = {
+  STRAIGHT:
+    "Play it straight. Describe what happens and stop. No winking at the reader, no comic " +
+    "asides, no flourishes on top of the result you were given. The world is matter-of-fact " +
+    "and takes itself seriously, which is its own kind of pleasure.",
+  BALANCED: "",
+  PLAYFUL:
+    "Have fun with it. Let small things be funny — a goat with opinions, a door that sighs, a " +
+    "name somebody keeps getting wrong. Comic timing is welcome: land the joke and move on. " +
+    "The stakes stay real; it is the telling that is light.",
+  MADCAP:
+    "Be gleefully ridiculous. The world says yes: if somebody tries something absurd, the " +
+    "absurd thing is what happens, and then it has consequences nobody planned for. Escalate. " +
+    "Let a small silly idea become the whole scene. Never at a character's expense — the joke " +
+    "is the situation, never one of the children.",
+};
+
 export function systemPrompt(options: {
   tone: ToneKey;
   readingLevel: ReadingLevelKey;
+  /** Omitted is the middle one, which adds nothing. */
+  manner?: MannerKey;
 }): string {
+  const manner = MANNER_GUIDANCE[options.manner ?? "BALANCED"];
+
   return [
     CORE_CONTRACT,
     "",
     `TONE: ${TONE_GUIDANCE[options.tone]}`,
     `AUDIENCE: ${READING_LEVEL_GUIDANCE[options.readingLevel]}`,
+    // Left out entirely rather than sent empty. A labelled heading with nothing
+    // under it is a small model's invitation to invent something to put there.
+    ...(manner ? [`MANNER: ${manner}`] : []),
     "",
     "Remember: nobody dies, nothing is cruel, and you narrate the dice result you are given.",
   ].join("\n");
@@ -393,9 +442,42 @@ export function extractionPrompt(options: {
    * than a threshold, because its reader is a small language model.
    */
   appetite?: string;
+  /**
+   * The long wishes the world is allowed to have touched this turn.
+   *
+   * Repeated here rather than inherited, because extraction is its own call and
+   * never sees the campaign context the narration was written from. Without
+   * this the model is asked whether a passage brushed against a dream it has
+   * never been told about — which it answers, wrongly, by inventing one or by
+   * always saying no.
+   *
+   * Already filtered by `mayEcho` upstream, so a wish still cooling is absent
+   * rather than forbidden. Nothing here can end one; see `dreamEchoes`.
+   */
+  dreams?: { character: string; wish: string }[];
+  /**
+   * The person who keeps turning up, when this household has one and this
+   * chapter is allowed to use them.
+   *
+   * Only the name, here. Extraction is being asked whether they were in the
+   * passage, not who they are — that belongs in the narration context, and
+   * repeating their whole character would be spending tokens on a question
+   * nobody is asking.
+   */
+  rivalName?: string | null;
 }): string {
   const deeds = options.openDeeds?.length
     ? `\nWHAT THE PARTY IS STILL TRYING TO DO OR GET HOLD OF:\n${options.openDeeds.map((deed) => `- ${deed}`).join("\n")}\n`
+    : "";
+
+  const rival = options.rivalName
+    ? `\nSOMEBODY WHO KEEPS TURNING UP: ${options.rivalName}\n`
+    : "";
+
+  const wishes = options.dreams?.length
+    ? `\nWHAT THEY HAVE ALWAYS WANTED, older than this adventure:\n${options.dreams
+        .map((dream) => `- ${dream.character}: ${dream.wish}`)
+        .join("\n")}\n`
     : "";
 
   return `Read this passage from a story and extract what should be remembered.
@@ -404,7 +486,7 @@ PASSAGE:
 ${options.narration}
 
 The characters in the party are: ${options.partyNames.join(", ")}.
-${deeds}
+${deeds}${wishes}${rival}
 Reply with ONLY this JSON, no other text:
 {
   "sceneTitle": "<short title, or null if unchanged>",
@@ -413,6 +495,10 @@ Reply with ONLY this JSON, no other text:
   "bondMoments": [{"from": "<character>", "to": "<character>", "why": "<what they did for them>"}],
   "itemsGained": [{"character": "<character>", "name": "<item>", "description": "<one short phrase>", "requiresSkill": null, "requiresRank": null}],
   "deedsDone": ["<one of the listed things, if the passage shows it finished>"],
+  "dreamEchoes": [{"character": "<character>", "note": "<how the passage brushed against their long wish, if it did>"}],
+  "waysOn": [{"where": "<somewhere they could go next>", "why": "<what draws them there>"}],
+  "rivalMet": null,
+  "companionFound": null,
   "questsOpened": [{"title": "<short name>", "summary": "<one line>", "objectives": [{"kind": "FIND|DEED", "text": "<what it needs>"}]}],
   "whatNow": "<one short question putting the choice back to the players>",
   "onTheTable": ["<a thing the passage put within their reach>"],
@@ -457,6 +543,17 @@ Rules:
   - "Finished" means finished. Being close, being told where it is, or wanting
     it very much is not finished, and reporting it here would take the thing
     they are working toward away from them.
+- ${FORK_INSTRUCTION}
+- ${RIVAL_INSTRUCTION}
+- ${COMPANION_INSTRUCTION}
+- dreamEchoes is for a long wish listed above, and ONLY if this passage really
+  touched it — a rumour, a half-answer, somebody who once knew, a thing that
+  looks like it might be connected. Almost every passage touches none, and []
+  is the right answer nearly every time.
+  - NEVER report one because a dream is listed and you have not mentioned it in
+    a while. The game keeps its own count and will throw away anything too soon.
+  - A dream is never finished here. If a passage looks like it answered one, it
+    did not: say what it revealed and leave the ending to the family.
 - questsOpened is for a NEW errand the passage introduced that the party could
   choose to take on — a neighbour's missing cat, a promise made, a debt owed.
   Only when it is a real, findable thing somebody asked for. Never restate what

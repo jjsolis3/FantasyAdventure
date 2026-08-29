@@ -92,6 +92,8 @@ model User {
   sessions       AuthSession[]
   characters     Character[]
   campaigns      Campaign[]
+  forksChosen    Fork[]
+  rival          Rival?
   uploadedImages CampaignImage[]
   chapterImages  ChapterImage[]
   invitesCreated InviteCode[]  @relation("InviteCreator")
@@ -252,6 +254,8 @@ model Character {
   keepsakes     Keepsake[]
   questFinds    QuestObjective[]
   personalQuests Quest[]         @relation("PersonalQuests")
+  dreams        Dream[]
+  companion     Companion?
   partyMemberships PartyMember[]
   partyInvites  PartyInvite[]
   roundAnswers  RoundAnswer[]
@@ -436,6 +440,275 @@ model RoadEntry {
   @@unique([characterId, campaignId])
   @@index([characterId])
   @@index([campaignId])
+}
+
+/// Somebody who keeps turning up and is after the same thing they are.
+///
+/// ## A foil, never a threat
+///
+/// The core contract forbids a villain — nobody is hurt, nothing catches them,
+/// nobody is taken — and that is not being relaxed here. What it does not
+/// forbid is somebody *infuriating*: who gets there first, takes the credit,
+/// is unbearably pleased about it, and turns up again three adventures later
+/// still going on about it. Children adore that, and it costs the safety
+/// promise nothing.
+///
+/// The distinction is written into the prompt in as many words, because
+/// "nemesis" is a word that invites a small model to reach for a monster.
+///
+/// ## Household-level, on purpose
+///
+/// One rival everybody groans about together beats one each. Two sisters
+/// racing the same insufferable boy have something to be on the same side of,
+/// which is worth more to them than a private antagonist would be.
+///
+/// ## The scoreboard is the point
+///
+/// A recurring NPC is set dressing. A recurring NPC with a running tally of who
+/// got there first is a rivalry — and it is the tally, not the character, that
+/// makes a ten-year-old want the next adventure.
+model Rival {
+  id      String @id @default(cuid())
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name String
+  /// What they are like, in a sentence.
+  about String
+  /// What they are always after. The reason they collide with the party at all,
+  /// and the thing that keeps them a rival rather than an enemy.
+  wants String
+
+  /// How often each side has got there first.
+  partyAhead Int @default(0)
+  rivalAhead Int @default(0)
+
+  /// Where they last turned up, so they can be kept to once a chapter. Held as
+  /// a title too, because the id goes when an adventure is deleted and the fact
+  /// that they were there should not.
+  lastSeenCampaignId    String?
+  lastSeenCampaignTitle String?
+  lastSeenActIndex      Int?
+
+  meetings RivalMeeting[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One per household. A second rival is a cast, and a cast dilutes the one
+  /// face they are meant to recognise.
+  @@unique([ownerId])
+}
+
+/// One time the party and their rival crossed paths.
+model RivalMeeting {
+  id      String @id @default(cuid())
+  rivalId String
+  rival   Rival  @relation(fields: [rivalId], references: [id], onDelete: Cascade)
+
+  /// What happened, in the storyteller's words.
+  note String
+  /// Who came off better. NEITHER is a real and common answer.
+  outcome String
+
+  campaignId    String?
+  campaignTitle String
+  actIndex      Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@index([rivalId, createdAt])
+}
+
+/// Two ways on, offered when a chapter closes, chosen by the table.
+///
+/// ## Why a chapter needs one
+///
+/// The story was good and it was never theirs. A chapter ended, the next one
+/// began, and the only thing anybody had chosen all evening was what their own
+/// character did in a scene somebody else had set. `whatNow` asks a question at
+/// the end of a turn, but nothing has ever branched on the answer.
+///
+/// This is the smallest thing that changes "the story happened to us" into "we
+/// picked this" — and it gives two sisters something to argue about between
+/// Saturday and the following Saturday, which is worth more than either branch.
+///
+/// ## It blocks
+///
+/// Deliberately. A fork nobody has to answer is a poll, and a poll is
+/// decoration. The next turn will not run until somebody has chosen, exactly as
+/// a pending dice roll stops the story until a number is typed in.
+///
+/// It only exists when the storyteller actually offered two ways — a passage
+/// that names none creates no row, and the adventure carries on as it always
+/// did. So the failure mode is the old behaviour, never a stuck campaign.
+model Fork {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  /// The chapter that just closed. A fork belongs to the turning between two
+  /// chapters rather than to either side of it.
+  afterActIndex Int
+
+  /// Where it leads, and what draws them — one line each, in the storyteller's
+  /// words. Two, always: one way on is a corridor and three is a menu.
+  whereA String
+  whyA   String
+  whereB String
+  whyB   String
+
+  /// "A" or "B", null until the table says. Nothing else may write this.
+  chosen     String?
+  chosenAt   DateTime?
+  /// The household that pressed it, so the journal can say who decided.
+  chosenById String?
+  chosenBy   User?     @relation(fields: [chosenById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  /// One turning between any two chapters. A second would mean two open
+  /// questions and no way to tell which the story answered.
+  @@unique([campaignId, afterActIndex])
+}
+
+/// Something small that comes along.
+///
+/// ## Why this is not a Character, and not an item either
+///
+/// `PET` has existed as a relationship kind since ties were built — but ties
+/// run between two `Character` rows, so having a wooden owl meant building the
+/// owl in the full seven-stat builder, giving it a race and a calling and a
+/// spread of numbers. Nobody was ever going to do that, which is why nobody
+/// had one.
+///
+/// The other wrong answer is an `InventoryItem`, and the engine already refuses
+/// it in as many words: a companion is not a thing in a pocket. Putting a
+/// living creature on the same list as a length of rope is how a game teaches a
+/// child that their friend is equipment.
+///
+/// So: its own small row. A name, what it is, the one thing it is good at, and
+/// a number that goes up the longer they travel together.
+///
+/// ## It is never in danger
+///
+/// The safety contract covers the party; it has to cover this too, and more
+/// loudly, because a companion is exactly the thing a storyteller reaches for
+/// when it wants stakes without hurting a child's character. Nothing happens to
+/// it. It does not get taken, lost, hurt or left behind. See `companionNote`.
+model Companion {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name String
+  /// What it is: "a wooden owl", "a three-legged fox", "a very serious goose".
+  kind String
+  /// The one thing it is good at, in a few words. Honoured by the storyteller
+  /// in the telling; it never touches the dice.
+  knack String
+
+  /// How long they have travelled together, in chapters. Not a stat and never
+  /// a bonus — a number that says "this has been going on a while", which is
+  /// the whole of what a child wants from it.
+  closeness Int @default(0)
+
+  /// Where it came from, kept both ways so the story survives the adventure
+  /// being deleted.
+  foundInCampaignId    String?
+  foundInCampaignTitle String
+  /// The chapter its closeness was last counted in, so travelling together is
+  /// counted once per chapter rather than once per turn.
+  countedActIndex      Int?
+  countedCampaignId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One at a time. A menagerie is a list; one companion is a friend.
+  @@unique([characterId])
+}
+
+enum DreamStatus {
+  ACTIVE
+  /// It came true. Said by the family, never by the storyteller.
+  ANSWERED
+  /// She changed her mind. Kept rather than deleted, because what a child
+  /// wanted at nine is worth being able to read back at eleven.
+  SET_ASIDE
+}
+
+/// The one thing an adventurer wants that no single adventure can give her.
+///
+/// ## Why this exists
+///
+/// Everything else in this game is bounded by one story. Quests are born and
+/// die inside a campaign; even a personal aim is `campaignId`-scoped. So a
+/// child had nothing she was working toward across a whole autumn — each
+/// Saturday started from nothing and finished finished.
+///
+/// A dream is the opposite: declared once, in her own words, and answered
+/// whenever it is answered. *"I want to find out who left me on the step."*
+/// The storyteller learns it and is told to brush against it rarely — a rumour,
+/// a half-answer, somebody who knew — which is what makes the next session
+/// worth turning up to.
+///
+/// ## The storyteller may never end one
+///
+/// Only the family marks a dream answered. This is the whole feature: a model
+/// that resolves it in turn three has spent the thing that was making Tuesday
+/// matter on Saturday, and there is no getting it back. The prompt says so, and
+/// no extraction field can set `ANSWERED` — the only route is a person pressing
+/// a button.
+model Dream {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  /// In her own words, and kept in them. Never tidied by the game.
+  wish String
+
+  status DreamStatus @default(ACTIVE)
+
+  /// Where it came true. The title as well as the id, because the id goes when
+  /// a campaign is deleted and the fact that it happened should not.
+  answeredAt              DateTime?
+  answeredInCampaignId    String?
+  answeredInCampaignTitle String?
+  /// How it came true, in whoever's words closed it.
+  answeredNote            String?
+
+  echoes DreamEcho[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([characterId, status])
+}
+
+/// A moment the world brushed against a dream without answering it.
+///
+/// The visible progress. Three of these on a sheet is a child being able to see
+/// that the world has not forgotten what she asked for — which is the whole
+/// difference between a long ambition and a sentence typed once and never
+/// mentioned again.
+model DreamEcho {
+  id      String @id @default(cuid())
+  dreamId String
+  dream   Dream  @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+
+  /// What happened, in the storyteller's words.
+  note String
+
+  /// Which adventure, kept both ways for the same reason as `answeredIn`.
+  campaignId    String?
+  campaignTitle String
+  /// The turn it landed on, so the cooldown can be enforced without a clock.
+  atTurn        Int    @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([dreamId, createdAt])
 }
 
 model Keepsake {
@@ -687,6 +960,41 @@ enum Pacing {
   LEISURELY
 }
 
+/// How hard the dice are.
+///
+/// Deliberately NOT an instruction to the storyteller. It moves the target
+/// numbers and how forgiving a near miss is, both server-side, so the effect is
+/// exact, testable, and visible in the check preview before anything is rolled.
+/// Telling a small local model to "be harder on them" would be none of those,
+/// and would fight the rule forbidding it to invent difficulty.
+enum Challenge {
+  /// Lower bars and a wide near-miss. For a table that wants to get on with it.
+  GENTLE
+  BALANCED
+  /// Real teeth. A miss is usually a miss.
+  TOUGH
+}
+
+/// How the storyteller plays, which is not the same question as `Tone`.
+///
+/// Tone is what the world is like; this is the manner of the person telling it.
+/// The two are independent: spooky played straight is horror, spooky played
+/// madcap is Goosebumps, and a family should be able to ask for either.
+///
+/// Reaches the narrator only. The adjudicator — the call that decides what
+/// needs a roll — never sees it, because a storyteller told to be wilder starts
+/// inventing wilder versions of what a child actually wrote, and then failing
+/// her at something she never tried. That has happened once already.
+enum GmManner {
+  /// What you wrote is what happens. Dry, unhurried, no embroidery.
+  STRAIGHT
+  BALANCED
+  /// Comic timing, small absurdities, things that escalate amusingly.
+  PLAYFUL
+  /// The world says yes to almost anything. Cheerfully ridiculous.
+  MADCAP
+}
+
 enum CampaignStatus {
   /// Created, party chosen, but the first scene has not been narrated yet.
   SETUP
@@ -773,6 +1081,7 @@ model Campaign {
   screens  ScreenPairing[]
   abilityUses AbilityUse[]
   images      CampaignImage[]
+  forks       Fork[]
 
   /// Increments once per completed party turn. Used for memory recency.
   turnCounter Int @default(0)
@@ -783,6 +1092,10 @@ model Campaign {
   /// Copied onto the campaign at setup, like tone and reading level, so
   /// changing your mind later cannot rewrite an adventure already under way.
   pacing       Pacing    @default(STANDARD)
+  /// Both default to the behaviour that was there before them, so every
+  /// adventure already under way plays exactly as it did.
+  challenge    Challenge @default(BALANCED)
+  manner       GmManner  @default(BALANCED)
   snapshot     TurnSnapshot?
   /// Set when the final act closes, so a finished adventure reads as finished
   /// rather than as one nobody has opened in a while.

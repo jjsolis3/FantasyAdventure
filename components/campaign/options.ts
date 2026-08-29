@@ -47,6 +47,49 @@ export const READING_LEVEL_OPTIONS = [
   },
 ] as const;
 
+/**
+ * How the storyteller plays — a different question from tone.
+ *
+ * Tone is what the world is like; this is the manner of the person telling it.
+ * Both are offered because they genuinely combine: spooky played straight is
+ * horror, spooky played madcap is Goosebumps.
+ *
+ * The blurbs say what changes rather than naming a mood, because "playful" on
+ * its own is a word two people will read two ways.
+ */
+export const MANNER_OPTIONS = [
+  {
+    value: "STRAIGHT",
+    label: "Plays it straight",
+    blurb:
+      "Describes what happens and stops. No winking, no jokes on top. The world takes itself " +
+      "seriously — which is its own kind of fun.",
+  },
+  {
+    value: "BALANCED",
+    label: "Just right",
+    blurb: "The usual storyteller. Warm, a bit wry, gets on with the story.",
+  },
+  {
+    value: "PLAYFUL",
+    label: "A bit of mischief",
+    blurb:
+      "Small things are funny — a goat with opinions, a door that sighs. The stakes stay real; " +
+      "the telling is light.",
+  },
+  {
+    value: "MADCAP",
+    label: "Utterly bananas",
+    blurb:
+      "The world says yes. Try something ridiculous and the ridiculous thing happens, then has " +
+      "consequences nobody planned. Never at an adventurer's expense.",
+  },
+] as const;
+
+export const MANNER_LABELS: Record<string, string> = Object.fromEntries(
+  MANNER_OPTIONS.map((option) => [option.value, option.label]),
+);
+
 export const INPUT_MODE_OPTIONS = [
   {
     value: "SHARED_SCREEN",

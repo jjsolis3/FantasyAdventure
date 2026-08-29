@@ -5,7 +5,8 @@ import { updateCampaignSettingsAction, updatePartyAction } from "@/lib/game/camp
 import type { FormState } from "@/lib/auth/actions";
 import { Alert, Field, SelectField } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { INPUT_MODE_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { INPUT_MODE_OPTIONS, MANNER_OPTIONS, READING_LEVEL_OPTIONS, TONE_OPTIONS } from "./options";
+import { CHALLENGE_OPTIONS } from "@/lib/game/challenge";
 import { PACING_OPTIONS } from "@/lib/game/pacing";
 import type { CharacterChoice } from "./campaign-setup";
 
@@ -15,6 +16,8 @@ export function CampaignSettingsForm({
   tone,
   readingLevel,
   pacing,
+  challenge,
+  manner,
   inputMode,
   diceMode,
 }: {
@@ -23,6 +26,8 @@ export function CampaignSettingsForm({
   tone: string;
   readingLevel: string;
   pacing: string;
+  challenge: string;
+  manner: string;
   inputMode: string;
   diceMode: string;
 }) {
@@ -48,6 +53,33 @@ export function CampaignSettingsForm({
         name="readingLevel"
         defaultValue={readingLevel}
         options={READING_LEVEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+      />
+
+      {/* Both of these are here as well as on the setup screen on purpose.
+          "That was too easy for them" and "he is being far too serious" are
+          Tuesday-evening realisations, not decisions anybody makes before the
+          first scene — and unlike tone, changing either mid-adventure costs
+          nothing and strands nothing. */}
+      <SelectField
+        label="How hard should it be?"
+        name="challenge"
+        defaultValue={challenge}
+        options={CHALLENGE_OPTIONS.map((option) => ({
+          value: option.value,
+          label: `${option.label} — ${option.blurb}`,
+        }))}
+        hint="Moves the number every roll has to beat. Takes effect on the next turn."
+      />
+
+      <SelectField
+        label="How should the storyteller play it?"
+        name="manner"
+        defaultValue={manner}
+        options={MANNER_OPTIONS.map((option) => ({
+          value: option.value,
+          label: `${option.label} — ${option.blurb}`,
+        }))}
+        hint="Separate from tone: this is the manner of the telling, not what the world is like."
       />
 
       <SelectField

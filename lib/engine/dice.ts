@@ -13,8 +13,18 @@
 
 import { randomInt } from "node:crypto";
 import { STAT_INFO, luckChance, statModifier, type StatKey } from "@/lib/game/rules";
+import { nearMissFor, targetFor } from "@/lib/game/challenge";
 import type { SignatureEffect } from "@/lib/game/character-options";
 
+/**
+ * The bands at the default setting.
+ *
+ * Kept for the many tests and callers that mean "a normal check", and equal by
+ * construction to what `targetFor` returns for BALANCED — see the test that
+ * holds the two together. What a band actually costs now depends on the
+ * campaign's `challenge`; see `lib/game/challenge.ts` for why that lives in
+ * numbers rather than in the prompt.
+ */
 export const DIFFICULTIES = {
   EASY: 8,
   NORMAL: 12,
@@ -37,6 +47,11 @@ export type CheckRequest = {
   characterName: string;
   stat: StatKey;
   difficulty: Difficulty;
+  /**
+   * The campaign's difficulty setting, which decides what this band costs and
+   * how forgiving a near miss is. Omitted means the middle one.
+   */
+  challenge?: string;
   /** What the character is trying to do, in the GM's words. */
   intent: string;
   /** Rank of a relevant skill, if the character has one. */
@@ -135,16 +150,27 @@ const LUCK_LIFTS: Partial<Record<CheckOutcome, CheckOutcome>> = {
   PARTIAL: "SUCCESS",
 };
 
-export function resolveOutcome(roll: number, total: number, target: number): CheckOutcome {
+export function resolveOutcome(
+  roll: number,
+  total: number,
+  target: number,
+  /**
+   * How far under still works, at a cost. Defaults to the middle setting, so
+   * every caller written before the challenge dial existed is unchanged.
+   */
+  nearMiss = 2,
+): CheckOutcome {
   // Natural 20 and natural 1 always mean something, regardless of modifiers —
-  // it keeps the dice exciting for a ten-year-old.
+  // it keeps the dice exciting for a ten-year-old. Both stay outside the dial:
+  // a table that asked for gentle should still feel a natural 1, and a table
+  // that asked for tough has not asked to lose their natural 20.
   if (roll === 20) return "CRITICAL";
   if (roll === 1) return "COMPLICATION";
 
   const margin = total - target;
   if (margin >= 5) return "CRITICAL";
   if (margin >= 0) return "SUCCESS";
-  if (margin >= -2) return "PARTIAL";
+  if (margin >= -nearMiss) return "PARTIAL";
   return "COMPLICATION";
 }
 
@@ -173,7 +199,11 @@ export function resolveCheck(
 ): CheckResult {
   const modifier = statModifier(stats[request.stat]) + (request.knackBonus ?? 0);
   const skillBonus = request.skillRank ?? 0;
-  const target = DIFFICULTIES[request.difficulty];
+  // Carried on the request rather than as a seventh positional argument, which
+  // is both where the rest of this check's context already lives and the only
+  // way to add it without renumbering forty call sites.
+  const target = targetFor(request.difficulty, request.challenge);
+  const nearMiss = nearMissFor(request.challenge);
 
   // Somebody else's "everyone but me does better" lands here, before anything
   // is rolled, so it is part of every path through the Family Move switch below
@@ -188,7 +218,7 @@ export function resolveCheck(
 
   const settle = (roll: number, bonus = 0) => {
     const total = roll + modifier + skillBonus + bonus + lent + shared;
-    return { roll, total, outcome: resolveOutcome(roll, total, target) };
+    return { roll, total, outcome: resolveOutcome(roll, total, target, nearMiss) };
   };
 
   let attempt = settle(roller());

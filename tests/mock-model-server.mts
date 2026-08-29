@@ -57,6 +57,7 @@ const idle = process.env.MOCK_IDLE === "1";
  */
 const encounter = process.env.MOCK_ENCOUNTER === "1";
 let encountersOpened = 0;
+let companionsGiven = 0;
 let narrationCount = 0;
 
 /**
@@ -179,13 +180,39 @@ const server = createServer((request, response) => {
         : "";
       const deeds = listed ? JSON.stringify([listed]) : "[]";
 
+      // A storyteller brushing against somebody's long wish, and doing it on
+      // every single turn it is given the chance — which is exactly what a real
+      // small model does when handed "mention this occasionally", and the
+      // reason the cooldown is enforced by the server rather than by asking
+      // nicely. The name is read back out of the prompt, so an echo only
+      // appears for a dream the context actually offered.
+      const wishing = process.env.MOCK_DREAM === "1";
+      const dreamer = wishing
+        ? (prompt.match(/WHAT THEY HAVE ALWAYS WANTED[\s\S]*?\n- ([^:]+):/)?.[1] ?? "")
+        : "";
+      const echoes = dreamer
+        ? `"dreamEchoes":[{"character":${JSON.stringify(dreamer)},` +
+          '"note":"A pedlar mentions a basket left at a door, years ago."}],'
+        : "";
+
       content = idle
         ? '{"sceneTitle":null,"location":null,"memories":[],"bondMoments":[],"itemsGained":[],' +
           '"deedsDone":[],"questsOpened":[],"whatNow":"You are still standing in the barley. Now what?",' +
           '"movedForward":false,"actComplete":false,"sceneComplete":false}'
         : ending
         ? '{"sceneTitle":"The Last of It","location":"the barley field","memories":[],' +
-          '"bondMoments":[],"itemsGained":[],"actComplete":true,"sceneComplete":true}'
+          '"bondMoments":[],"itemsGained":[],' +
+          // Two genuinely different ways on, offered exactly where a chapter
+          // turns. MOCK_SAMEWAY makes them the same place worded twice — the
+          // failure a real small model produces when asked for variety at the
+          // moment it has least to go on, and the one `optionsUsable` throws
+          // away rather than putting a meaningless choice in front of a child.
+          (process.env.MOCK_SAMEWAY === "1"
+            ? '"waysOn":[{"where":"the mill","why":"the wheel is still turning"},' +
+              '{"where":"The Mill","why":"somebody is up there"}],'
+            : '"waysOn":[{"where":"the drowned mill","why":"the wheel is still turning with nobody there"},' +
+              '{"where":"the bell-ringer\'s cottage","why":"she kept the old charts"}],') +
+          '"actComplete":true,"sceneComplete":true}'
         :
         '{"sceneTitle":"The Barley Field","location":"the barley field","memories":' +
         '[{"kind":"NPC","key":"the creature","content":"It settles when someone hums.","importance":4}],' +
@@ -203,6 +230,22 @@ const server = createServer((request, response) => {
         // has to be the thing that de-duplicates it.
         '"leads":["the bell-ringer keeps the old charts"],' +
         `"deedsDone":${deeds},` +
+        echoes +
+        // The rival turning up, and reporting it on every turn the storyteller
+        // is told about them — the same worst case as MOCK_DREAM, for the same
+        // reason. Once a chapter is the game's rule, not the model's.
+        // Somebody finding something small on the very first turn, so the
+        // whole life of a companion — arriving, being carried into the
+        // storyteller's context, and counting a chapter — fits one test.
+        (process.env.MOCK_COMPANION === "1" && companionsGiven++ === 0
+          ? '"companionFound":{"character":"Mira","name":"Woody","kind":"a wooden owl",' +
+            '"knack":"seeing in the dark"},'
+          : "") +
+        (process.env.MOCK_RIVAL === "1" &&
+        /SOMEBODY WHO KEEPS TURNING UP: (.+)/.test(prompt)
+          ? '"rivalMet":{"note":"He was already there, holding it, and said so twice.",' +
+            '"outcome":"RIVAL"},'
+          : "") +
         (encounter && encountersOpened++ === 0
           ? '"encounterOpened":{"name":"The Angry Customer","want":"to be taken seriously",' +
             '"kind":"PERSON","nerve":"TENSE","works":["admitting it","asking what happened"],' +

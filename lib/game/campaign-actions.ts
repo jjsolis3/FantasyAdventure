@@ -15,6 +15,8 @@ const campaignSchema = z.object({
   tone: z.enum(["COZY", "ADVENTUROUS", "SPOOKY"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
+  challenge: z.enum(["GENTLE", "BALANCED", "TOUGH"]).default("BALANCED"),
+  manner: z.enum(["STRAIGHT", "BALANCED", "PLAYFUL", "MADCAP"]).default("BALANCED"),
   inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),
 });
 
@@ -71,6 +73,8 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     tone: formData.get("tone"),
     readingLevel: formData.get("readingLevel"),
     pacing: formData.get("pacing") ?? undefined,
+    challenge: formData.get("challenge") ?? undefined,
+    manner: formData.get("manner") ?? undefined,
     inputMode: formData.get("inputMode") ?? undefined,
   });
   if (!parsed.success) {
@@ -128,6 +132,8 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     tone: parsed.data.tone,
     readingLevel: parsed.data.readingLevel,
     pacing: parsed.data.pacing,
+    challenge: parsed.data.challenge,
+    manner: parsed.data.manner,
     inputMode: parsed.data.inputMode,
     party: {
       // Turn order follows the order they were listed in the form.
@@ -223,6 +229,8 @@ const settingsSchema = z.object({
   tone: z.enum(["COZY", "ADVENTUROUS", "SPOOKY"]),
   readingLevel: z.enum(["EARLY_READER", "MIDDLE_GRADE", "TEEN", "FAMILY_MIXED"]),
   pacing: z.enum(["BRISK", "STANDARD", "LEISURELY"]).default("STANDARD"),
+  challenge: z.enum(["GENTLE", "BALANCED", "TOUGH"]).default("BALANCED"),
+  manner: z.enum(["STRAIGHT", "BALANCED", "PLAYFUL", "MADCAP"]).default("BALANCED"),
   inputMode: z.enum(["SHARED_SCREEN", "OWN_DEVICE"]).default("SHARED_SCREEN"),
   diceMode: z.enum(["SERVER", "TABLE"]).default("SERVER"),
 });
@@ -239,6 +247,8 @@ export async function updateCampaignSettingsAction(
     tone: formData.get("tone"),
     readingLevel: formData.get("readingLevel"),
     pacing: formData.get("pacing") ?? undefined,
+    challenge: formData.get("challenge") ?? undefined,
+    manner: formData.get("manner") ?? undefined,
     inputMode: formData.get("inputMode") ?? undefined,
     diceMode: formData.get("diceMode") ?? undefined,
   });

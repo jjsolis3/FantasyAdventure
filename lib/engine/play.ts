@@ -18,6 +18,7 @@ import {
   suggestionPrompt,
   summaryPrompt,
   systemPrompt,
+  type MannerKey,
   type ReadingLevelKey,
   type ToneKey,
 } from "@/lib/ai/prompts";
@@ -77,6 +78,10 @@ import {
   TRIED_PER_MOVE,
   shouldTick,
 } from "@/lib/game/pressure";
+import { ECHO_LIMIT_PER_TURN, mayEcho } from "@/lib/game/dreams";
+import { optionsUsable } from "@/lib/game/forks";
+import { isRivalOutcome, mayAppear } from "@/lib/game/rivals";
+import { countsTowardCloseness } from "@/lib/game/companions";
 import {
   abilityUnlockedAt,
   hasRequirement,
@@ -432,6 +437,9 @@ async function buildCampaignContext(campaign: LoadedCampaign, maxTokens: number)
     actSeeks: act?.seeks ?? [],
     itemsHeld: await heldItemNames(campaign.id),
     personalAims: await personalAimsFor(campaign.id),
+    dreams: await dreamsFor(campaign),
+    rival: await rivalFor(campaign),
+    companions: await companionsFor(campaign),
     knownPeople: await knownPeopleFor(campaign),
     party: partyContext(campaign, await spentAbilityNames(campaign, openScene?.id)),
     bonds: bondContext(campaign),
@@ -486,6 +494,82 @@ async function personalAimsFor(campaignId: string): Promise<{ character: string;
       character: quest.secretFor!.name,
       aim: quest.objectives[0]?.text ?? quest.summary,
     }));
+}
+
+/**
+ * The long wishes the storyteller is allowed to touch this turn.
+ *
+ * The cooldown is applied *here*, on the way in, rather than when an echo comes
+ * back. A dream still cooling is left out of the prompt entirely, so the model
+ * is never told about a thing it must not use — which is the reliable way to
+ * get it used. What it cannot see, it cannot reach for.
+ *
+ * Only adventurers actually travelling in this campaign. A sister at home has a
+ * dream too, and a world that whispers about it while she is not there is
+ * whispering to nobody.
+ */
+async function dreamsFor(campaign: LoadedCampaign): Promise<{ character: string; wish: string }[]> {
+  const dreams = await db.dream.findMany({
+    where: {
+      status: "ACTIVE",
+      characterId: { in: campaign.party.map((member) => member.characterId) },
+    },
+    include: {
+      character: { select: { name: true } },
+      echoes: { orderBy: { atTurn: "desc" }, take: 1, select: { atTurn: true } },
+    },
+  });
+
+  return dreams
+    .filter((dream) => mayEcho(dream.echoes[0]?.atTurn ?? null, campaign.turnCounter))
+    .map((dream) => ({ character: dream.character.name, wish: dream.wish }));
+}
+
+/**
+ * The person who keeps turning up, when this chapter has not used them yet.
+ *
+ * Belongs to the household that owns the adventure rather than to a character:
+ * one rival everybody groans about together beats one each, and two sisters
+ * racing the same insufferable boy have something to be on the same side of.
+ *
+ * Left out entirely once this chapter has had its meeting, rather than listed
+ * with a "not again" — the same reasoning as a cooling dream. A model told
+ * about somebody it must not use will find a way to use them.
+ */
+/**
+ * The small things travelling with the party.
+ *
+ * Never rationed, unlike the dreams and the rival. A companion is present in
+ * every scene by definition, and a storyteller that forgets it is there is the
+ * failure worth avoiding — a wooden owl that vanishes for three chapters and
+ * comes back is worse than one that was never mentioned.
+ */
+async function companionsFor(campaign: LoadedCampaign) {
+  const companions = await db.companion.findMany({
+    where: { characterId: { in: campaign.party.map((member) => member.characterId) } },
+    include: { character: { select: { name: true } } },
+  });
+
+  return companions.map((companion) => ({
+    owner: companion.character.name,
+    name: companion.name,
+    kind: companion.kind,
+    knack: companion.knack,
+  }));
+}
+
+async function rivalFor(campaign: LoadedCampaign) {
+  const rival = await db.rival.findUnique({ where: { ownerId: campaign.ownerId } });
+  if (!rival) return null;
+  if (!mayAppear(rival, campaign.id, campaign.currentActIndex)) return null;
+
+  return {
+    name: rival.name,
+    about: rival.about,
+    wants: rival.wants,
+    partyAhead: rival.partyAhead,
+    rivalAhead: rival.rivalAhead,
+  };
 }
 
 /**
@@ -565,6 +649,7 @@ export async function beginCampaign(
   const system = systemPrompt({
     tone: campaign.tone as ToneKey,
     readingLevel: campaign.readingLevel as ReadingLevelKey,
+    manner: campaign.manner as MannerKey,
   });
 
   onProgress?.({ type: "stage", stage: "narrating" });
@@ -965,6 +1050,19 @@ export async function playTurn(
   const scene = campaign.scenes.find((entry) => entry.status === "OPEN");
   if (!scene) throw new Error("There is no open scene.");
 
+  // A fork nobody has to answer is a poll, and a poll is decoration. So the
+  // story waits here, exactly as it waits for a dice roll typed in from the
+  // table. There is no way to reach this state without two ways on already
+  // being on screen — a chapter that ended without offering a choice creates no
+  // row at all — so the block can never be a dead end.
+  const unanswered = await db.fork.findFirst({
+    where: { campaignId, chosen: null },
+    orderBy: { afterActIndex: "desc" },
+  });
+  if (unanswered) {
+    throw new Error("The party has not said which way they are going yet.");
+  }
+
   const partyIds = new Set(campaign.party.map((member) => member.characterId));
   const accepted = actions.filter((action) => partyIds.has(action.characterId) && action.text.trim());
   if (accepted.length === 0) throw new Error("Nobody said what they were doing.");
@@ -1121,6 +1219,16 @@ export async function playTurn(
       context: built.text,
       tone: campaign.tone as ToneKey,
       readingLevel: campaign.readingLevel as ReadingLevelKey,
+      // Two different destinations, on purpose. The manner reaches the narrator
+      // and nothing else; the challenge reaches the dice and no prompt at all.
+      manner: campaign.manner as MannerKey,
+      challenge: campaign.challenge,
+      // Asked for a second time rather than threaded out of the context, and
+      // the repetition is the point: extraction is its own call that never sees
+      // the context, and it is the one being asked whether a wish was touched.
+      // Both reads use the same turn counter, so they cannot disagree.
+      dreams: await dreamsFor(campaign),
+      rivalName: (await rivalFor(campaign))?.name ?? null,
       sceneText: lastNarration?.content ?? campaign.storyline.hook,
       party: campaign.party.map((member) => ({
         id: member.characterId,
@@ -1690,6 +1798,42 @@ export async function playTurn(
       for (const [a, b] of pairsIn(plan)) await deepenOnce(a, b);
     }
 
+    // The world saying something about a long wish.
+    //
+    // Gated twice, deliberately. Once on the way out, by leaving a cooling
+    // dream out of the prompt; and again here, because the two calls of a turn
+    // are far apart and a model that was handed nothing can still decide to
+    // report something. The gate that matters is the one nearest the write.
+    //
+    // Capped per turn as well as per dream: a passage that brushed against
+    // three of them touched none of them, and recording all three would teach a
+    // family in one evening that these are cheap.
+    let echoed = 0;
+    for (const echo of result.extraction.dreamEchoes) {
+      if (echoed >= ECHO_LIMIT_PER_TURN) break;
+
+      const member = campaign.party.find((entry) => entry.character.name === echo.character);
+      if (!member) continue; // Somebody the model invented.
+
+      const dream = await tx.dream.findFirst({
+        where: { characterId: member.characterId, status: "ACTIVE" },
+        include: { echoes: { orderBy: { atTurn: "desc" }, take: 1, select: { atTurn: true } } },
+      });
+      if (!dream) continue;
+      if (!mayEcho(dream.echoes[0]?.atTurn ?? null, turnCounter)) continue;
+
+      await tx.dreamEcho.create({
+        data: {
+          dreamId: dream.id,
+          note: echo.note.trim(),
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          atTurn: turnCounter,
+        },
+      });
+      echoed += 1;
+    }
+
     // Something the passage put in front of them, standing there until dealt
     // with. Opened after everything else in the turn, so an encounter created by
     // this passage cannot be rolled against in the same passage that made it.
@@ -1830,6 +1974,136 @@ export async function playTurn(
           : undefined,
       })),
     );
+
+    // Somebody gaining something small that travels with them from now on.
+    //
+    // Refused for anybody who already has one, which is the unique index's job
+    // as well — but caught here so the turn does not fail on a constraint the
+    // storyteller had no way to know about.
+    const found = result.extraction.companionFound;
+    if (found) {
+      const member = campaign.party.find((entry) => entry.character.name === found.character);
+      if (member) {
+        const already = await tx.companion.findUnique({
+          where: { characterId: member.characterId },
+        });
+        if (!already) {
+          await tx.companion.create({
+            data: {
+              characterId: member.characterId,
+              name: found.name.trim(),
+              kind: found.kind.trim(),
+              knack: found.knack.trim(),
+              foundInCampaignId: campaign.id,
+              foundInCampaignTitle: campaign.title,
+            },
+          });
+          milestones.push(
+            `${found.name.trim()} is coming with ${member.character.name} from now on.`,
+          );
+        }
+      }
+    }
+
+    // Time served. Counted once per chapter rather than per turn, so a long
+    // sitting and a short one are worth the same — closeness measures how much
+    // story they have been through together, not how many buttons were pressed.
+    for (const member of campaign.party) {
+      const companion = await tx.companion.findUnique({
+        where: { characterId: member.characterId },
+      });
+      if (!companion) continue;
+      if (!countsTowardCloseness(companion, campaign.id, campaign.currentActIndex)) continue;
+
+      await tx.companion.update({
+        where: { id: companion.id },
+        data: {
+          closeness: { increment: 1 },
+          countedCampaignId: campaign.id,
+          countedActIndex: campaign.currentActIndex,
+        },
+      });
+    }
+
+    // The rival turning up, and who came off better.
+    //
+    // Gated on the way in as well as here: the storyteller is only told about
+    // them in a chapter that has not used them, so a second meeting is a model
+    // reporting somebody it was never handed. Refused at the write for the same
+    // reason the dream cooldown is — the gate nearest the row is the one that
+    // counts.
+    const met = result.extraction.rivalMet;
+    if (met) {
+      const rival = await tx.rival.findUnique({ where: { ownerId: campaign.ownerId } });
+      if (rival && mayAppear(rival, campaign.id, campaign.currentActIndex)) {
+        const outcome = isRivalOutcome(met.outcome) ? met.outcome : "NEITHER";
+
+        await tx.rivalMeeting.create({
+          data: {
+            rivalId: rival.id,
+            note: met.note.trim(),
+            outcome,
+            campaignId: campaign.id,
+            campaignTitle: campaign.title,
+            actIndex: campaign.currentActIndex,
+          },
+        });
+
+        await tx.rival.update({
+          where: { id: rival.id },
+          data: {
+            // A draw moves neither score, which is what makes the tally worth
+            // reading: most crossings of paths settle nothing.
+            partyAhead: outcome === "PARTY" ? { increment: 1 } : undefined,
+            rivalAhead: outcome === "RIVAL" ? { increment: 1 } : undefined,
+            lastSeenCampaignId: campaign.id,
+            lastSeenCampaignTitle: campaign.title,
+            lastSeenActIndex: campaign.currentActIndex,
+          },
+        });
+
+        milestones.push(
+          outcome === "PARTY"
+            ? `You got there before ${rival.name}.`
+            : outcome === "RIVAL"
+              ? `${rival.name} got there first.`
+              : `${rival.name} turned up again.`,
+        );
+      }
+    }
+
+    // Two ways on, when the storyteller had two ideas and there is a chapter
+    // left to spend them on. Created after the chapter has actually turned, so
+    // a fork can never appear beside a chapter that carried on.
+    //
+    // `optionsUsable` is the gate. A small model asked for variety at the exact
+    // moment it has least to go on will happily offer "go to the mill" and
+    // "head for the mill", and a fork like that is worse than none — it asks a
+    // child to choose and then makes the choice meaningless. Better no fork.
+    if (advancesAct && result.extraction.waysOn.length === 2) {
+      const [a, b] = result.extraction.waysOn;
+      if (optionsUsable(a, b)) {
+        await tx.fork.upsert({
+          where: {
+            campaignId_afterActIndex: {
+              campaignId: campaign.id,
+              afterActIndex: campaign.currentActIndex,
+            },
+          },
+          create: {
+            campaignId: campaign.id,
+            afterActIndex: campaign.currentActIndex,
+            whereA: a.where.trim(),
+            whyA: a.why.trim(),
+            whereB: b.where.trim(),
+            whyB: b.why.trim(),
+          },
+          // A chapter can only close once, so this is belt and braces against a
+          // retried turn rather than a real path.
+          update: {},
+        });
+      }
+    }
 
     // The next chapter's personal aims open only after all that has settled.
     // Opened any earlier they would be in the list `advanceQuests` just walked,
@@ -2233,6 +2507,7 @@ export async function talkTurn(
   const system = systemPrompt({
     tone: campaign.tone as ToneKey,
     readingLevel: campaign.readingLevel as ReadingLevelKey,
+    manner: campaign.manner as MannerKey,
   });
 
   let reply = await calls.prose(system, conversationPrompt({ context: built.text, said: named }));

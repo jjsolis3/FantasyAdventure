@@ -17,7 +17,7 @@
 import type { Adjudication, Extraction } from "@/lib/ai/schemas";
 import { adjudicationSchema, extractionSchema, validator } from "@/lib/ai/schemas";
 import { requestStructured, StructuredOutputError } from "@/lib/ai/json";
-import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
+import { adjudicationPrompt, extractionPrompt, narrationPrompt, systemPrompt, type MannerKey, type ReadingLevelKey, type ToneKey } from "@/lib/ai/prompts";
 import { checkNarration, safetyReminder } from "@/lib/ai/safety";
 import { describeResult, resolveCheck, type CheckRequest, type CheckResult, type Difficulty } from "@/lib/engine/dice";
 import type { SignatureEffect } from "@/lib/game/character-options";
@@ -40,6 +40,24 @@ export type TurnInput = {
   context: string;
   tone: ToneKey;
   readingLevel: ReadingLevelKey;
+  /** How the storyteller plays. Narration only — see `MANNER_GUIDANCE`. */
+  manner?: MannerKey;
+  /** How hard the dice are. Reaches `resolveCheck`, never a prompt. */
+  challenge?: string;
+  /**
+   * The long wishes the world may touch this turn, already past the cooldown.
+   *
+   * Reaches extraction as well as the context, because extraction is its own
+   * call that has never seen the context — and it is the one being asked
+   * whether a wish was brushed against.
+   */
+  dreams?: { character: string; wish: string }[];
+  /**
+   * The name of the person who keeps turning up, when this chapter may use
+   * them. Reaches extraction so it can report whether they were in the passage;
+   * the rest of who they are lives in the narration context.
+   */
+  rivalName?: string | null;
   sceneText: string;
   party: {
     id: string;
@@ -452,6 +470,9 @@ async function finishTurn(
       characterName: member.name,
       stat: requested.stat as StatKey,
       difficulty: requested.difficulty as Difficulty,
+      // The model chose the band, which is a judgement about the scene. What
+      // that band costs belongs to the table, and is settled here.
+      challenge: input.challenge,
       intent: requested.intent,
       skillRank: skill?.rank,
       skillName: skill?.name,
@@ -539,7 +560,11 @@ async function finishTurn(
     ...adjudication.automatic.map((entry) => `${entry.character}: ${entry.effect} (happens automatically)`),
   ].join("\n\n");
 
-  const system = systemPrompt({ tone: input.tone, readingLevel: input.readingLevel });
+  const system = systemPrompt({
+    tone: input.tone,
+    readingLevel: input.readingLevel,
+    manner: input.manner,
+  });
   const basePrompt = narrationPrompt({
       correction: input.correction,
     context: input.context,
@@ -578,6 +603,15 @@ async function finishTurn(
     bondMoments: [],
     itemsGained: [],
     deedsDone: [],
+    // Empty when extraction failed, which is the right way for this to fail: a
+    // turn nobody could read is not one to spend a whisper on.
+    dreamEchoes: [],
+    // Likewise: no fork rather than a broken one. A chapter that ends without
+    // offering a choice is the old behaviour, and the old behaviour is a safe
+    // place to fall back to.
+    waysOn: [],
+    rivalMet: null,
+    companionFound: null,
     questsOpened: [],
     whatNow: null,
     onTheTable: [],
@@ -600,6 +634,8 @@ async function finishTurn(
             partyNames: input.party.map((member) => member.name),
             openDeeds: input.openDeeds,
             appetite: input.appetite,
+            dreams: input.dreams,
+            rivalName: input.rivalName,
           }),
           hint,
         ),
