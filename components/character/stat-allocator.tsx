@@ -6,7 +6,6 @@ import {
   STAT_INFO,
   STAT_MAX,
   STAT_MIN,
-  POINTS_TO_SPEND,
   LUCK_NUDGE_NOTE,
   luckOdds,
   type StatBlock,
@@ -17,14 +16,24 @@ export function StatAllocator({
   stats,
   onChange,
   affinity,
+  budget = STAT_BUDGET,
 }: {
   stats: StatBlock;
   onChange: (stats: StatBlock) => void;
   /** Highlighted as a suggestion from race or calling. Never enforced. */
   affinity?: StatKey | null;
+  /**
+   * What the seven numbers must add up to.
+   *
+   * A level-one build by default. An adventurer who has earned points is
+   * allowed more, and the screen that knows her experience passes it in — which
+   * is what makes "the most she may have depends on her level" true of the
+   * control rather than only of the validator behind it.
+   */
+  budget?: number;
 }) {
   const spent = STATS.reduce((sum, stat) => sum + stats[stat], 0);
-  const remaining = STAT_BUDGET - spent;
+  const remaining = budget - spent;
 
   function adjust(stat: StatKey, delta: number) {
     const next = stats[stat] + delta;
@@ -37,7 +46,7 @@ export function StatAllocator({
     <div>
       <div className="mb-4 flex items-baseline justify-between">
         <span className="text-sm font-medium text-hearth-200">
-          {POINTS_TO_SPEND} points to spend
+          {budget} points to spend
         </span>
         <span
           className={`text-sm font-medium ${remaining === 0 ? "text-moss-400" : "text-hearth-300"}`}

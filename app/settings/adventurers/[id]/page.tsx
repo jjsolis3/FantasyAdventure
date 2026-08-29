@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { previewReset, suggestedBuild } from "@/lib/game/reset";
 import { ResetAdventurer } from "@/components/settings/reset-adventurer";
 import { capitalise, pronounsOf, toBe, toBePast, toHave } from "@/lib/game/pronouns";
-import { STATS } from "@/lib/game/rules";
+import { STATS, STAT_BUDGET, allowedTotal } from "@/lib/game/rules";
 import { Card, PageTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -142,7 +142,10 @@ export default async function ResetAdventurerPage({
         pronouns={preview.pronouns}
         archetype={preview.archetype}
         current={preview.stats}
-        suggested={suggestedBuild(preview.stats)}
+        // Scaled to what she may actually have — twelve plus whatever her
+        // experience has earned — so the form opens on a legal spread rather
+        // than one the validator would refuse.
+        suggested={suggestedBuild(preview.stats, allowedTotal(preview.xp, STAT_BUDGET))}
         level={preview.level}
         xp={preview.xp}
       />

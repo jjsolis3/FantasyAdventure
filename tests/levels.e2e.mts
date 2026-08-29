@@ -34,7 +34,14 @@ import { chromium } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { BASE, buildCharacter, submitAndSettle } from "./e2e-helpers.mts";
-import { POINTS_TO_SPEND, STAT_INFO, STATS, levelFor } from "../lib/game/rules.ts";
+import {
+  STAT_BUDGET,
+  STAT_INFO,
+  STATS,
+  STAT_MIN,
+  allowedTotal,
+  levelFor,
+} from "../lib/game/rules.ts";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@localhost:5432/hearthlight?schema=public";
@@ -122,7 +129,15 @@ try {
 
   check("emptying it leaves the whole budget unplaced", await submit.isDisabled());
 
-  const why = await page.locator(`text=/turns on once all ${POINTS_TO_SPEND} are spent/`).first();
+  // Not `STAT_BUDGET`, and this is the whole point of the round: the number the
+  // screen quotes is *his*. He is built with twelve and his 58 experience has
+  // bought one more, so this form says thirteen and a freshly built adventurer's
+  // says twelve. Hardcoding the constant here passed for as long as every
+  // adventurer had the same budget, and stopped the moment they did not.
+  const budget = allowedTotal(58, STAT_BUDGET);
+  check("which is his, not everybody's", budget === STAT_BUDGET + 1, String(budget));
+
+  const why = page.locator(`text=/turns on once all ${budget} are placed/`).first();
   check(
     "and the button says why, beside the button rather than half a page above it",
     await why.isVisible(),
@@ -130,8 +145,12 @@ try {
   );
 
   await page.getByRole("button", { name: /suggested spread back/ }).click();
-  const settled = await page.locator(`text=/All ${POINTS_TO_SPEND} spent/`).first().textContent();
-  check("one press puts a legal spread back", /All \d+ spent/.test(settled ?? ""), settled?.trim());
+  const settled = await page.locator(`text=/All \\d+ placed/`).first().textContent();
+  check(
+    "one press puts a legal spread back, all of it",
+    settled?.trim() === `All ${budget} placed.`,
+    settled?.trim(),
+  );
   check("which lets it press again", !(await submit.isDisabled()));
 
   // And the safe mode really is safe: it keeps the level it was told to keep.

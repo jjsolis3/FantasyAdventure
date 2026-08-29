@@ -30,7 +30,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { previewReset, resetCharacter, suggestedBuild } from "../lib/game/reset.ts";
 import {
+  STATS,
   STAT_BUDGET,
+  STAT_MAX,
   XP_PER_STAT_POINT,
   levelFor,
   statBlock,
@@ -65,13 +67,16 @@ async function buildOrin(userId: string, name: string) {
       // sheet to be in — which is exactly the case worth testing here.
       xp: 200,
       level: 5,
-      might: 3,
+      // Seventeen across the seven: the twelve he was built with, plus the five
+      // his experience has earned and he has already spent. A grown sheet, not
+      // a fresh one.
+      might: 2,
       wits: 5,
-      heart: 3,
-      spark: 5,
-      grace: 3,
-      luck: 4,
-      grit: 3,
+      heart: 2,
+      spark: 4,
+      grace: 1,
+      luck: 2,
+      grit: 1,
       skills: {
         create: ["Bargaining", "Small Wonders", "Telling a Joke", "Carrying On Anyway"].map(
           (skill, index) => ({ name: skill, chosenAtLevel: index + 1 }),
@@ -137,7 +142,10 @@ async function main() {
 
   console.log("\n-- Re-laying his numbers costs him nothing ------------------------");
   const before = await countsFor(orin.id);
-  const relaid = statBlock({ might: 2, wits: 4, heart: 2, spark: 4, grace: 2, luck: 3, grit: 2 });
+  // Seventeen: the twelve he was built with plus the five his experience has
+  // earned. That is what the form offers him and what the validator demands —
+  // his growth is placed during the re-lay rather than left loose afterwards.
+  const relaid = statBlock({ might: 2, wits: 4, heart: 3, spark: 3, grace: 2, luck: 2, grit: 1 });
 
   const outcome = await resetCharacter(orin.id, { mode: "RELAY_NUMBERS", build: relaid });
   check("the plan was legal", outcome.ok, outcome.ok ? "" : outcome.reason);
@@ -158,14 +166,22 @@ async function main() {
   check("and his experience", grown.xp === 200, String(grown.xp));
   check("the numbers are the ones that were typed", statsOf(grown).wits === 4 && statsOf(grown).might === 2, JSON.stringify(statsOf(grown)));
 
-  console.log("\n-- …and hands his growth back ------------------------------------");
+  console.log("\n-- …and his growth is in the numbers, not floating ----------------");
   console.log(`     buildBudget ${grown.buildBudget}, xp ${grown.xp}`);
-  const unspent = statPointsUnspent(statsOf(grown), grown.xp, grown.buildBudget);
+  const total = STATS.reduce((sum, stat) => sum + statsOf(grown)[stat], 0);
   check("the budget is measured from today's rules", grown.buildBudget === STAT_BUDGET, String(grown.buildBudget));
   check(
-    "and every earned point is his to spend again",
-    unspent === Math.floor(200 / XP_PER_STAT_POINT),
-    `${unspent} unspent`,
+    "his seven numbers add up to what his level allows",
+    total === STAT_BUDGET + Math.floor(200 / XP_PER_STAT_POINT),
+    `${total} of ${STAT_BUDGET + Math.floor(200 / XP_PER_STAT_POINT)}`,
+  );
+  // Which means nothing is owed to him afterwards: the five his experience
+  // bought are on the sheet, so his own growth screen offers him none. A
+  // leftover here would be five points from nowhere.
+  check(
+    "and nothing is left over to appear from nowhere later",
+    statPointsUnspent(statsOf(grown), grown.xp, grown.buildBudget) === 0,
+    String(statPointsUnspent(statsOf(grown), grown.xp, grown.buildBudget)),
   );
 
   console.log("\n-- The level may be moved, within reason -------------------------");
@@ -183,9 +199,63 @@ async function main() {
   );
 
   const refused = await resetCharacter(orin.id, { mode: "RELAY_NUMBERS", build: relaid, xp: -5 });
-  check("and nonsense is refused rather than stored", !refused.ok, refused.ok ? "" : refused.reason);
+  check(
+    "and nonsense is refused rather than stored",
+    !refused.ok && !refused.reason.includes("points"),
+    refused.ok ? "accepted" : refused.reason,
+  );
+
+  console.log("\n-- The ceiling is his level's, not everybody's -------------------");
+
+  // The complaint that started this round, from the other end: a level-one
+  // adventurer may place twelve, and this one may place seventeen, because he
+  // has earned five. Both numbers have to be enforced by the same rule, or the
+  // screen and the database will disagree again.
+  const earned = Math.floor(200 / XP_PER_STAT_POINT);
+  const ceiling = STAT_BUDGET + earned;
+  console.log(`     built with ${STAT_BUDGET}, earned ${earned}, so ${ceiling}`);
+
+  const toTheLimit = suggestedBuild(relaid, ceiling);
+  check(
+    "the suggestion fills the ceiling exactly",
+    STATS.reduce((sum, stat) => sum + toTheLimit[stat], 0) === ceiling,
+    `${STATS.reduce((sum, stat) => sum + toTheLimit[stat], 0)} of ${ceiling}`,
+  );
+
+  const atTheLimit = await resetCharacter(orin.id, { mode: "RELAY_NUMBERS", build: toTheLimit });
+  check("and spending every one of them is allowed", atTheLimit.ok, atTheLimit.ok ? "" : atTheLimit.reason);
+
+  // Raise a number that has room, so this is refused for costing a point he has
+  // not earned rather than for breaking the per-stat maximum.
+  const hasRoom = STATS.find((stat) => toTheLimit[stat] < STAT_MAX) ?? "grit";
+  const overTheLimit = await resetCharacter(orin.id, {
+    mode: "RELAY_NUMBERS",
+    build: statBlock({ ...toTheLimit, [hasRoom]: toTheLimit[hasRoom] + 1 }),
+  });
+  check(
+    "one more than he has earned is not",
+    !overTheLimit.ok,
+    overTheLimit.ok ? "accepted" : overTheLimit.reason,
+  );
 
   console.log("\n-- Starting again clears everything, and leaves him finished -------");
+
+  // The two things added after `resetCharacter` was written, and missed when
+  // they were. Both are earned in play, so "start again" has to take them.
+  await db.dream.create({
+    data: { characterId: orin.id, wish: "I want to find out who left me on the step." },
+  });
+  await db.companion.create({
+    data: {
+      characterId: orin.id,
+      name: "Woody",
+      kind: "a wooden owl",
+      knack: "seeing in the dark",
+      foundInCampaignTitle: "An earlier evening",
+      closeness: 4,
+    },
+  });
+
   const suggestion = suggestedBuild(statsOf(floored));
   const again = await resetCharacter(orin.id, {
     mode: "START_AGAIN",
@@ -199,6 +269,14 @@ async function main() {
   check("the knack is gone", cleared.knacks === 0, String(cleared.knacks));
   check("the pockets are empty", cleared.items === 0, String(cleared.items));
   check("the keepsakes are gone", cleared.keepsakes === 0, String(cleared.keepsakes));
+  check(
+    "the wish he had is gone too",
+    (await db.dream.count({ where: { characterId: orin.id } })) === 0,
+  );
+  check(
+    "and so is the companion he found",
+    (await db.companion.count({ where: { characterId: orin.id } })) === 0,
+  );
   check("and the people he had met", cleared.acquaintances === 0, String(cleared.acquaintances));
 
   // The bug this whole round started from: he used to walk away with none.
@@ -214,6 +292,16 @@ async function main() {
   check("level 1", fresh.level === 1, String(fresh.level));
   check("no experience", fresh.xp === 0, String(fresh.xp));
   check("and no points he has not earned", statPointsUnspent(statsOf(fresh), fresh.xp, fresh.buildBudget) === 0);
+
+  // The complaint that started all of this: add up the seven boxes and you get
+  // the number the screen puts at the top.
+  check(
+    "his seven numbers add up to what a level-one adventurer may have",
+    STATS.reduce((sum, stat) => sum + statsOf(fresh)[stat], 0) === STAT_BUDGET,
+    `${STATS.reduce((sum, stat) => sum + statsOf(fresh)[stat], 0)} of ${STAT_BUDGET}`,
+  );
+  check("and he is measured against that budget from now on", fresh.buildBudget === STAT_BUDGET,
+    String(fresh.buildBudget));
 
   const turnedDown = await db.relationship.findUniqueOrThrow({ where: { id: bond.id } });
   check(

@@ -12,7 +12,7 @@ import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { pickSkills, spendStatBudget } from "./e2e-helpers.mts";
-import { POINTS_TO_SPEND, STATS, STAT_BUDGET } from "../lib/game/rules.ts";
+import { STATS, STAT_BUDGET, STAT_MIN } from "../lib/game/rules.ts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3300";
 const connectionString =
@@ -112,7 +112,7 @@ try {
   // when that changed, and it was reading the old wording until now.
   check(
     "the builder starts with everything still to spend",
-    (await page.textContent("body"))?.includes(`${POINTS_TO_SPEND} points left`) === true,
+    (await page.textContent("body"))?.includes(`${STAT_BUDGET - STATS.length * STAT_MIN} points left`) === true,
   );
 
   // Nothing can come out of a stat sitting on the floor.

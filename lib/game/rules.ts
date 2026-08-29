@@ -47,31 +47,51 @@ export const STAT_MAX = 5;
 export const NEUTRAL_STAT = 3;
 
 /**
- * How many points a new adventurer has to spend.
+ * What a level-one adventurer's seven numbers add up to.
  *
- * Twelve, on top of a floor of one in everything. The previous rule handed out
- * three in every stat and asked the player to shuffle them about, which meant a
- * builder where the interesting move was taking points *away* from things — and
- * an adventurer who was already competent at all seven before she had done
- * anything at all.
+ * ## Twelve means twelve
  *
- * Starting at the floor makes the builder a series of decisions rather than a
- * set of sliders, and it leaves somewhere to grow into: an average stat now
- * sits below the value that rolls at +0, and climbing above it is something
- * play pays for.
+ * This used to be `STATS.length * STAT_MIN + 12` — a floor of one in every
+ * stat, and twelve more on top, adding up to nineteen. The maths was right and
+ * consistent everywhere, and it was still wrong, because the screen said
+ * "12 points to spend" over seven boxes that added up to nineteen. A family hit
+ * it twice, from two different directions, and both times the answer was a
+ * paragraph explaining the arithmetic. A rule that needs a paragraph is the
+ * wrong rule.
+ *
+ * So the budget is now the total, plainly: add up the boxes and you get the
+ * number at the top. A stat still cannot go below `STAT_MIN`, so seven of the
+ * twelve are spoken for and five are yours to place — which is a real decision,
+ * and one a nine-year-old can check by adding up.
+ *
+ * ## What it costs, and why that is the point
+ *
+ * A level-one character is now genuinely a beginner: about 1.7 in an average
+ * stat rather than 2.7, so most rolls start below the hinge at `NEUTRAL_STAT`.
+ * That is the trade, and it is deliberate — it leaves somewhere to climb to.
+ * Growth already adds points on top of the build budget, so a character reaches
+ * yesterday's strength at around level five and keeps going. See `allowedTotal`.
+ *
+ * ## Nobody already playing loses anything
+ *
+ * `Character.buildBudget` records what each adventurer actually started with,
+ * and every growth calculation measures against that column rather than this
+ * constant. An adventurer built under the old rule keeps a budget of nineteen
+ * and is unaffected; only new and reset ones are built to twelve.
  */
-export const POINTS_TO_SPEND = 12;
+export const STAT_BUDGET = 12;
 
 /**
- * What a whole freshly-built stat block adds up to.
+ * The most an adventurer's seven numbers may add up to right now.
  *
- * Floor everywhere, plus the points. Derived rather than written down, because
- * the last time this was a literal it was 12 across four stats — exactly three
- * each, so an average character rolled at +0 — and adding three stats without
- * moving it would have made every character in the game quietly worse at
- * everything.
+ * The build budget she actually started with, plus everything her experience
+ * has since earned. This is the number a form should be validating against —
+ * "twelve at level one, and more as she grows" is the whole of the rule, and
+ * before this existed there was no single place that said it.
  */
-export const STAT_BUDGET = STATS.length * STAT_MIN + POINTS_TO_SPEND;
+export function allowedTotal(xp: number, builtWith: number = STAT_BUDGET): number {
+  return builtWith + statPointsEarned(xp);
+}
 
 /**
  * The highest a stat can ever reach, through play.
@@ -289,8 +309,8 @@ export function totalSpent(stats: StatBlock): number {
   return STATS.reduce((sum, stat) => sum + stats[stat], 0);
 }
 
-export function pointsRemaining(stats: StatBlock): number {
-  return STAT_BUDGET - totalSpent(stats);
+export function pointsRemaining(stats: StatBlock, budget: number = STAT_BUDGET): number {
+  return budget - totalSpent(stats);
 }
 
 export type StatValidation = { ok: true } | { ok: false; reason: string };
@@ -299,7 +319,18 @@ export type StatValidation = { ok: true } | { ok: false; reason: string };
  * Enforced server-side on every save. The builder UI prevents illegal spreads,
  * but the UI is not a security boundary — a form post can say anything.
  */
-export function validateStats(stats: StatBlock): StatValidation {
+export function validateStats(
+  stats: StatBlock,
+  /**
+   * What the seven numbers must add up to.
+   *
+   * Defaults to a level-one build. A character who has earned points is allowed
+   * more — see `allowedTotal` — and the caller that knows her experience passes
+   * it in. Without this the reset screen could only ever hand back a level-one
+   * spread, which is precisely the growth the family asked to keep.
+   */
+  budget: number = STAT_BUDGET,
+): StatValidation {
   for (const stat of STATS) {
     const value = stats[stat];
     if (!Number.isInteger(value)) {
@@ -314,13 +345,13 @@ export function validateStats(stats: StatBlock): StatValidation {
   }
 
   const spent = totalSpent(stats);
-  if (spent !== STAT_BUDGET) {
+  if (spent !== budget) {
     return {
       ok: false,
       reason:
-        spent > STAT_BUDGET
-          ? `That spends ${spent} points, which is ${spent - STAT_BUDGET} too many.`
-          : `You still have ${STAT_BUDGET - spent} point${STAT_BUDGET - spent === 1 ? "" : "s"} left to spend.`,
+        spent > budget
+          ? `That spends ${spent} points, which is ${spent - budget} too many.`
+          : `You still have ${budget - spent} point${budget - spent === 1 ? "" : "s"} left to spend.`,
     };
   }
 

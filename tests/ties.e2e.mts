@@ -25,7 +25,7 @@ import { PrismaClient } from "../generated/prisma/client.ts";
 import { beginCampaign, playTurn } from "../lib/engine/play.ts";
 import { isConfirmed, needsConsent, reachableCharacterWhere } from "../lib/game/ties.ts";
 import { waitingPointsFor } from "../lib/game/waiting-points.ts";
-import { canonicalPair, statsOf } from "../lib/game/rules.ts";
+import { STATS, STAT_BUDGET, canonicalPair, statsOf } from "../lib/game/rules.ts";
 import { resetCharacter } from "../lib/game/reset.ts";
 import { hashPassword } from "../lib/auth/password.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
@@ -258,10 +258,16 @@ async function main() {
 
   console.log("\n-- Starting an adventurer again --------------------------------");
   const before = await db.relationship.findUniqueOrThrow({ where: { id: proposal.id } });
-  // 7 stats at a floor of 1 is 7, plus the 12 a family may spend — see
-  // STAT_BUDGET. A row created straight through Prisma carries the schema
-  // default of 3 everywhere, which is 21 and two over.
-  const legalBuild = { might: 5, wits: 4, heart: 3, spark: 1, grace: 1, luck: 1, grit: 4 };
+  // The seven numbers add up to STAT_BUDGET — that *is* the rule now, rather
+  // than a floor of one in everything plus twelve on top. A row created
+  // straight through Prisma carries the schema default of 3 everywhere, which
+  // is 21 and nine over, so a legal spread has to be given explicitly.
+  const legalBuild = { might: 3, wits: 3, heart: 2, spark: 1, grace: 1, luck: 1, grit: 1 };
+  check(
+    "the fixture spends exactly what a level-one adventurer may",
+    STATS.reduce((sum, stat) => sum + legalBuild[stat], 0) === STAT_BUDGET,
+    String(STATS.reduce((sum, stat) => sum + legalBuild[stat], 0)),
+  );
   // Starting again, in so many words. `resetCharacter` used to take a bare
   // stat block; it takes a plan now, because there are two things people mean
   // by resetting and only one of them costs an evening.
