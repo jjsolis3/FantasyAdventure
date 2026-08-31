@@ -8,10 +8,9 @@ import { findArchetype } from "@/lib/game/character-options";
 import { capitalise, pronounsOf, toBe, toBePast, toHave } from "@/lib/game/pronouns";
 import {
   MAX_LEVEL,
-  POINTS_TO_SPEND,
   STATS,
   STAT_BUDGET,
-  STAT_MIN,
+  allowedTotal,
   levelFor,
   statPointsEarned,
   xpForLevel,
@@ -77,9 +76,6 @@ export function ResetAdventurer({
   const they = pronounsOf(pronouns);
   const affinity: StatKey | null = findArchetype(archetype)?.affinity ?? null;
 
-  const spent = STATS.reduce((sum, stat) => sum + build[stat], 0);
-  const left = STAT_BUDGET - spent;
-
   const starting = mode === "START_AGAIN";
   const changed = STATS.some((stat) => build[stat] !== suggested[stat]);
 
@@ -98,13 +94,25 @@ export function ResetAdventurer({
   const willBeLevel = legalNumbers ? Math.max(floorLevel, askedLevel) : level;
   const handedBack = legalNumbers ? statPointsEarned(askedXp) : statPointsEarned(xp);
 
+  // What the seven numbers must add up to, for the adventurer this would
+  // produce. Starting again means level one and no experience, so twelve;
+  // re-laying keeps her experience, so twelve plus everything it has earned.
+  //
+  // Recomputed as the experience box is typed in, which is the point: the
+  // family asked for the numbers to reflect the level, and a budget that
+  // ignored the field right above it would be the same complaint again.
+  const budget = starting ? STAT_BUDGET : allowedTotal(legalNumbers ? askedXp : xp, STAT_BUDGET);
+
+  const spent = STATS.reduce((sum, stat) => sum + build[stat], 0);
+  const left = budget - spent;
+
   // The single reason the button will not press, in the order somebody would
   // meet them. Null means it presses.
   const blocking =
     left > 0
-      ? `Place the last ${left} point${left === 1 ? "" : "s"} above — this turns on once all ${POINTS_TO_SPEND} are spent.`
+      ? `Place the last ${left} point${left === 1 ? "" : "s"} above — this turns on once all ${budget} are placed.`
       : left < 0
-        ? `That is ${-left} point${left === -1 ? "" : "s"} more than the ${POINTS_TO_SPEND} available.`
+        ? `That is ${-left} point${left === -1 ? "" : "s"} more than the ${budget} available.`
         : !starting && !legalNumbers
           ? `Give a level between 1 and ${MAX_LEVEL}, and experience of nought or more.`
           : null;
@@ -209,7 +217,8 @@ export function ResetAdventurer({
           {handedBack > 0 ? (
             <p className="mt-1.5 text-sm text-moss-400">
               {handedBack} earned {handedBack === 1 ? "point" : "points"} come back for{" "}
-              {they.object} to spend again, on top of the {POINTS_TO_SPEND} below.
+              {they.object} to spend again — {budget} in total below, which is what {they.subject}{" "}
+              may have at this level.
             </p>
           ) : null}
         </div>
@@ -226,19 +235,21 @@ export function ResetAdventurer({
           guess — if you remember how {they.subject} {toBePast(they.subject)} built, put it right.
         </p>
 
-        <StatAllocator stats={build} onChange={setBuild} affinity={affinity} />
+        <StatAllocator stats={build} onChange={setBuild} affinity={affinity} budget={budget} />
 
-        {/* Both totals, out loud. The allocator counts the points being spent
-            above a floor of one in everything; the number written on the sheet
-            is that plus the floor. Saying only one of them is what made this
-            screen look broken — "all 12 spent" over boxes adding up to 19. */}
+        {/* One total, and it is the one on the boxes. This used to count points
+            spent above a floor of one in everything, so the screen said "all 12
+            placed" over seven boxes adding up to 19 — two true numbers that
+            looked like a bug, because nobody adds up a sheet by subtracting a
+            floor first. Now the budget *is* the sum, and the only arithmetic
+            anybody has to do is the arithmetic they were already doing. */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <p
             className={`text-sm ${left === 0 ? "text-moss-400" : "text-amber-300"}`}
             aria-live="polite"
           >
             {left === 0
-              ? `All ${POINTS_TO_SPEND} spent — ${STAT_BUDGET} in total, counting the ${STAT_MIN} every stat starts at.`
+              ? `All ${budget} placed.`
               : left > 0
                 ? `${left} point${left === 1 ? "" : "s"} still to spend.`
                 : `${-left} point${left === -1 ? "" : "s"} too many.`}

@@ -127,10 +127,31 @@ Once anyone has registered, bootstrap codes stop being generated.
 Build everyone at `/characters` — you choose who actually travels when an
 adventure begins, so it is fine to add the whole household.
 
-**Seven stats, twelve points to spend.** Might, Wits, Heart, **Spark**, Grace,
-Luck and Grit. Everything starts at 1 and she has **12 points** to place where
-she likes — so a new adventurer is genuinely good at two or three things and
-ordinary-to-poor at the rest, with somewhere to grow into.
+**Seven stats, and they add up to twelve.** Might, Wits, Heart, **Spark**,
+Grace, Luck and Grit. A newly built adventurer's seven numbers total **12** — so
+she is genuinely good at one or two things and ordinary-to-poor at the rest,
+with somewhere to grow into.
+
+Twelve is the *sum*, not an allowance on top of a floor. That distinction is
+the whole reason this number moved. It used to mean "one in everything, and
+twelve more to place", which totalled nineteen — arithmetically consistent
+everywhere, and still wrong, because the screen said "12 points to spend" over
+seven boxes adding up to 19. Nobody adds up a character sheet by subtracting a
+floor first.
+
+**Her numbers match her level.** Twelve is the level-one total; every 40
+experience adds one more, so a level-four adventurer's seven numbers add up to
+14 and a level-eight one's to around 22. The same rule drives the builder, her
+own growth screen, and the administrator's re-lay form, so the three cannot
+disagree.
+
+Worth knowing before the first evening: with a total of 12 across seven stats
+she starts at 1 in most of them, which is −2 on those rolls. That is deliberate
+— it leaves room to climb, and she passes yesterday's strength around level
+five — but it does make the opening chapter harder than the middle ones. If it
+lands too hard for a nine-year-old, the **difficulty dial** on the adventure is
+the control for it: `Gentle` lowers every target by two, which is almost exactly
+what the lower starting numbers cost.
 
 The builder used to open with 3 already in every stat, which made the only
 interesting move *taking points away* from things and handed a child somebody
@@ -1118,16 +1139,15 @@ Might was narrowed to pure force — its blurb used to end "holding on, standing
 firm", which is exactly what Grit is for, and two stats the storyteller cannot
 tell apart are worse than one stat too few.
 
-`STAT_BUDGET` is now derived — `STATS.length × NEUTRAL_STAT` — rather than the
-literal 12 it used to be. That is load-bearing. Three is the value that rolls at
-+0, so twelve across four stats put an average character at +0; adding three
-stats without moving the budget would have dropped the average to 1.7 and made
-every character in the game quietly worse at everything.
+Going to seven stats raised `STAT_BUDGET` to `STATS.length × NEUTRAL_STAT` = 21,
+which made the migration exact: the new columns default to 3, so a character on
+twelve points across four landed on twenty-one across seven — precisely the new
+budget, with nothing to reallocate. A part-grown character was equally safe,
+because unspent points are measured as `total − budget` and both sides rose by
+nine.
 
-It also made the migration exact. The new columns default to 3, so a character on
-twelve points across four lands on twenty-one across seven — precisely the new
-budget. A part-grown character is equally safe: unspent points are measured as
-`total − budget` and both sides rise by nine.
+It has since gone back down to a flat 12 — see **Twelve means twelve** below,
+which explains why, and why that move cost nobody a point either.
 
 **A skill at every level after the second.** Level 3 gives a third skill, level 4
 a fourth. Three suggestions drawn from what she has actually been doing, plus the
@@ -2094,6 +2114,49 @@ drop the chosen one straight into the box. Now:
    Never an action, never in the first person, never a verb aimed at her.
 
 And the nudges are text, not buttons. Nothing fills the box for her any more.
+
+### Twelve means twelve
+
+A household hit the same wall twice, from two directions. Resetting a character
+to start fresh, the screen offered nineteen points; and "even if I remove and set
+up to 12 stat points, I will still have the ability to use up 12 points." Both
+times the answer was a paragraph explaining that twelve was an allowance *on top
+of* a floor of one in all seven, so the boxes correctly added up to nineteen.
+
+A rule that needs a paragraph is the wrong rule. `STAT_BUDGET` is now the total
+on the sheet: add up the seven boxes and you get the number at the top of the
+screen. `POINTS_TO_SPEND` is gone, and with it the two-numbers-one-meaning
+problem that produced "all 12 spent" over a spread of 19.
+
+**And the total is hers, not everybody's.** `allowedTotal(xp, builtWith)` is
+twelve plus one point per 40 experience, and it is the single rule behind the
+builder, the growth screen and the administrator's re-lay form. A level-one
+adventurer lays out 12; one with 200 experience lays out 17. The re-lay form
+recomputes it live from the experience field, so changing the experience changes
+the ceiling in front of you.
+
+**Nobody already playing lost a point.** `Character.buildBudget` records what
+each adventurer actually started with, and every growth calculation measures
+from that column rather than from the constant. This is the third time this
+budget has moved — 12 across four stats, 21 across seven, 19, and now 12 — and
+that column is why none of those moves cost a child anything.
+
+**Starting again really does start again.** Two tables added the same week were
+missing from the wipe, so an adventurer began her new life still carrying the
+dream and the companion of her old one. Both are cleared now, and
+`tests/reset.e2e.mts` seeds one of each and asserts they are gone — against real
+rows, because "nothing was left behind" is not a claim a pure function can make.
+
+**Deleting an adventure no longer leaves ids pointing at nothing.** Dream echoes,
+rival meetings and where a companion was found all stored a campaign id with no
+constraint behind it. Each now has `ON DELETE SET NULL`; the campaign *title*
+stays on the row, because the thing still happened and the history should read
+correctly afterwards.
+
+What deleting an adventure does **not** take is anything the character earned in
+it — her items, keepsakes, the people she met, her dream and her companion are
+hers, not the adventure's, and they stay on her sheet. Clearing those is what
+the reset screen is for.
 
 ### A note on exposing your AI
 

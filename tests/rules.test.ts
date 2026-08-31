@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MAX_LEVEL, NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_MIN, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, levelReached, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
+import { MAX_LEVEL, NEUTRAL_STAT, STATS, STAT_BUDGET, STAT_MIN, STAT_CEILING, STAT_MAX, XP_PER_STAT_POINT, bondLevelFor, bondProgress, canonicalPair, kindFromPerspective, levelFor, levelProgress, levelReached, allowedTotal, movesUnlockedAt, movesUnlockedBetween, pointsRemaining, reciprocalOf, skillProgress, skillRankFor, chosenSkillsFor, skillRoom, statBlock, statModifier, validateStats, xpForLevel, type StatBlock } from "../lib/game/rules.ts";
 import { KNACKS, extraSkillRoom, knacksEarned } from "../lib/game/knacks.ts";
 import { MAX_SKILLS } from "../lib/game/practice.ts";
 
-/** An even spread of the twelve: floor everywhere, then two or three each. */
+/** An even spread of the twelve, which is what the seven boxes add up to. */
 const balanced: StatBlock = statBlock({
   might: 3,
-  wits: 3,
-  heart: 3,
-  spark: 3,
-  grace: 3,
-  luck: 2,
-  grit: 2,
+  wits: 2,
+  heart: 2,
+  spark: 2,
+  grace: 1,
+  luck: 1,
+  grit: 1,
 });
 
 test("a balanced spread spends exactly the budget", () => {
@@ -21,12 +21,13 @@ test("a balanced spread spends exactly the budget", () => {
 });
 
 test("a specialist spread is legal if it totals the budget", () => {
-  // Three things she is very good at and four she is not, which is now a build
-  // a child can actually make: twelve points buys three stats at the cap.
+  // One thing she is very good at and six she is not. Twelve buys a single stat
+  // at the cap with the rest at the floor, which is the spikiest build the rules
+  // allow — and the one a child reaches for first.
   const specialist: StatBlock = statBlock({
     might: 5,
-    wits: 5,
-    heart: 5,
+    wits: 2,
+    heart: 1,
     spark: 1,
     grace: 1,
     luck: 1,
@@ -42,7 +43,9 @@ test("rejects overspending", () => {
 });
 
 test("rejects underspending", () => {
-  const result = validateStats(statBlock({ might: 1, wits: 1, heart: 1, spark: 1 }));
+  const result = validateStats(
+    statBlock({ might: 1, wits: 1, heart: 1, spark: 1, grace: 1, luck: 1, grit: 1 }),
+  );
   assert.equal(result.ok, false);
   assert.match((result as { reason: string }).reason, /left to spend/);
 });
@@ -77,13 +80,30 @@ test("the budget is the floor everywhere plus the points she gets to spend", () 
   // apart. Pin the literal instead and the next change to either one silently
   // makes every character in the game better or worse at everything — which is
   // exactly what happened the last time this was a literal.
-  assert.equal(STAT_BUDGET, STATS.length * STAT_MIN + POINTS_TO_SPEND);
+  // Twelve means twelve: the budget IS what the seven boxes add up to. It was
+  // 7 + 12 = 19 — arithmetically fine and impossible to read, because the screen
+  // said twelve over boxes summing to nineteen.
+  assert.equal(STAT_BUDGET, 12);
+  assert.ok(STAT_BUDGET >= STATS.length * STAT_MIN, "and a floor of one everywhere still fits");
 
-  // And the shape it buys: three stats at the cap, or a spread, and nothing in
-  // between is out of reach.
+  // And the shape it buys: one stat at the cap and the rest at the floor, or an
+  // even spread, with everything between them reachable.
   assert.deepEqual(
-    validateStats(statBlock({ might: 5, wits: 5, heart: 5, spark: 1, grace: 1, luck: 1, grit: 1 })),
+    validateStats(statBlock({ might: 5, wits: 2, heart: 1, spark: 1, grace: 1, luck: 1, grit: 1 })),
     { ok: true },
+  );
+
+  // What growth adds on top, which is the other half of the family's ask: the
+  // most she may have goes up with her experience rather than staying at twelve.
+  assert.equal(allowedTotal(0), STAT_BUDGET);
+  assert.equal(allowedTotal(XP_PER_STAT_POINT * 3), STAT_BUDGET + 3);
+  assert.deepEqual(
+    validateStats(
+      statBlock({ might: 5, wits: 3, heart: 2, spark: 1, grace: 1, luck: 1, grit: 1 }),
+      allowedTotal(XP_PER_STAT_POINT * 2),
+    ),
+    { ok: true },
+    "a grown adventurer may hold more than a fresh one",
   );
 });
 
@@ -94,7 +114,7 @@ test("a freshly opened builder has all twelve still to spend", () => {
   // points away from things.
   const untouched = Object.fromEntries(STATS.map((stat) => [stat, STAT_MIN])) as StatBlock;
 
-  assert.equal(pointsRemaining(untouched), POINTS_TO_SPEND);
+  assert.equal(pointsRemaining(untouched), STAT_BUDGET - STATS.length * STAT_MIN);
   assert.equal(validateStats(untouched).ok, false);
 });
 

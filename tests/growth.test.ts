@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { NEUTRAL_STAT, POINTS_TO_SPEND, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, STAT_MIN, XP_PER_STAT_POINT, canRaise, nextPointAt, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
+import { NEUTRAL_STAT, STATS, STAT_BUDGET, STAT_CEILING, STAT_MAX, STAT_MIN, XP_PER_STAT_POINT, canRaise, nextPointAt, statBlock, statModifier, statPointsEarned, statPointsUnspent, validateStats, type StatBlock } from "../lib/game/rules.ts";
 import {
   ATTEMPTS_TO_LEARN,
   MAX_SKILLS,
@@ -19,12 +19,12 @@ import { ARCHETYPES, signaturesFor } from "../lib/game/character-options.ts";
 // whole change removed.
 const built: StatBlock = statBlock({
   might: 3,
-  wits: 3,
-  heart: 3,
-  spark: 3,
-  grace: 3,
-  luck: 2,
-  grit: 2,
+  wits: 2,
+  heart: 2,
+  spark: 2,
+  grace: 1,
+  luck: 1,
+  grit: 1,
 });
 
 // ---- Stats that grow --------------------------------------------------------
@@ -46,7 +46,7 @@ test("growth: a freshly built character has nothing to spend", () => {
 });
 
 test("growth: what she has spent is read off the sheet, not stored", () => {
-  // 120 xp earns 3 points; two are already in Might, so one is left.
+  // 120 xp earns 3 points; Might has climbed from 3 to 5, so one is left.
   const spentTwo: StatBlock = { ...built, might: 5 };
   assert.equal(statPointsUnspent(spentTwo, 120), 1);
 });
@@ -76,14 +76,14 @@ test("growth: nothing can be raised without a point to spend", () => {
 test("growth: the sheet fills far past where it was built", () => {
   // The whole reason growth exists. A built sheet is nineteen points; a filled
   // one is eighty-four, which takes hundreds of experience and is meant to.
-  assert.equal(STAT_BUDGET, 19);
+  assert.equal(STAT_BUDGET, 12);
   assert.equal(STAT_CEILING * STATS.length, 84);
   assert.ok(STAT_CEILING > STAT_MAX);
 
   // Stated as a relationship rather than a literal — see the note in
   // rules.test.ts. This is the second time the budget has moved, and both times
   // it was the literal that made it dangerous.
-  assert.equal(STAT_BUDGET, STATS.length * STAT_MIN + POINTS_TO_SPEND);
+  assert.ok(STAT_BUDGET >= STATS.length * STAT_MIN, "a floor of one everywhere fits inside it");
 
   // And an average new adventurer now starts *below* the value that rolls at
   // +0, which is the point: competence is something play pays for.
@@ -302,8 +302,9 @@ test("growth: an adventurer built under the old rule keeps every point she earne
   // A hundred and twenty experience earns three points, and she has spent none.
   assert.equal(statPointsUnspent(oldStyle, 120, OLD_BUDGET), 3);
 
-  // Measured against today's rule instead, she would be two short.
-  assert.equal(statPointsUnspent(oldStyle, 120), 1);
+  // Measured against today's rule instead, she would be short by the whole
+  // difference between the two budgets — which is the harm the column prevents.
+  assert.equal(statPointsUnspent(oldStyle, 120), Math.max(0, 3 - (OLD_BUDGET - STAT_BUDGET)));
 });
 
 test("growth: a new adventurer is measured against the rule she was built with", () => {
@@ -320,7 +321,11 @@ test("growth: the sheet counts against the budget she was built with", () => {
   const oldStyle: StatBlock = statBlock({});
 
   assert.equal(statPointsUnspent(oldStyle, 120, OLD_BUDGET), 3);
-  assert.equal(statPointsUnspent(oldStyle, 120), 1, "and this is what she was being shown");
+  assert.equal(
+    statPointsUnspent(oldStyle, 120),
+    Math.max(0, 3 - (OLD_BUDGET - STAT_BUDGET)),
+    "and this is what she was being shown",
+  );
 });
 
 test("growth: the next point has a number on it", () => {

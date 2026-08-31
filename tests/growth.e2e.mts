@@ -20,7 +20,7 @@ import { PrismaClient } from "../generated/prisma/client.ts";
 import { XP_PER_STAT_POINT } from "../lib/game/rules.ts";
 import { buildCharacter } from "./e2e-helpers.mts";
 import { ATTEMPTS_TO_LEARN } from "../lib/game/practice.ts";
-import { STAT_CEILING, statModifier } from "../lib/game/rules.ts";
+import { STATS, STAT_CEILING, statModifier, statsOf } from "../lib/game/rules.ts";
 import { signaturesFor } from "../lib/game/character-options.ts";
 
 /**
@@ -164,16 +164,33 @@ try {
   check(`${threePoints} experience is three points`, grown.includes("3 points to spend"));
   check("the sheet shows what a stat is worth on the dice", grown.includes("to rolls"));
 
+  // Read the sheet rather than assuming it. This block used to say "heart is 3,
+  // so after one point it is 4", which was true for exactly as long as a built
+  // adventurer had 3 in everything — and stopped being true the day the build
+  // budget became a total of twelve rather than twelve above a floor. What is
+  // under test is that *one point goes where she put it and nowhere else*, and
+  // that is expressible without knowing a single one of the seven numbers.
+  const built = statsOf(await db.character.findUniqueOrThrow({ where: { id: mira.id } }));
+
   await page.click('button[aria-label="Put a point into Heart"]');
   await waitFor(
     "the point to land",
-    async () => (await db.character.findUniqueOrThrow({ where: { id: mira.id } })).heart === 4,
+    async () =>
+      (await db.character.findUniqueOrThrow({ where: { id: mira.id } })).heart === built.heart + 1,
     15_000,
   );
 
-  const raised = await db.character.findUniqueOrThrow({ where: { id: mira.id } });
-  check("a point can be put where she wants it", raised.heart === 4, String(raised.heart));
-  check("and the others are untouched", raised.might === 3 && raised.wits === 3 && raised.spark === 3);
+  const raised = statsOf(await db.character.findUniqueOrThrow({ where: { id: mira.id } }));
+  check(
+    "a point can be put where she wants it",
+    raised.heart === built.heart + 1,
+    `${built.heart} → ${raised.heart}`,
+  );
+  check(
+    "and the others are untouched",
+    STATS.every((stat) => stat === "heart" || raised[stat] === built[stat]),
+    JSON.stringify(raised),
+  );
 
   await page.goto(`${BASE}/characters/${mira.id}`);
   const afterSpend = (await page.textContent("main")) ?? "";
@@ -196,8 +213,11 @@ try {
     `+${statModifier(STAT_CEILING)}`,
   );
 
-  // Put her back to something ordinary before playing.
-  await db.character.update({ where: { id: mira.id }, data: { xp: 0, level: 1, heart: 3 } });
+  // Put her back to the sheet she was built with before playing.
+  await db.character.update({
+    where: { id: mira.id },
+    data: { xp: 0, level: 1, heart: built.heart },
+  });
 
   // ---- Practice becomes a skill ---------------------------------------------
   const dragon = await db.storyline.findUniqueOrThrow({

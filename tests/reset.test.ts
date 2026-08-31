@@ -16,7 +16,6 @@ import {
 } from "../lib/game/skill-offer.ts";
 import {
   MAX_LEVEL,
-  POINTS_TO_SPEND,
   STATS,
   STAT_BUDGET,
   STAT_MAX,
@@ -95,14 +94,14 @@ test("reset: a stat over the build ceiling comes down even when the total is rig
 });
 
 test("reset: a character already at budget is left alone", () => {
-  // Nineteen exactly: floor everywhere plus the twelve she had to spend.
+  // Twelve exactly, which is what a level-one sheet adds up to.
   const built = statBlock({
-    might: 5,
-    wits: 4,
-    heart: 3,
-    spark: 2,
-    grace: 2,
-    luck: 2,
+    might: 4,
+    wits: 2,
+    heart: 2,
+    spark: 1,
+    grace: 1,
+    luck: 1,
     grit: 1,
   });
   assert.deepEqual(suggestedBuild(built), built);
@@ -231,13 +230,33 @@ test("skills: the server refuses what the form should not have offered", () => {
 // characters to be penalised for no reason."* There was no way to do that. The
 // only button available threw away four evenings to fix a spread of numbers.
 
-const legalBuild = statBlock({ might: 3, wits: 3, heart: 3, spark: 3, grace: 2, luck: 3, grit: 2 });
+const legalBuild = statBlock({ might: 3, wits: 2, heart: 2, spark: 2, grace: 1, luck: 1, grit: 1 });
 
-test("plan: the legal build is exactly the budget, floor and all", () => {
-  // The arithmetic the old screen showed and never explained: seven boxes
-  // adding up to nineteen under a sentence about twelve points.
+test("plan: the seven boxes add up to the number on the screen", () => {
+  // What the old rule got wrong, and it was never the arithmetic: seven boxes
+  // adding up to nineteen under a sentence about twelve points. Now the budget
+  // IS the total, so a child can check it by adding up.
   assert.equal(total(legalBuild), STAT_BUDGET);
-  assert.equal(STAT_BUDGET, STATS.length * STAT_MIN + POINTS_TO_SPEND);
+  assert.equal(STAT_BUDGET, 12);
+});
+
+test("plan: a grown adventurer may keep what her experience earned", () => {
+  // The other half of the family's ask. Re-laying keeps her experience, so the
+  // budget it bought comes with it — twelve at level one, and more as she grows.
+  const grownBuild = statBlock({ might: 5, wits: 3, heart: 2, spark: 1, grace: 1, luck: 1, grit: 1 });
+  assert.equal(total(grownBuild), STAT_BUDGET + 2);
+
+  // Refused for somebody starting again, who is level one with no experience.
+  assert.equal(validatePlan({ mode: "START_AGAIN", build: grownBuild }).ok, false);
+
+  // Allowed for a re-lay at experience that has earned two points.
+  assert.deepEqual(
+    validatePlan({ mode: "RELAY_NUMBERS", build: grownBuild, xp: XP_PER_STAT_POINT * 2 }),
+    { ok: true },
+  );
+
+  // And still refused when the experience has not earned them.
+  assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: grownBuild, xp: 0 }).ok, false);
 });
 
 test("plan: an illegal spread is refused whichever mode it is in", () => {
@@ -300,6 +319,34 @@ test("plan: a level off the ladder is refused, and so is negative experience", (
   assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild, xp: 2.5 }).ok, false);
 });
 
+test("plan: a refusal names the thing that was actually wrong", () => {
+  // The budget is derived from the experience, so a nonsense experience used to
+  // come back as a complaint about points: `statPointsEarned(-5)` is -1, the
+  // budget quietly dropped by one, and a perfectly good spread was reported as
+  // costing "1 too many". True, and no help to anybody. The checks that decide
+  // whether an input can be believed have to run before anything is built on it.
+  const refused = validatePlan({ mode: "RELAY_NUMBERS", build: legalBuild, xp: -5 });
+  assert.equal(refused.ok, false);
+  assert.match(refused.ok ? "" : refused.reason, /experience/i);
+  assert.doesNotMatch(refused.ok ? "" : refused.reason, /point/i);
+});
+
+test("plan: the budget for re-laying is her own, not everybody's", () => {
+  // The complaint that drove this: a level-one adventurer places twelve, and one
+  // who has earned five places seventeen. Same rule, two answers.
+  const earning = XP_PER_STAT_POINT * 5;
+  const seventeen = statBlock({ might: 2, wits: 4, heart: 3, spark: 3, grace: 2, luck: 2, grit: 1 });
+  assert.equal(total(seventeen), STAT_BUDGET + 5);
+
+  // Legal for the adventurer who earned it…
+  assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: seventeen, xp: earning }).ok, true);
+  // …and refused for the one who has not.
+  assert.equal(validatePlan({ mode: "RELAY_NUMBERS", build: seventeen, xp: 0 }).ok, false);
+  // Starting again is always the level-one budget, whatever she had before.
+  assert.equal(validatePlan({ mode: "START_AGAIN", build: seventeen }, earning).ok, false);
+  assert.equal(validatePlan({ mode: "START_AGAIN", build: legalBuild }, earning).ok, true);
+});
+
 // ---- Where the level actually lands -----------------------------------------
 
 test("level: omitting both leaves her exactly where she was", () => {
@@ -332,10 +379,9 @@ test("level: it is clamped at the top of the ladder", () => {
 
 // ---- What re-laying hands back ----------------------------------------------
 
-test("points: every point her experience earned comes back to spend again", () => {
-  // The interesting half of the safe mode, and the easy half to miss: writing
-  // `buildBudget` back to today's budget makes the growth unspent rather than
-  // lost.
+test("points: how much of the re-laying budget she earned rather than started with", () => {
+  // So the screen can say "twelve, plus five you have earned" instead of
+  // quoting seventeen and leaving somebody to work out where it came from.
   assert.equal(pointsHandedBack(0), 0);
   assert.equal(pointsHandedBack(XP_PER_STAT_POINT - 1), 0);
   assert.equal(pointsHandedBack(XP_PER_STAT_POINT), 1);

@@ -57,11 +57,24 @@
  *
  * **Re-lay her numbers** — she keeps everything. Level, experience, skills,
  * knacks, pockets, keepsakes, the people she knows and how close her bonds have
- * grown. What changes is the stat spread, re-laid against today's budget, and
- * because `buildBudget` is written back at the same time, every point her
- * experience has earned comes back as a point she may spend again on her own
- * sheet. It is the tool for "the rules moved underneath her", and it costs her
- * nothing.
+ * grown. What changes is the stat spread. It is the tool for "the rules moved
+ * underneath her", and it costs her nothing.
+ *
+ * The budget it offers is her own, not everybody's: the twelve every adventurer
+ * is built with *plus* every point her experience has earned. A character on
+ * 200 experience lays out seventeen, and one who has never left the house lays
+ * out twelve. That is the whole of what "her numbers should match her level"
+ * means, and it is one line — `allowedTotal` — so the form and the database
+ * cannot drift apart.
+ *
+ * Her earned points are therefore placed *here*, by the person doing the
+ * re-laying, rather than handed back as a floating balance to be discovered on
+ * her sheet later. An earlier version did the latter, and it was the more
+ * confusing of the two: the form showed a small number, the sheet afterwards
+ * offered points from nowhere, and neither screen was wrong on its own.
+ * `buildBudget` is still written back to today's starting budget, so the growth
+ * arithmetic on her sheet keeps measuring from the same place as everybody
+ * else's.
  *
  * Level and experience are settable on that path, because the reason to reach
  * for it is usually that one of them is wrong. Never below the level the
@@ -77,6 +90,7 @@ import {
   SKILLS_PER_CHARACTER,
   STATS,
   STAT_BUDGET,
+  allowedTotal,
   STAT_MAX,
   STAT_MIN,
   levelFor,
@@ -184,8 +198,8 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
  * Only ever a suggestion. The point of putting the numbers in a form is that
  * somebody who remembers how she was built can correct them before agreeing.
  */
-export function suggestedBuild(stats: StatBlock): StatBlock {
-  const legal = validateStats(stats);
+export function suggestedBuild(stats: StatBlock, budget: number = STAT_BUDGET): StatBlock {
+  const legal = validateStats(stats, budget);
   if (legal.ok) return { ...stats };
 
   const total = STATS.reduce((sum, stat) => sum + stats[stat], 0);
@@ -194,7 +208,7 @@ export function suggestedBuild(stats: StatBlock): StatBlock {
   // The whole part of each scaled share, floored so the total can only be short
   // and never over — a shortfall is easy to hand out, an overshoot is not.
   const shares = STATS.map((stat) => {
-    const exact = total > 0 ? (stats[stat] * STAT_BUDGET) / total : STAT_BUDGET / STATS.length;
+    const exact = total > 0 ? (stats[stat] * budget) / total : budget / STATS.length;
     const whole = Math.min(STAT_MAX, Math.max(STAT_MIN, Math.floor(exact)));
     build[stat] = whole;
     return { stat, remainder: exact - Math.floor(exact) };
@@ -205,7 +219,7 @@ export function suggestedBuild(stats: StatBlock): StatBlock {
   shares.sort((a, b) => b.remainder - a.remainder);
 
   let spent = STATS.reduce((sum, stat) => sum + build[stat], 0);
-  while (spent < STAT_BUDGET) {
+  while (spent < budget) {
     const room = shares.find(({ stat }) => build[stat] < STAT_MAX);
     if (!room) break;
     build[room.stat] += 1;
@@ -216,7 +230,7 @@ export function suggestedBuild(stats: StatBlock): StatBlock {
 
   // Clamping to the floor can push the total past the budget for a very lopsided
   // sheet. Take it back from the largest, which has the most to spare.
-  while (spent > STAT_BUDGET) {
+  while (spent > budget) {
     const highest = STATS.reduce((best, stat) => (build[stat] > build[best] ? stat : best), STATS[0]);
     if (build[highest] <= STAT_MIN) break;
     build[highest] -= 1;
@@ -287,8 +301,41 @@ export function plannedLevel(plan: { level?: number; xp?: number }, current: { l
  * Separate from `resetCharacter` so a form can ask the same question the
  * database will, and so the rules are testable without a connection.
  */
-export function validatePlan(plan: ResetPlan): ResetOutcome {
-  const legal = validateStats(plan.build);
+export function validatePlan(plan: ResetPlan, currentXp = 0): ResetOutcome {
+  // Level and experience are checked *first*, before anything is derived from
+  // them, so that a nonsense number is reported as itself.
+  //
+  // It used to be the other way round, and the message was misleading in a way
+  // worth remembering: the budget is now built from the experience, and
+  // `statPointsEarned(-5)` is -1, so asking for negative experience quietly
+  // lowered the budget to 11 and the plan came back "that spends 12 points,
+  // which is 1 too many". True, and useless — the points were never the
+  // problem. An input that cannot be believed has to be refused before it is
+  // allowed to shape a rule.
+  //
+  // Both fields are optional; each is checked only if it was given, so "change
+  // her level and leave the experience" stays expressible.
+  if (plan.level !== undefined) {
+    if (!Number.isInteger(plan.level) || plan.level < 1 || plan.level > MAX_LEVEL) {
+      return { ok: false, reason: `A level has to be a whole number between 1 and ${MAX_LEVEL}.` };
+    }
+  }
+  if (plan.xp !== undefined) {
+    if (!Number.isInteger(plan.xp) || plan.xp < 0) {
+      return { ok: false, reason: "Experience has to be a whole number, and never below nothing." };
+    }
+  }
+
+  // What the seven numbers are allowed to add up to, for the adventurer this
+  // plan would produce. Starting again means level one and no experience, so a
+  // level-one budget; re-laying keeps her experience, so the budget it earned.
+  //
+  // The form works this out too, and both have to agree — but this is the one
+  // that decides, because a form post can say anything.
+  const budget =
+    plan.mode === "START_AGAIN" ? STAT_BUDGET : allowedTotal(plan.xp ?? currentXp, STAT_BUDGET);
+
+  const legal = validateStats(plan.build, budget);
   if (!legal.ok) return legal;
 
   if (plan.mode === "START_AGAIN") {
@@ -304,33 +351,18 @@ export function validatePlan(plan: ResetPlan): ResetOutcome {
     if (new Set(skills).size !== skills.length) {
       return { ok: false, reason: "The same skill is in the list twice." };
     }
-    return { ok: true };
-  }
-
-  // Re-laying her numbers. Both fields are optional; each is checked only if it
-  // was given, so "change her level and leave the experience" is expressible.
-  if (plan.level !== undefined) {
-    if (!Number.isInteger(plan.level) || plan.level < 1 || plan.level > MAX_LEVEL) {
-      return { ok: false, reason: `A level has to be a whole number between 1 and ${MAX_LEVEL}.` };
-    }
-  }
-  if (plan.xp !== undefined) {
-    if (!Number.isInteger(plan.xp) || plan.xp < 0) {
-      return { ok: false, reason: "Experience has to be a whole number, and never below nothing." };
-    }
   }
 
   return { ok: true };
 }
 
 /**
- * What re-laying her numbers would hand back, so the screen can say so first.
+ * How much of the re-laying budget she earned rather than started with.
  *
- * The interesting half of that mode and the easy half to miss: writing
- * `buildBudget` back to today's budget means every point her experience has
- * earned is unspent again. She does not lose the growth — she gets to place it
- * somewhere else, which is exactly what "the rules moved underneath her" calls
- * for.
+ * `allowedTotal` is the number the form enforces; this is the half of it that
+ * came from playing, so a screen can say "twelve, plus five you have earned"
+ * instead of quoting seventeen and leaving somebody to work out where it came
+ * from. The growth is not lost in the re-lay — it is placed during it.
  */
 export function pointsHandedBack(xp: number): number {
   return statPointsEarned(xp);
@@ -344,14 +376,16 @@ export function pointsHandedBack(xp: number): number {
  * either doing it or not.
  */
 export async function resetCharacter(characterId: string, plan: ResetPlan): Promise<ResetOutcome> {
-  const legal = validatePlan(plan);
-  if (!legal.ok) return legal;
-
   const character = await db.character.findUnique({
     where: { id: characterId },
     select: { id: true, level: true, xp: true },
   });
   if (!character) return { ok: false, reason: "That adventurer no longer exists." };
+
+  // Validated against her own experience, so a grown adventurer may keep the
+  // points she earned and a fresh one may not invent any.
+  const legal = validatePlan(plan, character.xp);
+  if (!legal.ok) return legal;
 
   // Re-laying her numbers touches three columns and nothing else. Written as
   // its own short transaction rather than as a set of conditionals threaded
@@ -384,6 +418,12 @@ export async function resetCharacter(characterId: string, plan: ResetPlan): Prom
     await tx.keepsake.deleteMany({ where: { characterId } });
     await tx.acquaintance.deleteMany({ where: { characterId } });
     await tx.abilityUse.deleteMany({ where: { characterId } });
+    // Added after this function was written, and missed when they were. Both
+    // are earned in play — a companion is found in a story and a wish is
+    // something the world has been answering for weeks — so both go with
+    // everything else earned. "Starting again" has to mean it.
+    await tx.companion.deleteMany({ where: { characterId } });
+    await tx.dream.deleteMany({ where: { characterId } });
 
     // Bonds are turned down rather than deleted: that these two are sisters was
     // chosen, and only how close they have grown was earned.
