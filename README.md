@@ -2158,6 +2158,40 @@ it — her items, keepsakes, the people she met, her dream and her companion are
 hers, not the adventure's, and they stay on her sheet. Clearing those is what
 the reset screen is for.
 
+### The mark
+
+Saved to a Windows desktop, Hearthlight used to arrive as the generic
+torn-page glyph; added to an Android home screen, as a grey circle with a **7**
+in it — the first character of the domain, which is what Chrome draws when a
+site gives it nothing. Neither was a rendering bug. The app simply had no icon
+of any kind.
+
+It has one now: a hearth mouth with a fire in it, gold on warm black.
+
+**One file is the master.** `app/icon.svg` is both the source and the icon
+modern browsers load from the tab. `npm run brand:icons` rasterises everything
+else from it — edit the SVG, run the script, and the whole set moves together.
+
+| File | Who reads it |
+|---|---|
+| `app/icon.svg` | Browsers, in the tab |
+| `app/favicon.ico` | **Windows** — Chrome builds a desktop shortcut from this, and shows the generic page glyph without one. Four sizes: 16 tab, 32 taskbar, 48 shortcut, 64 for displays at 125–150% |
+| `app/apple-icon.png` | iOS and iPadOS home screens |
+| `public/icon-192.png`, `public/icon-512.png` | **Android**, via `app/manifest.ts` — this is what replaces the "7" |
+
+Three constraints shaped the drawing, and each one threw something away:
+
+- **Sixteen pixels.** A lantern was drawn first and discarded — at tab size its
+  frame turned to mush. What survives that small is one bold dark shape on one
+  bold light one.
+- **A dark phone.** The tile is gold rather than the app's near-black, because
+  a dark icon on a dark wallpaper is a hole. Gold reads on either.
+- **A circular crop.** Android masks home-screen icons to whatever shape the
+  launcher likes and guarantees only the middle 80%. The arch's furthest corner
+  sits 189 units from the centre of a 512 grid, inside the 204.8 that allows —
+  which is what lets the same file be declared `maskable` instead of needing a
+  second, padded one. Redraw the arch wider and that has to be re-earned.
+
 ### A note on exposing your AI
 
 Do **not** port-forward Ollama to the internet, and do not leave it listening on

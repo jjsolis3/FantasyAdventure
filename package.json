@@ -14,6 +14,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "brand:icons": "node scripts/brand-icons.mjs",
     "gm:harness": "tsx scripts/gm-harness.ts",
     "art:prompts": "tsx scripts/art-prompts.ts",
     "test": "node --import tsx --test tests/*.test.ts",
