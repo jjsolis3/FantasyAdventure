@@ -69,9 +69,84 @@ enum Role {
   PLAYER
 }
 
-/// Someone who can sign in. On a shared screen this is usually one adult per
-/// household rather than one row per family member — the adventurers
-/// themselves become Characters in a later milestone.
+/// One family, and the boundary everything private is drawn around.
+///
+/// "Household" was a word in comments for most of this app's life, and it meant
+/// *one account*. That held while one family played. It stopped holding the
+/// moment a second family was invited, because the party-invite picker offers
+/// every character in the database — fine when everyone in the database is
+/// yours, a leak the moment they are not.
+///
+/// So the word is a table now. It is the privacy boundary today and, if this
+/// ever becomes something families pay for, the tenant and billing boundary
+/// too — which is why `householdId` is written onto the rows a household owns
+/// rather than worked out by joining through the account that made them. A
+/// derived boundary fails open: forget the filter and the query quietly returns
+/// everybody. A column fails loudly, greps cleanly, and is what row-level
+/// security would key on later.
+model Household {
+  id   String @id @default(cuid())
+  name String
+
+  /// Handed to another household so the two can adventure together.
+  ///
+  /// Always live and rotatable, shaped like `Campaign.joinCode` — the same idea
+  /// one level up. Sharing it is one consent and redeeming it is the other,
+  /// which is the whole of what "both sides agreed" needs to mean.
+  linkCode String @unique
+
+  members    HouseholdMember[]
+  characters Character[]
+  campaigns  Campaign[]
+  aiCalls    AiCall[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// What authority one account has in one household.
+///
+/// A join table rather than a `householdId` on `User`, which would have been
+/// easier. The table separates two questions that are genuinely different —
+/// *who are you* and *what may you do here* — and it leaves room for
+/// grandparents, cousins, a child with two homes, and handing a household on,
+/// none of which would fit a single column without a redesign.
+///
+/// The schema permits an account to hold more than one membership. The code
+/// does not, yet: redemption refuses a second one, because "which household
+/// owns this character?" has no answer until the rest of the app is ready for
+/// two. That restriction lives in one place on purpose, so lifting it later is
+/// a decision rather than an excavation.
+model HouseholdMember {
+  id String @id @default(cuid())
+
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role HouseholdRole @default(MEMBER)
+
+  createdAt DateTime @default(now())
+
+  @@unique([householdId, userId])
+  @@index([userId])
+}
+
+enum HouseholdRole {
+  /// Answers for the household, and the only one who may hand it on. Later,
+  /// the billing contact.
+  OWNER
+  /// May invite the household's own people and put its adventurers right.
+  PARENT
+  /// Plays. The role a child's account is given.
+  MEMBER
+}
+
+/// Someone who can sign in. Their authority over a family lives in
+/// `HouseholdMember` rather than here — `Role` below is about this
+/// installation, not about anybody's family.
 model User {
   id           String @id @default(cuid())
   /// Always stored lowercased so sign-in is case-insensitive.
@@ -89,6 +164,7 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
 
+  households     HouseholdMember[]
   sessions       AuthSession[]
   characters     Character[]
   campaigns      Campaign[]
@@ -172,6 +248,15 @@ model Character {
   /// own account costs them nothing.
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Whose family this adventurer belongs to.
+  ///
+  /// Not the same question as `userId`, and both are needed: that one says who
+  /// may edit her, this one says whose data she is. A handover moves her
+  /// between accounts inside a household without changing this; moving a whole
+  /// account to another household changes this without changing that.
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   /// Set while this adventurer is being offered to another account, and cleared
   /// the moment somebody claims them. A code rather than a chosen recipient:
@@ -273,6 +358,7 @@ model Character {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([householdId])
 }
 
 /// Somebody this adventurer has met, who outlives the adventure.
@@ -1029,6 +1115,12 @@ model Campaign {
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  /// Whose family's adventure this is. The household of the account that
+  /// started it — guests from a linked household travel in it without it
+  /// becoming theirs.
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
   storylineId String
   storyline   Storyline @relation(fields: [storylineId], references: [id])
 
@@ -1114,6 +1206,7 @@ model Campaign {
   completedAt  DateTime?
 
   @@index([ownerId])
+  @@index([householdId])
   @@index([storylineId])
 }
 
@@ -1505,6 +1598,19 @@ model AiCall {
   campaignId String?
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
+  /// Who the work was done for.
+  ///
+  /// Stored rather than reached through the campaign, because the campaign may
+  /// not be there: `campaignId` above is `SetNull`, so deleting an adventure
+  /// leaves the usage record alive and ownerless. Fine for a log and useless
+  /// for a bill — and if this ever meters a subscription, "how much did this
+  /// family use" must not be a question a tidy-up can erase the answer to.
+  ///
+  /// Nullable only because rows written before households existed have no
+  /// honest answer; nothing written from here on leaves it empty.
+  householdId String?
+  household   Household? @relation(fields: [householdId], references: [id], onDelete: SetNull)
+
   /// adjudicate | narrate | extract | summarise
   stage String
   model String
@@ -1527,6 +1633,7 @@ model AiCall {
   createdAt DateTime @default(now())
 
   @@index([campaignId, createdAt])
+  @@index([householdId, createdAt])
 }
 
 /// A record that a Family Move was spent, so it can be limited to once per

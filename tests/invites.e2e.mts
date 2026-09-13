@@ -22,6 +22,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { buildCharacter } from "./e2e-helpers.mts";
 import { generateInviteCode, generateJoinCode } from "../lib/auth/invite-code.ts";
+import { householdOf } from "./e2e-helpers.mjs";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -205,9 +206,11 @@ try {
   );
 
   // ---- Declining leaves a way to ask again ---------------------------------
+  const hostUserHome = await householdOf(db, hostUser.id);
   const second = await db.campaign.create({
     data: {
       ownerId: hostUser.id,
+      householdId: hostUserHome,
       storylineId: dragon.id,
       title: "The Second Flight",
       joinCode: generateJoinCode(),

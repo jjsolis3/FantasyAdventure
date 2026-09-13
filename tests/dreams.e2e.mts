@@ -27,6 +27,7 @@ import { BASE, buildCharacter, submitAndSettle } from "./e2e-helpers.mts";
 import { beginCampaign, playTurn } from "../lib/engine/play.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
 import { ECHO_COOLDOWN_TURNS } from "../lib/game/dreams.ts";
+import { householdOf } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@localhost:5432/hearthlight?schema=public";
@@ -91,11 +92,13 @@ try {
 
   // ---- The world whispers, at the pace the game sets -------------------------
   const storyline = await db.storyline.findFirstOrThrow({ where: { minPlayers: { lte: 2 } } });
+  const home = await householdOf(db, user.id);
   const campaign = await db.campaign.create({
     data: {
       title: "The long way round",
       joinCode: generateJoinCode(),
       ownerId: user.id,
+      householdId: home,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "MIDDLE_GRADE",

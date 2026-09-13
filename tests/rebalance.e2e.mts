@@ -37,6 +37,7 @@ import { skillPicksUnspent } from "../lib/game/skill-offer.ts";
 import { neededObjectives } from "../lib/game/briefing.ts";
 import { hashPassword } from "../lib/auth/password.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
+import { makeHousehold } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5507/hearthlight?schema=public";
@@ -58,6 +59,7 @@ async function main() {
       role: "ADMIN",
     },
   });
+  const home = await makeHousehold(db, user);
 
   console.log("\n-- Two adventurers, exactly as the journal left them -------------");
   // Orin and Ember from the real evening, standing in as Mira and Rowan because
@@ -69,7 +71,7 @@ async function main() {
     db.character.create({
       data: {
         name: "Mira",
-        userId: user.id,
+        userId: user.id, householdId: home,
         race: "Elf",
         archetype: "Wondersmith",
         pronouns: "he/him",
@@ -88,7 +90,7 @@ async function main() {
     db.character.create({
       data: {
         name: "Rowan",
-        userId: user.id,
+        userId: user.id, householdId: home,
         race: "Fox-folk",
         archetype: "Healer",
         pronouns: "she/her",
@@ -114,7 +116,7 @@ async function main() {
   const campaign = await db.campaign.create({
     data: {
       title: "The Village That Built Itself",
-      ownerId: user.id,
+      ownerId: user.id, householdId: home,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "MIDDLE_GRADE",

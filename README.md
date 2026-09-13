@@ -2115,6 +2115,42 @@ drop the chosen one straight into the box. Now:
 
 And the nudges are text, not buttons. Nothing fills the box for her any more.
 
+### Households
+
+"Household" was a word in comments for most of this app's life, and it meant
+*one account*. That held while one family played. It stops holding the moment a
+second family is invited, because the party-invite picker offers **every
+character in the database** — fine when everyone in the database is yours, and a
+leak when they are not.
+
+So the word is a table now, and it is the boundary everything private is drawn
+around.
+
+**The id is written down, not worked out.** `Character`, `Campaign` and `AiCall`
+each carry a `householdId` alongside the account that owns them. It could have
+been reached by joining through that account; it deliberately is not, because a
+derived boundary fails *open* — forget the filter and `findMany` quietly returns
+every family's children, and the code looks right. A column fails closed, greps
+cleanly, and is the thing row-level security would key on if this ever holds
+more than one family who paid to be here.
+
+`userId` and `ownerId` are untouched. *Who may edit this* and *whose data is
+this* are different questions and the app needs both answers.
+
+**Nobody was grouped by guessing.** A household where everybody has their own
+sign-in looks exactly like three separate households from inside a database, so
+the migration gave every existing account one of its own rather than inventing a
+grouping. Putting the right accounts together is a decision a person makes, at
+**Settings → Households** — which also renames them, since "Dad's household" is
+a reasonable guess and "The Solis family" is the truth. Moving an account takes
+its adventurers and its adventures with it, in one transaction, and a household
+nobody is left in is tidied away.
+
+**Usage records keep their household.** `AiCall.campaignId` is `SET NULL` on
+delete, so tidying away an adventure used to leave the record of what it cost
+alive and ownerless. Fine for a log, useless for a bill. The household is
+stamped on at the time the call is made.
+
 ### Twelve means twelve
 
 A household hit the same wall twice, from two directions. Resetting a character
@@ -2475,6 +2511,7 @@ tests/
   acquaintances.e2e.mts  Two adventures, and somebody who remembers you in the second
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
+  households.e2e.mts  A household each on registering, and making one family of two
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createSession, destroySession, requireAdmin, requireUser } from "@/lib/auth/session";
 import { INVITE_ERROR_MESSAGES, checkInviteCode, createInvite, normaliseInviteCode } from "@/lib/auth/invites";
+import { createHousehold, householdNameFor } from "@/lib/game/households";
 
 /** Shape returned to every auth form. `null` means nothing has been submitted yet. */
 export type FormState = { error: string; fieldErrors?: Record<string, string> } | null;
@@ -80,13 +81,27 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
     // race where two people redeem the same code at the same moment: the
     // unique constraint on redeemedById makes the second one fail.
     const user = await db.$transaction(async (tx) => {
+      const displayName = parsed.data.displayName.trim();
+
       const created = await tx.user.create({
         data: {
           email,
-          displayName: parsed.data.displayName.trim(),
+          displayName,
           passwordHash,
           role: isFirstUser ? "ADMIN" : "PLAYER",
         },
+      });
+
+      // A household of their own, in the same transaction as the account.
+      //
+      // Every account has one — the boundary everything private is drawn
+      // around is not a thing anybody should be able to exist outside of, even
+      // for the moment between two writes. Joining somebody *else's* household
+      // rather than starting a fresh one is what an invite will decide once
+      // invites say what they grant; until then, one each.
+      await createHousehold(tx, {
+        ownerId: created.id,
+        name: householdNameFor(displayName),
       });
 
       const spent = await tx.inviteCode.updateMany({

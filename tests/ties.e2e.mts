@@ -29,6 +29,7 @@ import { STATS, STAT_BUDGET, canonicalPair, statsOf } from "../lib/game/rules.ts
 import { resetCharacter } from "../lib/game/reset.ts";
 import { hashPassword } from "../lib/auth/password.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
+import { makeHousehold } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5499/hearthlight?schema=public";
@@ -75,6 +76,9 @@ async function main() {
       },
     }),
   ]);
+  const dadHome = await makeHousehold(db, dad);
+  const olderHome = await makeHousehold(db, older);
+  const youngerHome = await makeHousehold(db, younger);
 
   // Named to match what the mock storyteller reports a bond moment between —
   // it says "Rowan stood between Mira and the noise", so the father's new
@@ -83,7 +87,7 @@ async function main() {
     db.character.create({
       data: {
         name: "Mira",
-        userId: older.id,
+        userId: older.id, householdId: olderHome,
         race: "Human",
         archetype: "Trickster",
         pronouns: "she/her",
@@ -92,7 +96,7 @@ async function main() {
     db.character.create({
       data: {
         name: "Wren",
-        userId: younger.id,
+        userId: younger.id, householdId: youngerHome,
         race: "Human",
         archetype: "Guardian",
         pronouns: "she/her",
@@ -104,7 +108,7 @@ async function main() {
   const campaign = await db.campaign.create({
     data: {
       title: "The Barley Field",
-      ownerId: dad.id,
+      ownerId: dad.id, householdId: dadHome,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "FAMILY_MIXED",
@@ -122,7 +126,7 @@ async function main() {
   const orin = await db.character.create({
     data: {
       name: "Rowan",
-      userId: dad.id,
+      userId: dad.id, householdId: dadHome,
       race: "Human",
       archetype: "Guardian",
       pronouns: "he/him",
@@ -240,7 +244,7 @@ async function main() {
   const bramble = await db.character.create({
     data: {
       name: "Bramble",
-      userId: dad.id,
+      userId: dad.id, householdId: dadHome,
       race: "Stonekin",
       archetype: "Beastfriend",
       pronouns: "they/them",

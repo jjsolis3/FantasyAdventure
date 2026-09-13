@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import type { Role } from "@/generated/prisma/enums";
+import type { HouseholdRole, Role } from "@/generated/prisma/enums";
 
 const COOKIE_NAME = "hearthlight_session";
 const SESSION_DAYS = 30;
@@ -61,7 +61,24 @@ export type SessionUser = {
   id: string;
   email: string;
   displayName: string;
+  /** What this account may do to the *installation*. See `Role`. */
   role: Role;
+  /**
+   * Which family's data this account's work belongs to, and what it may do
+   * inside that family.
+   *
+   * Carried on the session because almost every write needs it — a new
+   * adventurer and a new adventure are both stamped with it — and looking it up
+   * again in each of those places would be the same query three times a page.
+   *
+   * Nullable in the type and never in practice: registration makes a household
+   * in the same transaction as the account, and the migration gave one to
+   * everybody who already existed. A null here means something is wrong rather
+   * than something to handle quietly, which is why the writes that need it
+   * refuse rather than invent one.
+   */
+  householdId: string | null;
+  householdRole: HouseholdRole | null;
 };
 
 /**
@@ -77,7 +94,14 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
   const session = await db.authSession.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: true },
+    include: {
+      user: {
+        // Oldest first, and only one taken. The schema permits an account to
+        // belong to more than one household; the code does not yet, and this is
+        // one of the two places that decides so — see `singleHouseholdFor`.
+        include: { households: { orderBy: { createdAt: "asc" }, take: 1 } },
+      },
+    },
   });
   if (!session) return null;
 
@@ -100,11 +124,15 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       .catch(() => {});
   }
 
+  const membership = session.user.households[0] ?? null;
+
   return {
     id: session.user.id,
     email: session.user.email,
     displayName: session.user.displayName,
     role: session.user.role,
+    householdId: membership?.householdId ?? null,
+    householdRole: membership?.role ?? null,
   };
 }
 

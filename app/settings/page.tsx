@@ -17,14 +17,16 @@ export const dynamic = "force-dynamic";
 export default async function SettingsHubPage() {
   await requireAdmin();
 
-  const [storylines, custom, campaigns, calls, unusedInvites, adventurers] = await Promise.all([
-    db.storyline.count(),
-    db.storyline.count({ where: { isCustom: true } }),
-    db.campaign.count(),
-    db.aiCall.count(),
-    db.inviteCode.count({ where: { redeemedById: null } }),
-    db.character.count(),
-  ]);
+  const [storylines, custom, campaigns, calls, unusedInvites, adventurers, households] =
+    await Promise.all([
+      db.storyline.count(),
+      db.storyline.count({ where: { isCustom: true } }),
+      db.campaign.count(),
+      db.aiCall.count(),
+      db.inviteCode.count({ where: { redeemedById: null } }),
+      db.character.count(),
+      db.household.count(),
+    ]);
 
   const cards = [
     {
@@ -56,6 +58,13 @@ export default async function SettingsHubPage() {
       blurb:
         "Everyone in the house, and what they have earned. Starting one again — back to level one, skills and knacks cleared — is here rather than on her own sheet, so it is always something two people agreed on.",
       note: `${adventurers} across every household`,
+    },
+    {
+      href: "/settings/households",
+      title: "Households",
+      blurb:
+        "Which accounts are one family. Everything private in this app is scoped to these — an adventurer belongs to a household, and only that household and the ones it has agreed to adventure with can see her.",
+      note: `${households} ${households === 1 ? "household" : "households"}`,
     },
     {
       href: "/invites",

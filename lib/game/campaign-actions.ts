@@ -125,8 +125,17 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     };
   }
 
+  // As with a new adventurer: refused rather than guessed. See `createCharacterAction`.
+  if (!user.householdId) {
+    return { error: "This account is not part of a household yet. Ask an administrator." };
+  }
+
   const campaign = await createWithJoinCode({
     ownerId: user.id,
+    // The household that started it. Guests from a linked household travel in
+    // it without it becoming theirs — which is why this is the owner's
+    // household rather than anything derived from who is in the party.
+    householdId: user.householdId,
     storylineId: storyline.id,
     title: parsed.data.title,
     tone: parsed.data.tone,

@@ -40,6 +40,7 @@ import {
   statsOf,
 } from "../lib/game/rules.ts";
 import { hashPassword } from "../lib/auth/password.ts";
+import { makeHousehold } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5509/hearthlight?schema=public";
@@ -52,11 +53,12 @@ function check(label: string, condition: boolean, detail = "") {
 }
 
 /** An adventurer with something to lose, and somebody to lose it with. */
-async function buildOrin(userId: string, name: string) {
+async function buildOrin(userId: string, householdId: string, name: string) {
   const orin = await db.character.create({
     data: {
       name,
       userId,
+      householdId,
       race: "Elf",
       archetype: "Wondersmith",
       // Deliberately he/him: the screen said "Her numbers" over exactly this.
@@ -123,11 +125,12 @@ async function main() {
       role: "ADMIN",
     },
   });
+  const home = await makeHousehold(db, user);
 
   console.log("\n-- The screen knows how to talk about him ------------------------");
-  const orin = await buildOrin(user.id, `Orin-${stamp}`);
+  const orin = await buildOrin(user.id, home, `Orin-${stamp}`);
   const ember = await db.character.create({
-    data: { name: `Ember-${stamp}`, userId: user.id, race: "Fox-folk", archetype: "Healer", pronouns: "she/her" },
+    data: { name: `Ember-${stamp}`, userId: user.id, householdId: home, race: "Fox-folk", archetype: "Healer", pronouns: "she/her" },
   });
   const bond = await db.relationship.create({
     data: { characterAId: orin.id, characterBId: ember.id, aToB: "SIBLING", bondLevel: 3, bondXp: 20 },
