@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import { SETTINGS_ID } from "@/lib/ai/settings";
 import { costOf, formatCost, summarise, type Prices } from "@/lib/ai/usage";
 import { Alert, Card, PageTitle } from "@/components/ui";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const RECENT = 40;
 
 export default async function UsagePage() {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const settings = await db.aiSetting.findUnique({ where: { id: SETTINGS_ID } });
   const prices: Prices = {
@@ -76,8 +76,8 @@ export default async function UsagePage() {
       />
 
       <div className="mb-6">
-        <Link href="/settings" className="text-sm text-hearth-300 underline hover:text-hearth-200">
-          ← Settings
+        <Link href="/admin" className="text-sm text-hearth-300 underline hover:text-hearth-200">
+          ← Administration
         </Link>
       </div>
 
@@ -124,7 +124,7 @@ export default async function UsagePage() {
             <div className="mt-4">
               <Alert tone="info">
                 Add what your provider charges under{" "}
-                <Link href="/settings/storyteller" className="underline hover:text-hearth-100">
+                <Link href="/admin/storyteller" className="underline hover:text-hearth-100">
                   the storyteller
                 </Link>{" "}
                 and this becomes money. Prices are not built in on purpose — they change monthly and

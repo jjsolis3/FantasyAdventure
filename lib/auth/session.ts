@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import type { HouseholdRole, Role } from "@/generated/prisma/enums";
+import { mayActForHousehold } from "@/lib/game/households";
 
 const COOKIE_NAME = "hearthlight_session";
 const SESSION_DAYS = 30;
@@ -165,18 +166,59 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
-/** For admin-only pages. Sends non-admins home rather than to login. */
-export async function requireAdmin(): Promise<SessionUser> {
+/**
+ * For the screens that belong to whoever runs this installation.
+ *
+ * The storyteller's settings, the shared adventure library, what everything has
+ * cost, and which accounts are in which family. None of it is about anybody's
+ * own household, and a parent should never be shown an API key.
+ *
+ * This used to be `requireAdmin`, which meant both this and "may put my
+ * family's sheets right". The two were the same person while one family played
+ * and stopped being the same person the moment a second family was invited.
+ */
+export async function requirePlatformAdmin(): Promise<SessionUser> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/");
+  if (user.role !== "PLATFORM_ADMIN") redirect("/");
   return user;
+}
+
+/**
+ * For the screens that belong to one family: its invitations, and putting its
+ * own adventurers right.
+ *
+ * Passes for the household's `OWNER` or `PARENT`, and for a platform
+ * administrator — who has to be able to reach any family to support it, and
+ * whose own family is one of them.
+ *
+ * **The guard is never enough on its own.** It says *this person may act for a
+ * household*; it cannot say *this is their household*. Every caller has to
+ * scope its query by the returned `householdId` as well, or a parent is handed
+ * every other family's data — a worse bug than the one this replaces. The
+ * return type makes that awkward to forget: the id is what you get back.
+ */
+export type HouseholdActor = {
+  user: SessionUser;
+  /** Null only for a platform admin with no household — meaning "everything". */
+  householdId: string | null;
+  /** True when this person may look past their own family. */
+  everywhere: boolean;
+};
+
+export async function requireHouseholdParent(): Promise<HouseholdActor> {
+  const user = await requireUser();
+  const everywhere = user.role === "PLATFORM_ADMIN";
+
+  if (!everywhere && !mayActForHousehold(user.householdRole)) redirect("/");
+
+  return { user, householdId: user.householdId, everywhere };
 }
 
 /**
  * Guards for route handlers.
  *
- * `requireUser` and `requireAdmin` redirect, which is right for a page and
- * wrong for an API: a POST that redirects looks like a success to `fetch`,
+ * `requireUser` and `requirePlatformAdmin` redirect, which is right for a page
+ * and wrong for an API: a POST that redirects looks like a success to `fetch`,
  * which follows it and reports 200. These return a 403 instead, so refusal is
  * unambiguous to a caller and to a test.
  */
@@ -188,12 +230,12 @@ export async function requireUserForApi(): Promise<SessionUser | Response> {
   return user;
 }
 
-export async function requireAdminForApi(): Promise<SessionUser | Response> {
+export async function requirePlatformAdminForApi(): Promise<SessionUser | Response> {
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: "You need to be signed in." }, { status: 401 });
   }
-  if (user.role !== "ADMIN") {
+  if (user.role !== "PLATFORM_ADMIN") {
     return Response.json({ error: "Administrators only." }, { status: 403 });
   }
   return user;

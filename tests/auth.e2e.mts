@@ -102,7 +102,7 @@ try {
     const user = await db.user.findFirst();
     check("first account created", user !== null);
     check("email normalised", user?.email === "parent@example.com", user?.email);
-    check("first account is ADMIN", user?.role === "ADMIN", user?.role);
+    check("first account administers the installation", user?.role === "PLATFORM_ADMIN", user?.role);
 
     // Registering makes a household in the same transaction as the account.
     // Nobody should exist outside the boundary every privacy rule is drawn
@@ -151,8 +151,8 @@ try {
   let newCode = "";
   {
     const page = await adminContext.newPage();
-    await page.goto(`${BASE}/invites`);
-    check("admin can reach /invites", page.url().endsWith("/invites"), page.url());
+    await page.goto(`${BASE}/settings/invites`);
+    check("a household parent can reach their invitations", page.url().endsWith("/settings/invites"), page.url());
 
     await page.fill('input[name="note"]', "Grandma");
     await submitAndSettle(page, 'button:has-text("Create invite code")');
@@ -192,8 +192,32 @@ try {
       `${grandmaHome?.householdId} vs ${parentHome?.householdId}`,
     );
 
-    await page.goto(`${BASE}/invites`);
-    check("non-admin is redirected away from /invites", !page.url().endsWith("/invites"), page.url());
+    // She reaches her *own* invitations, and this is a change rather than a
+    // regression. She answers for a household — her own — so inviting into it
+    // is hers to do. What she must not reach is the installation's screens.
+    await page.goto(`${BASE}/settings/invites`);
+    check(
+      "an ordinary account reaches its own invitations",
+      page.url().endsWith("/settings/invites"),
+      page.url(),
+    );
+
+    const hers = (await page.textContent("main")) ?? "";
+    check(
+      "and sees only its own codes, not the one that let it in",
+      !hers.includes(newCode),
+      newCode,
+    );
+
+    await page.goto(`${BASE}/admin`);
+    check("but not the installation's", !page.url().endsWith("/admin"), page.url());
+
+    await page.goto(`${BASE}/admin/storyteller`);
+    check(
+      "and certainly not the storyteller's credentials",
+      !page.url().endsWith("/admin/storyteller"),
+      page.url(),
+    );
     await page.close();
   }
 

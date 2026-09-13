@@ -21,10 +21,14 @@ export function AccountMenu({
   displayName,
   email,
   isAdmin,
+  runsAHousehold,
 }: {
   displayName: string;
   email: string;
+  /** Runs this installation — the storyteller, the library, what it all cost. */
   isAdmin: boolean;
+  /** Answers for a family — its invitations, and putting its sheets right. */
+  runsAHousehold: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
@@ -85,9 +89,14 @@ export function AccountMenu({
 
           <MenuLink href="/profile">Your profile</MenuLink>
 
-          {/* Only an administrator has anywhere to go here, and the rest of a
-              household should not be shown a door they cannot open. */}
-          {isAdmin ? <MenuLink href="/settings">Settings</MenuLink> : null}
+          {/* Two doors now, because there are two jobs. Settings is the
+              family's — its people and its invitations. Administration is the
+              installation's, and a parent should never see it.
+
+              Neither is shown to somebody who cannot open it: the rest of a
+              household should not be looking at a door that only says no. */}
+          {runsAHousehold ? <MenuLink href="/settings">Settings</MenuLink> : null}
+          {isAdmin ? <MenuLink href="/admin">Administration</MenuLink> : null}
 
           <div className="border-t border-hearth-800/60">
             <form action={logoutAction}>

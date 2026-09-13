@@ -119,16 +119,16 @@ try {
 
   console.log("\n-- A player cannot reach the households screen -------------------");
 
-  await mira.goto(`${BASE}/settings/households`);
+  await mira.goto(`${BASE}/admin/households`);
   check(
     "it is administrators only",
-    !mira.url().endsWith("/settings/households"),
+    !mira.url().endsWith("/admin/households"),
     mira.url(),
   );
 
   console.log("\n-- The administrator makes one family of the two -----------------");
 
-  await dad.goto(`${BASE}/settings/households`);
+  await dad.goto(`${BASE}/admin/households`);
   await dad.waitForLoadState("networkidle");
 
   const listed = (await dad.textContent("main")) ?? "";
@@ -146,7 +146,7 @@ try {
   // Move both accounts into it, one at a time, the way a person would.
   for (const who of ["dad@example.com", "mira@example.com"]) {
     const user = await db.user.findUniqueOrThrow({ where: { email: who } });
-    await dad.goto(`${BASE}/settings/households`);
+    await dad.goto(`${BASE}/admin/households`);
     await dad.waitForLoadState("networkidle");
     await dad.selectOption('select[name="userId"]', user.id);
     await dad.selectOption('select[name="householdId"]', solis.id);
@@ -192,6 +192,50 @@ try {
 
   const everyone = await db.user.count({ where: { households: { none: {} } } });
   check("and nobody was left outside a household", everyone === 0, `${everyone} stranded`);
+
+  check(
+    "the first one in takes charge, so the family is never left unable to act",
+    dadAfter?.role === "OWNER",
+    dadAfter?.role,
+  );
+  check("and the one who followed only plays", miraAfter?.role === "MEMBER", miraAfter?.role);
+
+  console.log("\n-- One family's parent cannot touch another's adventurer ---------");
+
+  // A third household, outside the Solis family entirely.
+  const strangerCode = await db.inviteCode.create({
+    data: { code: generateInviteCode(), createdById: dadAfter?.userId, note: "Someone else" },
+  });
+  const strangerContext = await browser.newContext();
+  const stranger = await strangerContext.newPage();
+  await register(stranger, strangerCode.code, "Someone Else", "stranger@example.com");
+
+  // The screen refuses to show her — not found rather than forbidden, because a
+  // 403 would confirm that the id belongs to somebody.
+  await stranger.goto(`${BASE}/settings/adventurers/${orin.id}`);
+  const strangerSees = (await stranger.textContent("body")) ?? "";
+  check(
+    "another family's reset screen is not found",
+    !strangerSees.includes("Orin"),
+    stranger.url(),
+  );
+
+  // She cannot see the list either — the one that had no `where` clause at all
+  // and returned every adventurer in the installation.
+  await stranger.goto(`${BASE}/settings/adventurers`);
+  const strangerList = (await stranger.textContent("main")) ?? "";
+  check(
+    "nor find them on her own family's list",
+    !strangerList.includes("Orin") && !strangerList.includes("Wren"),
+    strangerList.replace(/\n+/g, " / ").slice(0, 120),
+  );
+
+  // The action's own refusal is *not* asserted here. Hand-posting to this URL
+  // gets a 404 from Next before any of our code runs — server actions want a
+  // header a raw POST has not got — so a check on it would pass whether the
+  // guard existed or not, which is the worst kind of green. The rule itself is
+  // `mayTouch`, exhaustively covered in `tests/households.test.ts`, and it is
+  // the same function both this screen and the action call.
 
   console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} failed.`);
 } finally {

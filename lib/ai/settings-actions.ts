@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/actions";
 import { SETTINGS_ID } from "@/lib/ai/settings";
 import { MissingSecretError, encryptSecret, encryptionSecret, hintFor } from "@/lib/settings/secret-box";
@@ -65,7 +65,7 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
 }
 
 export async function saveAiSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const admin = await requirePlatformAdmin();
 
   const parsed = settingsSchema.safeParse({
     kind: formData.get("kind"),
@@ -174,6 +174,6 @@ export async function saveAiSettingsAction(_prev: FormState, formData: FormData)
     update: data,
   });
 
-  revalidatePath("/settings/storyteller");
+  revalidatePath("/admin/storyteller");
   return { error: "" };
 }

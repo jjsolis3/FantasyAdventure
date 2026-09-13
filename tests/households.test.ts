@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { householdNameFor, mayActForHousehold } from "../lib/game/households.ts";
+import { householdNameFor, mayActForHousehold, mayTouch } from "../lib/game/households.ts";
 
 // ---- What a household gets called ------------------------------------------
 
@@ -42,4 +42,45 @@ test("an account with no household at all may not act for one", () => {
   assert.equal(mayActForHousehold(null), false);
   assert.equal(mayActForHousehold(undefined), false);
   assert.equal(mayActForHousehold("SOMETHING_ELSE"), false);
+});
+
+// ---- Whose adventurer it is ------------------------------------------------
+//
+// The rule that was missing. `resetCharacterAction` took an adventurer's id
+// from a form and never compared it to anything the caller owned, so any
+// administrator could send any adventurer in the installation back to level
+// one — every skill, knack and keepsake with it. Harmless while one family
+// played and one person was the administrator, and a way to wipe a stranger's
+// child's evening the moment there are two.
+
+const parent = { householdId: "hh_solis", everywhere: false };
+const operator = { householdId: "hh_solis", everywhere: true };
+
+test("touch: a parent may act on their own family's things", () => {
+  assert.equal(mayTouch(parent, "hh_solis"), true);
+});
+
+test("touch: and not on another family's", () => {
+  assert.equal(mayTouch(parent, "hh_smith"), false);
+});
+
+test("touch: whoever runs the installation may act on anybody's", () => {
+  // Somebody has to be able to help a family who cannot help themselves — and
+  // their own household is one of the ones they would otherwise be shut out of.
+  assert.equal(mayTouch(operator, "hh_smith"), true);
+  assert.equal(mayTouch(operator, "hh_solis"), true);
+});
+
+test("touch: an account belonging to no household may act on nothing", () => {
+  // Not an ordinary state: registering makes a household in the same
+  // transaction as the account. So the answer to "may this nobody touch that"
+  // is no, rather than a crash or an accidental yes from two nulls matching.
+  const stray = { householdId: null, everywhere: false };
+  assert.equal(mayTouch(stray, "hh_solis"), false);
+  assert.equal(mayTouch(stray, null), false);
+});
+
+test("touch: and nothing belonging to no household may be acted on", () => {
+  assert.equal(mayTouch(parent, null), false);
+  assert.equal(mayTouch(parent, undefined), false);
 });

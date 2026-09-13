@@ -122,7 +122,7 @@ async function main() {
       email: `reset-${stamp}@example.test`,
       displayName: "Dad",
       passwordHash: await hashPassword("hunter2hunter2"),
-      role: "ADMIN",
+      role: "PLATFORM_ADMIN",
     },
   });
   const home = await makeHousehold(db, user);

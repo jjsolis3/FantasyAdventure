@@ -58,7 +58,7 @@ async function main() {
         email: `dad-${stamp}@example.test`,
         displayName: "Dad",
         passwordHash: await hashPassword("hunter2hunter2"),
-        role: "ADMIN",
+        role: "PLATFORM_ADMIN",
       },
     }),
     db.user.create({

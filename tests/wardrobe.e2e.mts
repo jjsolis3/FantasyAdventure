@@ -55,7 +55,7 @@ async function main() {
       email: `ward-${stamp}@example.test`,
       displayName: "Parent",
       passwordHash: await hashPassword("hunter2hunter2"),
-      role: "ADMIN",
+      role: "PLATFORM_ADMIN",
     },
   });
   const home = await makeHousehold(db, user);

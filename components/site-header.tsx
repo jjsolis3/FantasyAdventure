@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AccountMenu } from "@/components/account-menu";
+import { mayActForHousehold } from "@/lib/game/households";
 import { NavLinks } from "@/components/nav-links";
 
 /**
@@ -43,7 +44,10 @@ export async function SiteHeader() {
           <AccountMenu
             displayName={user.displayName}
             email={user.email}
-            isAdmin={user.role === "ADMIN"}
+            isAdmin={user.role === "PLATFORM_ADMIN"}
+            runsAHousehold={
+              user.role === "PLATFORM_ADMIN" || mayActForHousehold(user.householdRole)
+            }
           />
         ) : (
           <Link

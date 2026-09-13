@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requireAdminForApi } from "@/lib/auth/session";
+import { requirePlatformAdminForApi } from "@/lib/auth/session";
 import { chat } from "@/lib/ai/provider";
 import { SETTINGS_ID, resolveAiConfig } from "@/lib/ai/settings";
 import { modelCalls } from "@/lib/engine/play";
@@ -25,7 +25,7 @@ export const maxDuration = 300;
  * something a player should be able to do.
  */
 export async function POST(request: Request) {
-  const admin = await requireAdminForApi();
+  const admin = await requirePlatformAdminForApi();
   if (admin instanceof Response) return admin;
 
   const body = (await request.json().catch(() => ({}))) as { deep?: boolean };

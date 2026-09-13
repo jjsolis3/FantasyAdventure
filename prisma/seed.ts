@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { generateInviteCode } from "../lib/auth/invite-code.ts";
+import { bootstrapBannerLine } from "../lib/auth/platform-admin.ts";
 import { storylines } from "./storylines.ts";
 
 const connectionString = process.env.DATABASE_URL;
@@ -39,7 +40,7 @@ async function ensureBootstrapInvite() {
   console.log(`\n${banner}`);
   console.log("  No accounts exist yet. Register the first one at /register");
   console.log(`  using this invite code:   ${invite.code}`);
-  console.log("  That account becomes the administrator.");
+  console.log(bootstrapBannerLine());
   console.log(`${banner}\n`);
 }
 

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import { householdOverview } from "@/lib/game/household-actions";
 import { Card, PageTitle } from "@/components/ui";
-import { MoveAccount, NewHousehold, RenameHousehold } from "./household-forms";
+import { MemberRole, MoveAccount, NewHousehold, RenameHousehold } from "./household-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ const ROLE_LABELS: Record<string, string> = {
  * wants their own household gets moved out again.
  */
 export default async function HouseholdsPage() {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const { households, strays } = await householdOverview();
 
   const choices = households.map((household) => ({ id: household.id, name: household.name }));
@@ -44,8 +44,8 @@ export default async function HouseholdsPage() {
       />
 
       <p className="mb-8">
-        <Link href="/settings" className="text-sm text-hearth-400 underline hover:text-hearth-200">
-          ← Back to settings
+        <Link href="/admin" className="text-sm text-hearth-400 underline hover:text-hearth-200">
+          ← Back to administration
         </Link>
       </p>
 
@@ -110,9 +110,14 @@ export default async function HouseholdsPage() {
                     · <span className="text-hearth-100">{member.user.displayName}</span>{" "}
                     <span className="text-hearth-400">{member.user.email}</span> —{" "}
                     {ROLE_LABELS[member.role] ?? member.role}
-                    {member.user.role === "ADMIN" ? (
+                    {member.user.role === "PLATFORM_ADMIN" ? (
                       <span className="text-moss-400"> · administers this installation</span>
                     ) : null}
+                    <MemberRole
+                      memberId={member.id}
+                      name={member.user.displayName}
+                      role={member.role}
+                    />
                   </li>
                 ))}
               </ul>

@@ -17,8 +17,8 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
-import { createHousehold } from "@/lib/game/households";
+import { requirePlatformAdmin } from "@/lib/auth/session";
+import { createHousehold, mayActForHousehold } from "@/lib/game/households";
 
 export type HouseholdFormState = { error: string; done?: string } | null;
 
@@ -37,7 +37,7 @@ export async function moveAccountAction(
   _prev: HouseholdFormState,
   formData: FormData,
 ): Promise<HouseholdFormState> {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const userId = String(formData.get("userId") ?? "");
   const householdId = String(formData.get("householdId") ?? "");
@@ -58,17 +58,28 @@ export async function moveAccountAction(
     return { error: `${user.displayName} is already in ${household.name}.` };
   }
 
+  // Somebody arriving in a household that has nobody in it takes charge of it.
+  //
+  // Otherwise this screen can build a household nobody can use. A household
+  // started here begins empty, and everyone who moves in would arrive as a
+  // member — so the family made by pulling three accounts together would have
+  // no OWNER at all, and once inviting and putting sheets right are gated on
+  // OWNER or PARENT, nobody in that family could do either. Found by planning
+  // the guards rather than by shipping them.
+  const alreadyThere = await db.householdMember.count({ where: { householdId } });
+  const role = alreadyThere === 0 ? "OWNER" : "MEMBER";
+
   await db.$transaction(async (tx) => {
     if (existing) {
       await tx.householdMember.update({
         where: { id: existing.id },
-        // Somebody joining an existing family arrives as a member of it. An
+        // Otherwise: joining an existing family arrives as a member of it. An
         // owner who moves house is not still in charge of the one they left,
         // and is not automatically in charge of the one they joined.
-        data: { householdId, role: "MEMBER" },
+        data: { householdId, role },
       });
     } else {
-      await tx.householdMember.create({ data: { userId, householdId, role: "MEMBER" } });
+      await tx.householdMember.create({ data: { userId, householdId, role } });
     }
 
     await tx.character.updateMany({ where: { userId }, data: { householdId } });
@@ -85,16 +96,70 @@ export async function moveAccountAction(
     }
   }
 
-  revalidatePath("/settings/households");
+  revalidatePath("/admin/households");
   return { error: "", done: `${user.displayName} is now in ${household.name}.` };
 }
+
+/**
+ * Says who answers for a household and who only plays.
+ *
+ * The last person who can act for a household may not be demoted. A family with
+ * nobody able to invite its own people or put its own sheets right is a family
+ * that has to come back to whoever runs the server for everything — which is
+ * the arrangement all of this exists to end.
+ */
+export async function setHouseholdRoleAction(
+  _prev: HouseholdFormState,
+  formData: FormData,
+): Promise<HouseholdFormState> {
+  await requirePlatformAdmin();
+
+  const memberId = String(formData.get("memberId") ?? "");
+  const role = String(formData.get("role") ?? "");
+  if (!memberId) return { error: "Pick somebody." };
+  if (role !== "OWNER" && role !== "PARENT" && role !== "MEMBER") {
+    return { error: "That is not a role." };
+  }
+
+  const member = await db.householdMember.findUnique({
+    where: { id: memberId },
+    select: { id: true, role: true, householdId: true, user: { select: { displayName: true } } },
+  });
+  if (!member) return { error: "That person is no longer in this household." };
+  if (member.role === role) return { error: "", done: "Nothing to change." };
+
+  if (role === "MEMBER" && mayActForHousehold(member.role)) {
+    const others = await db.householdMember.count({
+      where: {
+        householdId: member.householdId,
+        id: { not: member.id },
+        role: { in: ["OWNER", "PARENT"] },
+      },
+    });
+    if (others === 0) {
+      return {
+        error: `${member.user.displayName} is the only one who can answer for this household. Give somebody else that job first.`,
+      };
+    }
+  }
+
+  await db.householdMember.update({ where: { id: memberId }, data: { role } });
+  revalidatePath("/admin/households");
+  return { error: "", done: `${member.user.displayName} is now ${ROLE_WORDS[role]}.` };
+}
+
+const ROLE_WORDS: Record<string, string> = {
+  OWNER: "answering for this household",
+  PARENT: "able to invite and put sheets right",
+  MEMBER: "playing",
+};
 
 /** Renames a household, so "Dad's household" can become "The Solis family". */
 export async function renameHouseholdAction(
   _prev: HouseholdFormState,
   formData: FormData,
 ): Promise<HouseholdFormState> {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const householdId = String(formData.get("householdId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -103,7 +168,7 @@ export async function renameHouseholdAction(
   if (name.length > 80) return { error: "That name is too long." };
 
   await db.household.update({ where: { id: householdId }, data: { name } });
-  revalidatePath("/settings/households");
+  revalidatePath("/admin/households");
   return { error: "", done: `Renamed to ${name}.` };
 }
 
@@ -120,7 +185,7 @@ export async function createHouseholdAction(
   _prev: HouseholdFormState,
   formData: FormData,
 ): Promise<HouseholdFormState> {
-  const admin = await requireAdmin();
+  const admin = await requirePlatformAdmin();
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "A household needs a name." };
@@ -133,7 +198,7 @@ export async function createHouseholdAction(
   const household = await createHousehold(db, { ownerId: admin.id, name });
   await db.householdMember.deleteMany({ where: { householdId: household.id, userId: admin.id } });
 
-  revalidatePath("/settings/households");
+  revalidatePath("/admin/households");
   return { error: "", done: `${name} is ready. Move somebody into it.` };
 }
 
@@ -149,6 +214,7 @@ export async function householdOverview() {
         members: {
           orderBy: { createdAt: "asc" },
           select: {
+            id: true,
             role: true,
             user: { select: { id: true, displayName: true, email: true, role: true } },
           },

@@ -5,6 +5,7 @@ import {
   createHouseholdAction,
   moveAccountAction,
   renameHouseholdAction,
+  setHouseholdRoleAction,
   type HouseholdFormState,
 } from "@/lib/game/household-actions";
 import { SubmitButton } from "@/components/submit-button";
@@ -135,6 +136,49 @@ export function RenameHousehold({ householdId, name }: { householdId: string; na
       />
       <SubmitButton variant="secondary" pendingLabel="Saving…">
         Rename
+      </SubmitButton>
+      <Said state={state} />
+    </form>
+  );
+}
+
+/**
+ * Who answers for a household, and who only plays.
+ *
+ * One select per person rather than a screen of its own: this is read far more
+ * often than it is changed, and the answer belongs next to the name it is about.
+ * The last person who can act for a household cannot be demoted — the action
+ * refuses, and says why.
+ */
+export function MemberRole({
+  memberId,
+  name,
+  role,
+}: {
+  memberId: string;
+  name: string;
+  role: string;
+}) {
+  const [state, action] = useActionState<HouseholdFormState, FormData>(
+    setHouseholdRoleAction,
+    null,
+  );
+
+  return (
+    <form action={action} className="mt-1 flex flex-wrap items-center gap-2">
+      <input type="hidden" name="memberId" value={memberId} />
+      <select
+        name="role"
+        defaultValue={role}
+        aria-label={`What ${name} may do`}
+        className="rounded-md border border-hearth-700 bg-hearth-900/60 px-2 py-1 text-xs text-hearth-100"
+      >
+        <option value="OWNER">answers for it</option>
+        <option value="PARENT">may invite and put right</option>
+        <option value="MEMBER">plays</option>
+      </select>
+      <SubmitButton variant="secondary" pendingLabel="Saving…">
+        Save
       </SubmitButton>
       <Said state={state} />
     </form>

@@ -903,7 +903,7 @@ on every Coolify poll would hammer your GPU, and the app is deliberately still
 
 ### Settings, and switching to a cloud model
 
-`/settings/storyteller` (admin only) configures the storyteller from the
+`/admin/storyteller` (platform administrator only) configures the storyteller from the
 browser, so the model can be changed **without a redeploy**. Presets are
 included for Ollama, Anthropic, OpenAI, OpenRouter and Groq.
 
@@ -2115,6 +2115,65 @@ drop the chosen one straight into the box. Now:
 
 And the nudges are text, not buttons. Nothing fills the box for her any more.
 
+### Two kinds of administration
+
+`requireAdmin` meant two different things from the day it was written: *runs
+this installation* — the storyteller's settings, the shared adventure library,
+what everything has cost — and *may put my family's sheets right*. One family,
+one administrator, and the two never needed telling apart.
+
+They do now. A parent handed the second job must not thereby be handed the
+first: nobody should be looking at a model provider's API key because they
+wanted to fix their daughter's character sheet.
+
+**So the screens split.** `/settings` is the family's — its adventurers and its
+invitations. `/admin` is the installation's — the storyteller, the adventure
+library, what it has all cost, and which accounts are in which family. The
+account menu shows each person only the doors they can open.
+
+**And the roles split with them.** `Role.ADMIN` became `PLATFORM_ADMIN`; what
+somebody may do inside a family lives in `HouseholdMember.role` — `OWNER`,
+`PARENT` or `MEMBER`. A rename is metadata only, so the existing administrator
+stayed one with no UPDATE and no window where anybody was locked out.
+
+**The guard is never enough on its own.** `requireHouseholdParent` says *this
+person may act for a household*; it cannot say *this is their household*. Every
+caller scopes its query by the household id it hands back, because swapping the
+guard without scoping the query would have handed each family's data to every
+other family's parent — a worse bug than the one being fixed.
+
+Four unscoped queries closed with it:
+
+- **`resetCharacterAction` had no ownership check at all.** It took an
+  adventurer's id from a form and never compared it to anything the caller
+  owned, so any administrator could send any adventurer in the installation back
+  to level one. The rule is now `mayTouch` in `lib/game/households.ts` — one
+  function, used by both the screen and the action, and covered exhaustively by
+  unit tests rather than by a browser check that cannot fail.
+- The adventurers list was a bare `findMany` with no `where`. Its "grouping by
+  household" was also fake — it keyed on the account's display name, so two
+  accounts in one family came out as two households.
+- The invitations list returned every code in the installation, bootstrap codes
+  included.
+- `revokeInviteAction` deleted by id with no ownership filter.
+
+### Who administers an installation
+
+The rule used to be "whoever registers first", counted in three separate places.
+Fine for a copy on your own server; bad for anything public, since an empty
+database is one restored backup away and the first stranger to reach `/register`
+would inherit the storyteller's credentials and every household's usage.
+
+`PLATFORM_ADMIN_EMAIL` names the address instead. Left unset, the old rule still
+applies — a change to who may administer a live server should not be able to
+lock somebody out of their own installation because an environment variable was
+missed on a deploy.
+
+The bootstrap invite is still printed to the container logs on an empty
+database either way: registration needs a code, and there is nobody yet who
+could make one. What changes is what the code *confers*. Named, it only creates
+an account, and a stranger who came by it gets an ordinary one.
+
 ### Households
 
 "Household" was a word in comments for most of this app's life, and it meant
@@ -2432,7 +2491,8 @@ lib/
     secret-box.ts   AES-256-GCM for keys stored in the database
   auth/
     password.ts     scrypt hashing, parameters embedded per hash
-    session.ts      Server-side sessions, requireUser / requireAdmin
+    session.ts      Server-side sessions; requireUser, requirePlatformAdmin,
+                    requireHouseholdParent
     invites.ts      Code validation and redemption
     invite-code.ts  Pure generator — import-free so the seed can use it
     actions.ts      Server actions for every auth form

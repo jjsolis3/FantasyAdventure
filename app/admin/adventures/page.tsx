@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import { duplicateStorylineAction, setStorylineActiveAction } from "@/lib/game/storyline-actions";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
@@ -12,7 +12,7 @@ export default async function AdventuresPage({
 }: {
   searchParams: Promise<{ saved?: string }>;
 }) {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const { saved } = await searchParams;
 
   const storylines = await db.storyline.findMany({
@@ -32,14 +32,14 @@ export default async function AdventuresPage({
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link
-          href="/settings"
+          href="/admin"
           className="text-sm text-hearth-300 underline hover:text-hearth-200"
         >
-          ← Settings
+          ← Administration
         </Link>
         <div className="flex-1" />
         <Link
-          href="/settings/adventures/new"
+          href="/admin/adventures/new"
           className="rounded-lg bg-hearth-600 px-4 py-2 font-medium text-hearth-50 hover:bg-hearth-500"
         >
           Write a new one
@@ -57,7 +57,7 @@ export default async function AdventuresPage({
           <Card key={storyline.id}>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <Link
-                href={`/settings/adventures/${storyline.id}`}
+                href={`/admin/adventures/${storyline.id}`}
                 className="font-display text-xl text-hearth-100 hover:text-hearth-50"
               >
                 {storyline.title}
@@ -90,7 +90,7 @@ export default async function AdventuresPage({
 
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href={`/settings/adventures/${storyline.id}`}
+                href={`/admin/adventures/${storyline.id}`}
                 className="rounded-lg border border-hearth-700 px-4 py-2 text-sm text-hearth-200 hover:bg-hearth-800/50"
               >
                 {storyline.isCustom ? "Edit" : "Edit (makes it yours)"}

@@ -96,3 +96,30 @@ export async function singleHouseholdFor(
 export function mayActForHousehold(role: string | null | undefined): boolean {
   return role === "OWNER" || role === "PARENT";
 }
+
+/**
+ * Whether this person may act on something belonging to that household.
+ *
+ * Pulled out as a function rather than written inline at each call site,
+ * because it is the rule that was *missing* — `resetCharacterAction` took an
+ * adventurer's id from a form and never compared it to anything the caller
+ * owned, so any administrator could send any adventurer in the installation
+ * back to level one. A rule that exists in one place can be tested exhaustively
+ * and reused; one written out three times gets it right twice.
+ *
+ * A platform administrator passes everywhere. Somebody has to be able to help a
+ * family who cannot help themselves, and their own family is one of the ones
+ * they would otherwise be locked out of.
+ *
+ * An actor with no household of their own passes nowhere. That is not an
+ * ordinary state — registration makes one in the same transaction as the
+ * account — so the honest answer to "may this nobody touch that" is no.
+ */
+export function mayTouch(
+  actor: { householdId: string | null; everywhere: boolean },
+  householdId: string | null | undefined,
+): boolean {
+  if (actor.everywhere) return true;
+  if (!actor.householdId || !householdId) return false;
+  return actor.householdId === householdId;
+}

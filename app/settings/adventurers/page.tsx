@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireHouseholdParent } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Everyone in the house, and what they have earned.
+ * Everyone in this family, and what they have earned.
  *
- * The only page in the application that looks across households. That is the
- * whole reason it is administrator-only: everywhere else, an adventurer belongs
- * to the account that built her and nobody else can see her sheet.
+ * It used to look across every household in the installation, which was the
+ * reason it was administrator-only. Now it looks at one — the caller's — and is
+ * open to whoever answers for that family. A platform administrator still sees
+ * all of them, because somebody has to be able to help a family who cannot help
+ * themselves.
  *
  * A list rather than a set of controls. Starting somebody again is a page of
  * its own, behind a name typed out in full — see `[id]/page.tsx`.
@@ -20,11 +22,19 @@ export default async function AdventurersPage({
 }: {
   searchParams: Promise<{ done?: string; who?: string }>;
 }) {
-  await requireAdmin();
+  const actor = await requireHouseholdParent();
   const { done, who } = await searchParams;
 
   const characters = await db.character.findMany({
-    orderBy: [{ user: { displayName: "asc" } }, { name: "asc" }],
+    // Scoped to the caller's own family. This query had no `where` at all —
+    // which was defensible while only an administrator could reach the page and
+    // there was only one family, and is a leak between customers the moment a
+    // second family's parent can open it.
+    //
+    // A platform administrator still sees everything: somebody has to be able
+    // to help a family who cannot help themselves.
+    where: actor.everywhere ? {} : { householdId: actor.householdId ?? "" },
+    orderBy: [{ household: { name: "asc" } }, { user: { displayName: "asc" } }, { name: "asc" }],
     select: {
       id: true,
       name: true,
@@ -33,6 +43,7 @@ export default async function AdventurersPage({
       level: true,
       xp: true,
       user: { select: { displayName: true } },
+      household: { select: { id: true, name: true } },
       _count: { select: { skills: true, knacks: true, keepsakes: true } },
       partyMemberships: {
         where: { campaign: { status: "ACTIVE" } },
@@ -41,20 +52,22 @@ export default async function AdventurersPage({
     },
   });
 
-  // Grouped by household, because "whose is this?" is the first question asked
-  // of a list that spans every account in the house.
+  // Grouped by household — genuinely, now. This keyed on the account's display
+  // name and called the result "households", which was the closest thing
+  // available before there was a table to ask. Two accounts in one family came
+  // out as two households, which is exactly the confusion all of this fixes.
   const households = new Map<string, typeof characters>();
   for (const character of characters) {
-    const key = character.user.displayName;
+    const key = character.household.name;
     households.set(key, [...(households.get(key) ?? []), character]);
   }
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
-        eyebrow="Administrator"
+        eyebrow={actor.everywhere ? "Every household" : "Your household"}
         title="Adventurers"
-        lead="Everyone in the house, and what they have earned so far."
+        lead="Everyone in the family, and what they have earned so far."
       />
 
       {/* Said out loud, because the alternative is what this used to do: finish
@@ -84,7 +97,7 @@ export default async function AdventurersPage({
       {characters.length === 0 ? (
         <Card>
           <p className="text-hearth-300">
-            Nobody has built an adventurer yet. They appear here as soon as somebody does.
+            Nobody in this family has built an adventurer yet. They appear here as soon as somebody does.
           </p>
         </Card>
       ) : (

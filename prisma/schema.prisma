@@ -64,8 +64,12 @@ enum ReadingLevel {
 }
 
 enum Role {
-  /// Can create invite codes and manage other accounts.
-  ADMIN
+  /// Runs this installation: the storyteller's settings, the shared adventure
+  /// library, what everything has cost. Not a parent, and not about anybody's
+  /// family — authority inside a household lives in `HouseholdMember.role`.
+  PLATFORM_ADMIN
+  /// Everybody else. What they may do to their own family is a different
+  /// question, asked of a different column.
   PLAYER
 }
 

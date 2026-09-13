@@ -322,7 +322,7 @@ export function StorytellerForm({
               Optional, and not built in on purpose: prices change monthly and differ per provider,
               so a number in the code would be wrong by the time you read it. Fill these in from
               your provider&rsquo;s pricing page and{" "}
-              <a href="/settings/usage" className="underline hover:text-hearth-200">
+              <a href="/admin/usage" className="underline hover:text-hearth-200">
                 what it has used
               </a>{" "}
               reports money instead of tokens. Leave them blank and it counts rather than costs.

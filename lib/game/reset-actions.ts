@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireHouseholdParent } from "@/lib/auth/session";
 import { resetCharacter, type ResetMode, type ResetPlan } from "@/lib/game/reset";
 import { ALL_SKILLS } from "@/lib/game/character-options";
 import { SKILLS_PER_CHARACTER, STATS, type StatBlock } from "@/lib/game/rules";
 import { db } from "@/lib/db";
+import { mayTouch } from "@/lib/game/households";
 
 export type ResetFormState = { error?: string };
 
@@ -45,14 +46,20 @@ function numberFrom(formData: FormData, name: "level" | "xp"): { level?: number 
 /**
  * Starts an adventurer again.
  *
- * Three gates, and each one is guarding against a different mistake.
+ * Four gates, and each one is guarding against a different mistake.
  *
- *   1. `requireAdmin`, because the whole point of putting this here is that a
- *      player asks somebody rather than doing it herself.
- *   2. The name, typed out in full. Not a "are you sure?" — those get clicked
+ *   1. `requireHouseholdParent`, because the whole point of putting this here
+ *      is that a player asks somebody rather than doing it herself.
+ *   2. **Whose adventurer it is.** This gate was missing entirely: the action
+ *      took an id from the form and never compared it to anything the caller
+ *      owned, so any administrator could send any adventurer in the
+ *      installation back to level one. Harmless while one family played and one
+ *      person was the administrator; a way to wipe a stranger's child's evening
+ *      the moment there are two families.
+ *   3. The name, typed out in full. Not a "are you sure?" — those get clicked
  *      through — but the one confirmation that cannot be given by accident, and
  *      that makes resetting the wrong adventurer of two nearly impossible.
- *   3. The whole plan, checked by the same rules the builder and the ladder
+ *   4. The whole plan, checked by the same rules the builder and the ladder
  *      use. Stats can only ever be set once, at build time, so an illegal
  *      spread here would strand her somewhere the game has no way to correct.
  *
@@ -65,16 +72,22 @@ export async function resetCharacterAction(
   _prev: ResetFormState,
   formData: FormData,
 ): Promise<ResetFormState> {
-  await requireAdmin();
+  const actor = await requireHouseholdParent();
 
   const characterId = String(formData.get("characterId") ?? "");
   if (!characterId) return { error: "Missing adventurer." };
 
   const character = await db.character.findUnique({
     where: { id: characterId },
-    select: { name: true },
+    select: { name: true, householdId: true },
   });
   if (!character) return { error: "That adventurer no longer exists." };
+
+  // Checked before the typed name, so nothing about somebody else's adventurer
+  // — not even whether the name you guessed was right — comes back from here.
+  if (!mayTouch(actor, character.householdId)) {
+    return { error: "That adventurer no longer exists." };
+  }
 
   const typed = String(formData.get("confirmName") ?? "").trim();
   if (typed.toLowerCase() !== character.name.trim().toLowerCase()) {

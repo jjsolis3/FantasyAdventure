@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireHouseholdParent } from "@/lib/auth/session";
 import { previewReset, suggestedBuild } from "@/lib/game/reset";
+import { mayTouch } from "@/lib/game/households";
 import { ResetAdventurer } from "@/components/settings/reset-adventurer";
 import { capitalise, pronounsOf, toBe, toBePast, toHave } from "@/lib/game/pronouns";
 import { STATS, STAT_BUDGET, allowedTotal } from "@/lib/game/rules";
@@ -25,11 +26,16 @@ export default async function ResetAdventurerPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin();
+  const actor = await requireHouseholdParent();
   const { id } = await params;
 
   const preview = await previewReset(id);
   if (!preview) notFound();
+
+  // Another family's adventurer is not found rather than forbidden. A 403 would
+  // confirm that the id belongs to somebody — which is the one thing a guessed
+  // id should never be able to establish.
+  if (!mayTouch(actor, preview.householdId)) notFound();
 
   // Every sentence on this page is built from what is written on her sheet.
   // It said "Her numbers" over an adventurer called Orin whose player had
