@@ -15,6 +15,7 @@ import {
   planInvite,
 } from "@/lib/auth/invites";
 import { normaliseHandle, usernameProblem } from "@/lib/auth/handle";
+import { signInColumns, signInProblem } from "@/lib/auth/change-sign-in";
 import { createHousehold, householdNameFor } from "@/lib/game/households";
 import { shouldAdminister } from "@/lib/auth/platform-admin";
 
@@ -428,4 +429,54 @@ export async function revokeInviteAction(formData: FormData): Promise<void> {
     where: { id, redeemedById: null, ...(actor.everywhere ? {} : { householdId: actor.householdId }) },
   });
   revalidatePath("/settings/invites");
+}
+
+/**
+ * Changes the address or username you sign in with yourself.
+ *
+ * **Asks for your password**, unlike a parent changing a child's. A session
+ * somebody else has got hold of could otherwise rewrite the address, then use
+ * the forgotten-password flow to take the account permanently — the password is
+ * what makes that a dead end rather than a hand-over.
+ *
+ * Switching kind clears the other column, so an account never holds two
+ * identities. Whether this account may hold a username at all is
+ * `signInProblem`'s question, and it is the same question registration asks.
+ */
+export async function changeSignInAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const sessionUser = await requireUser();
+
+  const kind = String(formData.get("handleKind") ?? "email") === "username" ? "username" : "email";
+  const handle = normaliseHandle(String(formData.get("handle") ?? ""));
+  // Not `currentPassword`: the password form on the same page owns that name.
+  const currentPassword = String(formData.get("signInPassword") ?? "");
+
+  const me = await db.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { id: true, displayName: true, passwordHash: true, role: true },
+  });
+  if (!me) return { error: "Account not found." };
+
+  if (!(await verifyPassword(currentPassword, me.passwordHash))) {
+    return {
+      error: "Your current password is not correct.",
+      fieldErrors: { signInPassword: "Your current password is not correct." },
+    };
+  }
+
+  const problem = await signInProblem(handle, kind, {
+    userId: me.id,
+    displayName: me.displayName,
+    householdRole: sessionUser.householdRole,
+    platformAdmin: me.role === "PLATFORM_ADMIN",
+  });
+  if (problem) return { error: problem, fieldErrors: { handle: problem } };
+
+  await db.user.update({ where: { id: me.id }, data: signInColumns(handle, kind) });
+
+  revalidatePath("/profile");
+  return { error: "" };
 }

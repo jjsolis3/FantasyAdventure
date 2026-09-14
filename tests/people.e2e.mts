@@ -255,6 +255,57 @@ try {
     );
   }
 
+  console.log("\n-- The family names itself ---------------------------------------");
+
+  // "Jose's household" is what the migration guessed, because three accounts
+  // that are one family look like three families to a SELECT. The family is who
+  // knows the answer, so it is theirs to give.
+  await ownerPage.goto(`${BASE}/settings/people`);
+  await ownerPage.waitForLoadState("networkidle");
+  await ownerPage.fill('input[name="name"]', "The Solis family");
+  await ownerPage.click('button:has-text("Save the name")');
+  await ownerPage.waitForSelector("text=/called The Solis family now/", { timeout: 10_000 });
+  check(
+    "the owner renamed their own family, without borrowing the operator",
+    (await db.household.findUniqueOrThrow({ where: { id: home } })).name === "The Solis family",
+  );
+
+  console.log("\n-- And says what each of them may do -----------------------------");
+
+  // Tamsyn signs in with a username, so promoting her is refused with the fix
+  // named rather than half-applied: a grown-up of a household is reached by
+  // email, and that is what the reset flow depends on.
+  await ownerPage.click('li:has-text("Tamsyn") button:has-text("Change what they may do")');
+  await ownerPage.selectOption('select[name="role"]', "PARENT");
+  await ownerPage.click('button:has-text("Save their job")');
+  await ownerPage.waitForSelector("text=/Give them an email address first/", { timeout: 10_000 });
+  check(
+    "promoting a child who signs in by name is refused",
+    (await db.householdMember.findFirstOrThrow({ where: { userId: tamsyn.id } })).role === "MEMBER",
+  );
+
+  // Give her an address, from the same screen, and the promotion goes through.
+  await ownerPage.click('li:has-text("Tamsyn") button:has-text("Change how they sign in")');
+  await ownerPage.selectOption('select[name="handleKind"]', "email");
+  await ownerPage.fill('input[name="handle"]', "tamsyn@example.com");
+  await ownerPage.click('button:has-text("Save how they sign in")');
+  await ownerPage.waitForSelector("text=/signs in as tamsyn@example.com now/", { timeout: 10_000 });
+
+  const moved = await db.user.findUniqueOrThrow({ where: { id: tamsyn.id } });
+  check("her address is set", moved.email === "tamsyn@example.com", moved.email ?? "(none)");
+  check("and her username is cleared, so she has one identity", moved.username === null);
+  const movedIn = await signIn("tamsyn@example.com", "email", NEW_PASSWORD);
+  check("she signs in with the new address", movedIn.landed, movedIn.said);
+
+  await ownerPage.click('li:has-text("Tamsyn") button:has-text("Change what they may do")');
+  await ownerPage.selectOption('select[name="role"]', "PARENT");
+  await ownerPage.click('button:has-text("Save their job")');
+  await ownerPage.waitForSelector("text=/helping run the family/", { timeout: 10_000 });
+  check(
+    "now the promotion goes through",
+    (await db.householdMember.findFirstOrThrow({ where: { userId: tamsyn.id } })).role === "PARENT",
+  );
+
   console.log("\n-- A username is a child's account, and only a child's -----------");
 
   // The invitation says which this is, so the rule reads off the invitation
@@ -285,15 +336,21 @@ try {
 
   console.log("\n-- And somebody who only plays cannot reach it -------------------");
 
+  // Merrow, not Tamsyn. Tamsyn was promoted a moment ago and her username was
+  // cleared when she got an address, so signing in as her would simply fail —
+  // and a check that redirects to /login because nobody is signed in passes
+  // without testing the thing it names.
   const child = await (await browser.newContext()).newPage();
   await child.goto(`${BASE}/login`);
   await child.click('button:has-text("I sign in with a username")');
-  await child.fill('input[name="handle"]', "tamsyn");
-  await child.fill('input[name="password"]', NEW_PASSWORD);
+  await child.fill('input[name="handle"]', "merrow");
+  await child.fill('input[name="password"]', PASSWORD);
   await submitAndSettle(child);
+  check("she is signed in to start with", child.url() === `${BASE}/`, child.url());
 
   await child.goto(`${BASE}/settings/people`);
-  check("the screen is not hers", !child.url().endsWith("/settings/people"), child.url());
+  check("but the screen is not hers", !child.url().endsWith("/settings/people"), child.url());
+  check("and she is bounced home rather than to a sign-in", child.url() === `${BASE}/`, child.url());
 
   console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} failed.`);
 } finally {

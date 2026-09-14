@@ -2373,6 +2373,60 @@ chose, and the things her character did. If Hearthlight ever takes money it is a
 service for under-13s, and the least data that makes the thing work is the only
 defensible amount.
 
+### A household runs itself
+
+Three things a family could not do without borrowing the operator. That only
+looked wrong once the two roles ended up on different accounts — a family
+account that is a household owner, and a separate one that runs the
+installation — at which point promoting your own spouse meant signing out and
+in as somebody else.
+
+A household is the unit a family is administered in, so its owner administers
+it, at **Settings → Your family**:
+
+- **What each person may do.** Promote somebody who plays into helping run the
+  family, or the other way round.
+- **What the family is called.** "Dad's household" is what the migration
+  guessed, because three accounts that are one family look like three families
+  to a `SELECT`. The family is who knows the answer.
+- **How each person signs in.** A child who wants a different username, or who
+  has finally got an address of her own.
+
+**Authority runs downwards and never sideways or up.** A parent may not hand out
+their own job — that is the whole escalation guard, because if they could,
+"promote the eldest so she can help" would become a way around every rule that
+tells the two apart. Nobody changes their own role either: an owner who demotes
+themselves leaves a family unable to invite, reset a password or put a sheet
+right, and the person who could undo it is the one who just gave the power away.
+Handing a household to a *different* owner stays with the operator, where an
+accident is recoverable.
+
+**Promoting somebody who signs in with a username is refused**, with the fix
+named rather than half-applied. A grown-up of a household is reached by email,
+and that is exactly what the reset flow depends on — so the screen sets an
+address first, and then the promotion goes through.
+
+**`mayEditSignIn` is deliberately `mayResetPassword`**, not a rule that resembles
+it. Setting somebody's password and changing the address that password protects
+are the same amount of power over an account, and two rules that meant to agree
+would eventually stop agreeing.
+
+### Changing how you sign in
+
+Nobody could, until now: the profile screen did display name, reading level,
+tone and password, so changing email provider left you stuck, and a child who
+got an address at twelve could not move off her username.
+
+**It asks for your password**, and that is the point. A session somebody else
+had got hold of could otherwise rewrite the address and then use the
+forgotten-password flow to keep the account for good. A parent changing a
+*child's* is not asked for one — they have already been checked against the same
+rule that lets them set the password outright.
+
+Changing the kind clears the other column, so an account never holds two
+identities. Whether it may hold a username at all is the same question
+registration asks, so a grown-up is not even offered the choice.
+
 ### Forgetting a password
 
 A nine-year-old will forget her password. Until recently that was the end of the
@@ -2823,7 +2877,7 @@ tests/
   invites.test.ts   Unit tests — who is offered along, and in what order
   households.test.ts     Unit tests — naming one, who may act for it, whose it is
   invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
-  member-password.test.ts  Unit tests — who may help somebody back into their account
+  member-authority.test.ts Unit tests — what a family's grown-ups may do to the people in it
   password-reset.test.ts   Unit tests — the token, the window, and what a spent link says
   handle.test.ts         Unit tests — what a child may sign in with, and what shows it
   visibility.test.ts     Unit tests — one pair one row, and who can see whom

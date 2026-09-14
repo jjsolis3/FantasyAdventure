@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { householdPeople } from "@/lib/game/people-actions";
 import { signInKind, signInName } from "@/lib/auth/handle";
 import { Card, PageTitle } from "@/components/ui";
-import { PeopleList, type Person } from "./reset-form";
+import { PeopleList, RenameHousehold, type Person } from "./reset-form";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +31,13 @@ export default async function PeoplePage() {
     displayName: person.displayName,
     signIn: signInName(person),
     isUsername: signInKind(person) === "username",
+    householdRole: person.householdRole,
     roleLabel: person.platformAdmin
       ? "runs Hearthlight"
       : (ROLE_LABELS[person.householdRole] ?? person.householdRole),
     mayReset: person.mayReset,
+    maySetRole: person.maySetRole,
+    mayUseUsername: person.mayUseUsername,
     isYou: person.id === overview.actorId,
   }));
 
@@ -51,6 +54,11 @@ export default async function PeoplePage() {
           ← Back to settings
         </Link>
       </p>
+
+      <Card className="mb-6">
+        <h2 className="font-display mb-4 text-xl text-hearth-100">What this family is called</h2>
+        <RenameHousehold name={overview.household.name} />
+      </Card>
 
       <Card>
         <PeopleList people={people} />

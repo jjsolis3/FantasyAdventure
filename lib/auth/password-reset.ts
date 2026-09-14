@@ -6,7 +6,7 @@
  *   - A **child** signs in with a username and holds no address at all — that
  *     is the point of her account. There is nowhere to send a link, so the
  *     grown-up next to her sets a new password directly. See
- *     `lib/auth/member-password.ts`.
+ *     `lib/auth/member-authority.ts`.
  *   - A **grown-up** holds an address, which is what makes the account
  *     ordinary. They get a link, and need nobody's help.
  *
