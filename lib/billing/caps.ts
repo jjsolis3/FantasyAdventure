@@ -108,10 +108,14 @@ export function linkVerdict(entitlements: Entitlements, inUse: number): Verdict 
  * is why it asks `mayPlay` rather than `mayStart`. A family whose card failed
  * on Thursday should still be able to finish Saturday's chapter.
  *
- * The warning at nine tenths is not decoration. Running out of turns in the
- * middle of a chapter is the worst possible moment to find out there was a
- * limit, and a family that knows it is close can choose to stop somewhere
- * sensible instead.
+ * **There is no warning before this bites, and there should be.** Running out
+ * in the middle of a chapter is the worst possible moment to discover there was
+ * a limit — a family that knew it was close could have stopped somewhere
+ * sensible. `/settings` shows the month's count, which is not the same thing:
+ * nobody opens settings mid-game. The place it belongs is the table itself, a
+ * line above the turn button once the last tenth is gone, and it is not built
+ * yet. Said here rather than left as an absence, because an unwritten warning
+ * looks exactly like a warning nobody needed.
  */
 export function turnVerdict(entitlements: Entitlements, usedThisPeriod: number): Verdict {
   if (!entitlements.mayPlay) {
