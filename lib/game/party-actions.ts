@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { generateJoinCode, normaliseInviteCode } from "@/lib/auth/invite-code";
+import { areLinked, visibleHouseholdIds } from "@/lib/game/visibility";
 import type { FormState } from "@/lib/auth/actions";
 
 const joinSchema = z.object({
@@ -45,6 +46,24 @@ export async function joinCampaignAction(_prev: FormState, formData: FormData): 
   }
   if (campaign.status === "COMPLETE") {
     return { error: `${campaign.title} has already finished.` };
+  }
+
+  // Possession of the code used to be the *entire* authorisation, and joining
+  // grants read access to every party member's sheet. That was fine between
+  // friends round one table; it is not fine once the installation holds
+  // families who have never met, because a code pasted anywhere becomes a way
+  // into a stranger's children.
+  //
+  // So the code still carries the invitation — it is what makes joining one
+  // step rather than a negotiation — but it only works between families who
+  // have already agreed to play together. The refusal names the adventure
+  // rather than the household, because somebody holding a real code is not
+  // being told a secret by learning that the adventure exists.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
+  if (!areLinked(householdIds, campaign.householdId)) {
+    return {
+      error: `${campaign.title} belongs to a family yours has not agreed to adventure with yet. Swap family codes first, in Settings → Families.`,
+    };
   }
 
   const character = await db.character.findFirst({

@@ -8,17 +8,26 @@
  * your own adventurers, so the minimum was unreachable no matter how many
  * people were playing.
  *
- * The rule for who is offered is deliberately generous. Registration is
- * invite-only, so everyone with an account was let in by somebody here; there
- * is no stranger to protect anyone from. Family ties come first because that is
- * who you are most likely to be playing with, but a brand-new adventurer with
- * no ties yet is still listed — the first character a child makes has no
- * relationships at all, and being invisible would be exactly the problem this
- * exists to fix.
+ * **Who is offered used to be everybody.** The rule was
+ * `{ userId: { not: userId } }` — every character in the database, with the
+ * display name of the adult who plays them. The reasoning was written down and
+ * was sound at the time: registration is invite-only, so everyone here was let
+ * in by somebody here, and there is no stranger to protect anyone from.
+ *
+ * That stopped being true the moment a second family could be invited. It is
+ * now `visibleCharacterWhere`: your own household, the households yours has
+ * agreed to play with, and anybody you are already travelling with.
+ *
+ * What has *not* changed is the generosity inside that boundary. Family ties
+ * come first because that is who you are most likely to be playing with, but a
+ * brand-new adventurer with no ties yet is still listed — the first character a
+ * child makes has no relationships at all, and being invisible would be exactly
+ * the problem this exists to fix.
  */
 
 import { db } from "@/lib/db";
 import { kindFromPerspective, RELATIONSHIP_LABELS, type RelationshipKind } from "@/lib/game/rules";
+import { visibleCharacterWhere } from "@/lib/game/visibility";
 
 export type InviteCandidate = {
   id: string;
@@ -95,9 +104,17 @@ export function rankCandidates(
     });
 }
 
-/** Everybody else's adventurers, ordered by how likely you are to want them. */
+/**
+ * Everybody you may ask, ordered by how likely you are to want them.
+ *
+ * `householdIds` is your own household plus the ones it is linked to — see
+ * `visibleHouseholdIds`. It is passed in rather than looked up here so the
+ * caller pays for the query once, and so the boundary is visible at the call
+ * site rather than buried three modules down.
+ */
 export async function invitableCharacters(
   userId: string,
+  householdIds: string[],
   options: { exclude?: string[] } = {},
 ): Promise<InviteCandidate[]> {
   const excluded = new Set(options.exclude ?? []);
@@ -105,7 +122,11 @@ export async function invitableCharacters(
   const [mine, others] = await Promise.all([
     db.character.findMany({ where: { userId }, select: { id: true, name: true } }),
     db.character.findMany({
-      where: { userId: { not: userId }, id: { notIn: [...excluded] } },
+      where: {
+        userId: { not: userId },
+        id: { notIn: [...excluded] },
+        ...visibleCharacterWhere(userId, householdIds),
+      },
       select: {
         id: true,
         name: true,

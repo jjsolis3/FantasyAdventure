@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { chronicleFor, type Chronicle } from "@/lib/game/chronicle";
-import { reachableCharacterWhere } from "@/lib/game/ties";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 import { Card, PageTitle } from "@/components/ui";
 import { capitalise, pronounsOf, toHave } from "@/lib/game/pronouns";
 
@@ -34,10 +34,13 @@ export default async function StoryPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const user = await requireUser();
 
-  // Anybody at your table, which is the same rule ties use. A guessed id from
-  // outside 404s rather than admitting the adventurer exists.
+  // Anybody you can see, which is the same rule ties and party invitations use
+  // now. A guessed id from outside 404s rather than admitting the adventurer
+  // exists — not found rather than forbidden, because a 403 confirms that the
+  // id belongs to somebody.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const allowed = await db.character.findFirst({
-    where: { id, ...reachableCharacterWhere(user.id) },
+    where: { id, ...visibleCharacterWhere(user.id, householdIds) },
     select: { id: true, race: true, archetype: true, pronouns: true },
   });
   if (!allowed) notFound();

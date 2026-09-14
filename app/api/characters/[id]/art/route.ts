@@ -4,6 +4,7 @@ import { resolveImageConfig } from "@/lib/ai/settings";
 import { ImagesUnavailableError, drawScene, portraitPrompt } from "@/lib/ai/images";
 import { lookOf, lookSentence } from "@/lib/game/wardrobe";
 import { lookKey } from "@/lib/game/character-picture";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -28,25 +29,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const user = await requireUserForApi();
   if (user instanceof Response) return user;
 
-  // Same audience as the uploaded portrait: her household, or anybody at a
-  // table she is playing at. This face already appears on the party sheets
-  // every player can see.
+  // Same audience as the uploaded portrait, and now the same *rule* — this
+  // block used to be a hand-written copy of it, which is a smell in a
+  // single-family app and a leak between families in a multi-tenant one:
+  // change the rule and the duplicate silently keeps the old one.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const character = await db.character.findFirst({
-    where: {
-      id,
-      OR: [
-        { userId: user.id },
-        {
-          partyMemberships: {
-            some: {
-              campaign: {
-                OR: [{ ownerId: user.id }, { party: { some: { character: { userId: user.id } } } }],
-              },
-            },
-          },
-        },
-      ],
-    },
+    where: { id, ...visibleCharacterWhere(user.id, householdIds) },
     select: { art: true },
   });
 

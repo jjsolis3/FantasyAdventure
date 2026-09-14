@@ -2250,6 +2250,60 @@ did before, making a household of its own. The bootstrap code is deliberately
 left alone: it is the way into an empty installation, there is no household for
 it to join, and a null household already means *make one*.
 
+### Families who adventure together
+
+Households made the boundary. This is what reads it.
+
+Until now the question *"whose adventurers can I see?"* had **two** answers in
+two modules, and neither was right. The party picker asked for
+`{ userId: { not: userId } }` — every character in the database, offered in a
+dropdown with the name of the adult who plays them. Ties asked a narrower
+question scoped to your own table. One question, two rules, and they had drifted
+exactly as far apart as you would expect.
+
+There is one rule now, `visibleCharacterWhere`, and it says: **your own
+household, the households yours has agreed to play with, and anybody you are
+actually travelling with.**
+
+**Agreeing is two actions, not a request and an approval.** One family shares
+its `KIN-XXXX-XXXX` code; the other types it in at **Settings → Families**.
+Sharing is one consent and redeeming is the other, and a row existing is the
+whole of what "both sides agreed" needs to mean — so there is no inbox, no
+pending state and nothing to chase. The pair is stored sorted, so two households
+are one row whichever of them typed the code.
+
+Only a household's owner or parent may share or redeem. A nine-year-old should
+not be able to attach her family to strangers because a code arrived in a chat.
+
+**Unlinking does not end an adventure**, and that is the part worth knowing
+before you use it. Cut the link and the two families vanish from each other's
+pickers immediately; no new sharing is possible. But everybody already in a
+party keeps the story and keeps each other, because party membership flows
+through `PartyMember` and never mentions households at all. A half-played
+Saturday does not disappear because two adults stopped agreeing.
+
+**Two real holes closed here.** The invite-target checks in
+`campaign-actions.ts` and `invite-actions.ts` were `userId: { not: user.id }` —
+the screen offered a short list, but the screen is not the rule, and a
+hand-posted id reached any account's child. And the portrait and art routes held
+**hand-written copies** of the access rule that never imported the helper: in a
+one-family app a duplicated rule is a smell, between two families it is a leak,
+because moving the rule leaves the copy answering the old question. Both now
+import it.
+
+**A join code is no longer the whole authorisation.** Possession of a `PARTY-`
+code used to be the entire check, and joining grants read access to every party
+member's sheet. It still carries the invitation — that is what makes joining one
+step rather than a negotiation — but it now only works between families who have
+already agreed to play together.
+
+**And `needsConsent` became a gift rather than a restriction.** It compared
+*account* ids, which meant that on this very installation, where a father and
+his two daughters each have their own sign-in, saying "Mira is Bramble's sister"
+needed a nine-year-old to go and confirm her own family's paperwork before the
+tie earned a single bond point. It compares households now: inside one family a
+tie is agreed on the spot, and only a claim about another family's child waits.
+
 ### Twelve means twelve
 
 A household hit the same wall twice, from two directions. Resetting a character
@@ -2516,6 +2570,7 @@ app/
   settings/         The family's hub: its adventurers, its invitations
   settings/adventurers/    Fixing and re-laying a sheet in your own household
   settings/invites/        Codes for your own family, and what each one grants
+  settings/families/       The families yours has agreed to adventure with
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
   admin/adventures/        Writing and editing storylines in the app
@@ -2604,6 +2659,7 @@ tests/
   invites.test.ts   Unit tests — who is offered along, and in what order
   households.test.ts     Unit tests — naming one, who may act for it, whose it is
   invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
+  visibility.test.ts     Unit tests — one pair one row, and who can see whom
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
@@ -2619,6 +2675,8 @@ tests/
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
   households.e2e.mts  A household each on registering, making one family of two,
                       and a code that puts a child inside it rather than beside it
+  families.e2e.mts    Two families: strangers, agreed, travelling, and stopped —
+                      and the adventure that survives the stopping
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

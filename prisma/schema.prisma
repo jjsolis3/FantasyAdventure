@@ -104,9 +104,49 @@ model Household {
   campaigns  Campaign[]
   aiCalls    AiCall[]
   invites    InviteCode[]
+  linksA     HouseholdLink[]   @relation("HouseholdA")
+  linksB     HouseholdLink[]   @relation("HouseholdB")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Two households that have agreed to adventure together.
+///
+/// **No pending state, deliberately.** A `Relationship` needs `proposedById`
+/// and `confirmedAt` because it *asserts* something about somebody else's
+/// character — "your daughter is my son's sister" earns real bond levels, so it
+/// has to be agreed to. A link asserts nothing. One household shares its
+/// `linkCode`; the other redeems it. Sharing is one consent and redeeming is
+/// the other, and a row existing is the whole of what "both sides agreed" needs
+/// to mean.
+///
+/// The pair is stored sorted — see `canonicalLink` — so two households are one
+/// row whichever of them redeemed, in the same idiom `canonicalPair` uses for
+/// ties. The unique constraint is then real rather than decorative.
+///
+/// Deleting it is symmetric: either side may, without asking. A family that
+/// wants out of an arrangement should not need the other family's cooperation
+/// to get out of it.
+model HouseholdLink {
+  id String @id @default(cuid())
+
+  householdAId String
+  householdA   Household @relation("HouseholdA", fields: [householdAId], references: [id], onDelete: Cascade)
+
+  householdBId String
+  householdB   Household @relation("HouseholdB", fields: [householdBId], references: [id], onDelete: Cascade)
+
+  /// Who redeemed the code. Kept for the screen that says how this came about;
+  /// SET NULL because the link belongs to the households, not to the person who
+  /// happened to type the code.
+  createdById String?
+  createdBy   User?   @relation("LinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([householdAId, householdBId])
+  @@index([householdBId])
 }
 
 /// What authority one account has in one household.
@@ -182,6 +222,7 @@ model User {
   roundAnswers   RoundAnswer[]
   partyInvitesSent PartyInvite[] @relation("PartyInviter")
   tiesProposed     Relationship[] @relation("TieProposer")
+  linksMade        HouseholdLink[] @relation("LinkCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
