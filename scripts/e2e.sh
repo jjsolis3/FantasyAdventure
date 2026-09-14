@@ -53,7 +53,7 @@ fi
 
 ALL=(
   auth characters campaigns play rounds invites quests loadout growth knacks
-  acquaintances personal-quests progression settings admin screen bonds
+  acquaintances personal-quests progression settings admin households screen bonds
   briefing chapters chronicle companions dials dreams encounters forks levels luck pressure
   rebalance reset
   rivals

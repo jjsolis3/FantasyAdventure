@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 import { StorylineForm } from "@/components/settings/storyline-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewAdventurePage() {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -17,7 +17,7 @@ export default async function NewAdventurePage() {
       />
 
       <div className="mb-6">
-        <Link href="/settings/adventures" className="text-sm text-hearth-300 underline hover:text-hearth-200">
+        <Link href="/admin/adventures" className="text-sm text-hearth-300 underline hover:text-hearth-200">
           ← All adventures
         </Link>
       </div>

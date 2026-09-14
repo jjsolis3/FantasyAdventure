@@ -39,6 +39,7 @@ import { knownPeople } from "../lib/game/acquaintances.ts";
 import { recapFor } from "../lib/game/recap.ts";
 import { hashPassword } from "../lib/auth/password.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
+import { makeHousehold } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5509/hearthlight?schema=public";
@@ -63,7 +64,7 @@ async function main() {
         email: `view-a-${stamp}@example.test`,
         displayName: "Parent",
         passwordHash: await hashPassword("hunter2hunter2"),
-        role: "ADMIN",
+        role: "PLATFORM_ADMIN",
       },
     }),
     db.user.create({
@@ -74,13 +75,15 @@ async function main() {
       },
     }),
   ]);
+  const parentHome = await makeHousehold(db, parent);
+  const cousinHome = await makeHousehold(db, cousin);
 
   const [mira, rowan] = await Promise.all([
     db.character.create({
-      data: { name: "Mira", userId: parent.id, race: "Elf", archetype: "Wondersmith", pronouns: "she/her" },
+      data: { name: "Mira", userId: parent.id, householdId: parentHome, race: "Elf", archetype: "Wondersmith", pronouns: "she/her" },
     }),
     db.character.create({
-      data: { name: "Rowan", userId: cousin.id, race: "Fox-folk", archetype: "Healer", pronouns: "she/her" },
+      data: { name: "Rowan", userId: cousin.id, householdId: cousinHome, race: "Fox-folk", archetype: "Healer", pronouns: "she/her" },
     }),
   ]);
 
@@ -90,7 +93,7 @@ async function main() {
   const campaign = await db.campaign.create({
     data: {
       title: "The Village That Built Itself",
-      ownerId: parent.id,
+      ownerId: parent.id, householdId: parentHome,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "MIDDLE_GRADE",
@@ -110,7 +113,7 @@ async function main() {
   const earlier = await db.campaign.create({
     data: {
       title: "The Long Winter",
-      ownerId: parent.id,
+      ownerId: parent.id, householdId: parentHome,
       storylineId: storyline.id,
       tone: "COZY",
       readingLevel: "MIDDLE_GRADE",

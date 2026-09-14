@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, isUniqueViolation } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/actions";
 
 /**
@@ -92,7 +92,7 @@ function actsFrom(formData: FormData) {
 }
 
 export async function saveStorylineAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const parsed = storylineSchema.safeParse({
     id: formData.get("id") ?? undefined,
@@ -173,9 +173,9 @@ export async function saveStorylineAction(_prev: FormState, formData: FormData):
     });
   });
 
-  revalidatePath("/settings/adventures");
+  revalidatePath("/admin/adventures");
   revalidatePath("/campaigns/new");
-  redirect(`/settings/adventures?saved=${storylineId}`);
+  redirect(`/admin/adventures?saved=${storylineId}`);
 }
 
 /**
@@ -187,7 +187,7 @@ export async function saveStorylineAction(_prev: FormState, formData: FormData):
  * what their journal is about.
  */
 export async function setStorylineActiveAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const id = String(formData.get("storylineId") ?? "");
   const active = String(formData.get("active") ?? "") === "true";
@@ -195,13 +195,13 @@ export async function setStorylineActiveAction(formData: FormData): Promise<void
 
   await db.storyline.updateMany({ where: { id }, data: { isActive: active } });
 
-  revalidatePath("/settings/adventures");
+  revalidatePath("/admin/adventures");
   revalidatePath("/campaigns/new");
 }
 
 /** Copies one, as a starting point for a family's own version. */
 export async function duplicateStorylineAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const id = String(formData.get("storylineId") ?? "");
   if (!id) return;
@@ -243,6 +243,6 @@ export async function duplicateStorylineAction(formData: FormData): Promise<void
     select: { id: true },
   });
 
-  revalidatePath("/settings/adventures");
-  redirect(`/settings/adventures/${copy.id}`);
+  revalidatePath("/admin/adventures");
+  redirect(`/admin/adventures/${copy.id}`);
 }

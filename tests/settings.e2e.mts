@@ -85,12 +85,12 @@ try {
     await submitAndSettle(player);
     await player.waitForURL(`${BASE}/`);
 
-    await player.goto(`${BASE}/settings/storyteller`);
+    await player.goto(`${BASE}/admin/storyteller`);
     check("a non-admin is sent away from settings", !player.url().includes("/settings"), player.url());
 
     // And cannot drive the test endpoint directly.
     const status = await player.evaluate(async () => {
-      const reply = await fetch("/api/settings/storyteller/test", {
+      const reply = await fetch("/api/admin/storyteller/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deep: false }),
@@ -102,9 +102,9 @@ try {
   }
 
   // ---- The page shows the environment fallback ----------------------------
-  await page.goto(`${BASE}/settings/storyteller`);
+  await page.goto(`${BASE}/admin/storyteller`);
   const before = (await page.textContent("body")) ?? "";
-  check("settings page reachable by an admin", page.url().includes("/settings/storyteller"));
+  check("settings page reachable by an admin", page.url().includes("/admin/storyteller"));
   check("it explains that nothing is saved yet", /Nothing saved here yet|Nothing is configured yet/.test(before));
 
   // ---- Saving takes over from the environment -----------------------------
@@ -215,7 +215,7 @@ try {
   check("the practice turn created no scenes", (await db.scene.count()) === 0);
 
   // ---- An API key is stored encrypted, and never returned -----------------
-  await page.goto(`${BASE}/settings/storyteller`);
+  await page.goto(`${BASE}/admin/storyteller`);
   await page.fill('input[name="apiKey"]', "sk-test-secret-value-12345");
   await submitAndSettle(page, 'button:has-text("Save settings")');
 
@@ -227,7 +227,7 @@ try {
   );
   check("a hint was stored instead", (withKey.apiKeyHint ?? "").includes("…"), withKey.apiKeyHint ?? "");
 
-  await page.goto(`${BASE}/settings/storyteller`);
+  await page.goto(`${BASE}/admin/storyteller`);
   const withKeyPage = await page.content();
   check("the key is never sent back to the page", !withKeyPage.includes("sk-test-secret-value-12345"));
   check("the page shows the hint", withKeyPage.includes(withKey.apiKeyHint ?? "@@@"));
@@ -240,14 +240,14 @@ try {
   check("other changes still applied", kept.model === "mock-model-2", kept.model);
 
   // ---- Removing the key ---------------------------------------------------
-  await page.goto(`${BASE}/settings/storyteller`);
+  await page.goto(`${BASE}/admin/storyteller`);
   await page.check('input[name="clearApiKey"]');
   await submitAndSettle(page, 'button:has-text("Save settings")');
   const cleared = await db.aiSetting.findUniqueOrThrow({ where: { id: "singleton" } });
   check("the key can be removed", cleared.apiKeyCipher === null && cleared.apiKeyHint === null);
 
   // ---- Validation ----------------------------------------------------------
-  await page.goto(`${BASE}/settings/storyteller`);
+  await page.goto(`${BASE}/admin/storyteller`);
   await page.fill('input[name="baseUrl"]', "not-a-url");
   await submitAndSettle(page, 'button:has-text("Save settings")');
   check(

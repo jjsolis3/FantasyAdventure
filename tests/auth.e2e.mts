@@ -102,7 +102,25 @@ try {
     const user = await db.user.findFirst();
     check("first account created", user !== null);
     check("email normalised", user?.email === "parent@example.com", user?.email);
-    check("first account is ADMIN", user?.role === "ADMIN", user?.role);
+    check("first account administers the installation", user?.role === "PLATFORM_ADMIN", user?.role);
+
+    // Registering makes a household in the same transaction as the account.
+    // Nobody should exist outside the boundary every privacy rule is drawn
+    // against, even for the moment between two writes — and an account without
+    // one cannot build an adventurer at all, so this failing quietly would
+    // surface much later as a builder that refuses a perfectly good form.
+    const firstHome = await db.householdMember.findFirst({
+      where: { userId: user?.id },
+      include: { household: { select: { name: true, linkCode: true } } },
+    });
+    check("and it has a household of its own", firstHome !== null);
+    check("named after them", firstHome?.household.name === "Parent's household", firstHome?.household.name);
+    check("answering for it", firstHome?.role === "OWNER", firstHome?.role);
+    check(
+      "with a code it could share with another family",
+      /^KIN-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(firstHome?.household.linkCode ?? ""),
+      firstHome?.household.linkCode,
+    );
     check("session cookie issued", (await adminContext.cookies()).some((c) => c.name === "hearthlight_session"));
     check("session cookie is httpOnly", (await adminContext.cookies()).find((c) => c.name === "hearthlight_session")?.httpOnly === true);
     check("password not stored in plaintext", !(user?.passwordHash ?? "").includes("a long enough password"));
@@ -133,8 +151,8 @@ try {
   let newCode = "";
   {
     const page = await adminContext.newPage();
-    await page.goto(`${BASE}/invites`);
-    check("admin can reach /invites", page.url().endsWith("/invites"), page.url());
+    await page.goto(`${BASE}/settings/invites`);
+    check("a household parent can reach their invitations", page.url().endsWith("/settings/invites"), page.url());
 
     await page.fill('input[name="note"]', "Grandma");
     await submitAndSettle(page, 'button:has-text("Create invite code")');
@@ -156,10 +174,50 @@ try {
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
 
-    check("second account is PLAYER", (await db.user.findUnique({ where: { email: "grandma@example.com" } }))?.role === "PLAYER");
+    const grandma = await db.user.findUnique({ where: { email: "grandma@example.com" } });
+    check("second account is PLAYER", grandma?.role === "PLAYER");
 
-    await page.goto(`${BASE}/invites`);
-    check("non-admin is redirected away from /invites", !page.url().endsWith("/invites"), page.url());
+    // A household of her own, not the one that invited her. Today every invite
+    // means "make an account"; when invites start saying what they grant, a
+    // code from a household will land its redeemer *inside* that household
+    // instead — and this check is what will have to change to say so.
+    const grandmaHome = await db.householdMember.findFirst({ where: { userId: grandma?.id } });
+    const parentHome = await db.householdMember.findFirst({
+      where: { user: { email: "parent@example.com" } },
+    });
+    check("and a household of her own, not the one that asked her", grandmaHome !== null);
+    check(
+      "which is a different household from the first account's",
+      grandmaHome !== null && grandmaHome.householdId !== parentHome?.householdId,
+      `${grandmaHome?.householdId} vs ${parentHome?.householdId}`,
+    );
+
+    // She reaches her *own* invitations, and this is a change rather than a
+    // regression. She answers for a household — her own — so inviting into it
+    // is hers to do. What she must not reach is the installation's screens.
+    await page.goto(`${BASE}/settings/invites`);
+    check(
+      "an ordinary account reaches its own invitations",
+      page.url().endsWith("/settings/invites"),
+      page.url(),
+    );
+
+    const hers = (await page.textContent("main")) ?? "";
+    check(
+      "and sees only its own codes, not the one that let it in",
+      !hers.includes(newCode),
+      newCode,
+    );
+
+    await page.goto(`${BASE}/admin`);
+    check("but not the installation's", !page.url().endsWith("/admin"), page.url());
+
+    await page.goto(`${BASE}/admin/storyteller`);
+    check(
+      "and certainly not the storyteller's credentials",
+      !page.url().endsWith("/admin/storyteller"),
+      page.url(),
+    );
     await page.close();
   }
 

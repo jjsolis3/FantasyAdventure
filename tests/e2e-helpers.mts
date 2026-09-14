@@ -30,10 +30,51 @@
  * these tests keep testing the thing a child actually uses.
  */
 import type { Page } from "@playwright/test";
+import type { PrismaClient } from "../generated/prisma/client.ts";
 import { findArchetype } from "../lib/game/character-options.ts";
+import { createHousehold, householdNameFor, singleHouseholdFor } from "../lib/game/households.ts";
 import { SKILLS_PER_CHARACTER } from "../lib/game/rules.ts";
 
 export const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
+
+/**
+ * The household for a fixture account created straight through Prisma.
+ *
+ * Tests that skip the browser and write their fixtures straight through Prisma
+ * still have to produce a *legal* row, and since households arrived an account
+ * without one is not legal — an adventurer cannot be created without a
+ * household to belong to.
+ *
+ * It calls the real `createHousehold` rather than inserting the two rows by
+ * hand, so a test fixture cannot drift into a shape the application would never
+ * produce. That has happened here before: fixtures carried 19-point stat
+ * spreads for a while after the budget became 12, and every one of them passed.
+ */
+export async function makeHousehold(
+  db: PrismaClient,
+  user: { id: string; displayName: string },
+): Promise<string> {
+  const household = await createHousehold(db, {
+    ownerId: user.id,
+    name: householdNameFor(user.displayName),
+  });
+  return household.id;
+}
+
+/**
+ * The household an account already belongs to.
+ *
+ * For tests that register through the browser — registration makes the
+ * household itself, so they only need to find it again to stamp a fixture with.
+ * Throws rather than returning null: in a test, no household means the
+ * registration under test silently did not do its job, and that should stop the
+ * run rather than turn into a confusing failure three assertions later.
+ */
+export async function householdOf(db: PrismaClient, userId: string): Promise<string> {
+  const membership = await singleHouseholdFor(db, userId);
+  if (!membership) throw new Error(`No household for user ${userId} — did registration change?`);
+  return membership.householdId;
+}
 
 /** Clicks a submit and waits for the page to stop moving. */
 export async function submitAndSettle(page: Page, selector = 'button[type="submit"]') {

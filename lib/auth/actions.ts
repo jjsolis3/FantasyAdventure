@@ -6,8 +6,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { createSession, destroySession, requireAdmin, requireUser } from "@/lib/auth/session";
+import { createSession, destroySession, requireHouseholdParent, requireUser } from "@/lib/auth/session";
 import { INVITE_ERROR_MESSAGES, checkInviteCode, createInvite, normaliseInviteCode } from "@/lib/auth/invites";
+import { createHousehold, householdNameFor } from "@/lib/game/households";
+import { shouldAdminister } from "@/lib/auth/platform-admin";
 
 /** Shape returned to every auth form. `null` means nothing has been submitted yet. */
 export type FormState = { error: string; fieldErrors?: Record<string, string> } | null;
@@ -71,8 +73,10 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 
   const passwordHash = await hashPassword(parsed.data.password);
 
-  // The very first account is the admin, so somebody can hand out invites.
-  const isFirstUser = (await db.user.count()) === 0;
+  // Who administers this installation. Named by `PLATFORM_ADMIN_EMAIL` when it
+  // is set, and otherwise whoever registers first — see `lib/auth/platform-admin.ts`
+  // for why the old rule is kept as a fallback rather than removed.
+  const administers = shouldAdminister(email, (await db.user.count()) === 0);
 
   let userId: string;
   try {
@@ -80,13 +84,27 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
     // race where two people redeem the same code at the same moment: the
     // unique constraint on redeemedById makes the second one fail.
     const user = await db.$transaction(async (tx) => {
+      const displayName = parsed.data.displayName.trim();
+
       const created = await tx.user.create({
         data: {
           email,
-          displayName: parsed.data.displayName.trim(),
+          displayName,
           passwordHash,
-          role: isFirstUser ? "ADMIN" : "PLAYER",
+          role: administers ? "PLATFORM_ADMIN" : "PLAYER",
         },
+      });
+
+      // A household of their own, in the same transaction as the account.
+      //
+      // Every account has one — the boundary everything private is drawn
+      // around is not a thing anybody should be able to exist outside of, even
+      // for the moment between two writes. Joining somebody *else's* household
+      // rather than starting a fresh one is what an invite will decide once
+      // invites say what they grant; until then, one each.
+      await createHousehold(tx, {
+        ownerId: created.id,
+        name: householdNameFor(displayName),
       });
 
       const spent = await tx.inviteCode.updateMany({
@@ -242,7 +260,7 @@ const inviteSchema = z.object({
 });
 
 export async function createInviteAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const actor = await requireHouseholdParent();
 
   const parsed = inviteSchema.safeParse({
     note: formData.get("note") ?? undefined,
@@ -254,22 +272,30 @@ export async function createInviteAction(_prev: FormState, formData: FormData): 
   }
 
   await createInvite({
-    createdById: admin.id,
+    createdById: actor.user.id,
     note: parsed.data.note ?? null,
     expiresInDays: parsed.data.expiresInDays,
   });
 
-  revalidatePath("/invites");
+  revalidatePath("/settings/invites");
   return { error: "" };
 }
 
 export async function revokeInviteAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  const actor = await requireHouseholdParent();
   const id = formData.get("inviteId");
   if (typeof id !== "string") return;
 
   // Only unused codes can be revoked; deleting a redeemed one would erase the
   // record of how an account came to exist.
-  await db.inviteCode.deleteMany({ where: { id, redeemedById: null } });
-  revalidatePath("/invites");
+  //
+  // Scoped to codes this account made, so one family's parent cannot revoke
+  // another's. `createdById` is a stand-in: an invite has no household column
+  // yet, and gets one when invites start saying what they grant. At that point
+  // this becomes a household comparison and stops depending on which particular
+  // parent happened to press the button.
+  await db.inviteCode.deleteMany({
+    where: { id, redeemedById: null, ...(actor.everywhere ? {} : { createdById: actor.user.id }) },
+  });
+  revalidatePath("/settings/invites");
 }

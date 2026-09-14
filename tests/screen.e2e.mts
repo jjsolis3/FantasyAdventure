@@ -17,7 +17,7 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
-import { buildCharacter } from "./e2e-helpers.mts";
+import { buildCharacter, householdOf, makeHousehold } from "./e2e-helpers.mjs";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -82,10 +82,12 @@ try {
   const storyline = await db.storyline.findFirstOrThrow();
   const owner = await db.user.findUniqueOrThrow({ where: { email: "parent@example.com" } });
   const mira = await db.character.findFirstOrThrow({ where: { userId: owner.id } });
+  const ownerHome = await householdOf(db, owner.id);
 
   const campaign = await db.campaign.create({
     data: {
       ownerId: owner.id,
+      householdId: ownerHome,
       storylineId: storyline.id,
       title: "The Test Evening",
       joinCode: `PARTY-TEST-${Date.now().toString(36).toUpperCase().slice(-4)}`,
@@ -101,8 +103,9 @@ try {
   const stranger = await db.user.create({
     data: { email: "stranger@example.com", displayName: "Stranger", passwordHash: "x" },
   });
+  const home = await makeHousehold(db, stranger);
   const strangerCharacter = await db.character.create({
-    data: { userId: stranger.id, name: "Nobody", race: "HUMAN", archetype: "SCOUT" },
+    data: { userId: stranger.id, householdId: home, name: "Nobody", race: "HUMAN", archetype: "SCOUT" },
   });
 
   console.log("\n— a television asks to be adopted —");
@@ -223,8 +226,9 @@ try {
   await submitAndSettle(guestPage);
 
   const guest = await db.user.findUniqueOrThrow({ where: { email: "guest@example.com" } });
+  const guestHome = await householdOf(db, guest.id);
   const guestCharacter = await db.character.create({
-    data: { userId: guest.id, name: "Tam", race: "HUMAN", archetype: "SCOUT" },
+    data: { userId: guest.id, householdId: guestHome, name: "Tam", race: "HUMAN", archetype: "SCOUT" },
   });
   await db.partyMember.create({
     data: { campaignId: campaign.id, characterId: guestCharacter.id, position: 1 },

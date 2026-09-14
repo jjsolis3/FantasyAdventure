@@ -25,6 +25,7 @@ import { chronicleFor } from "../lib/game/chronicle.ts";
 import { canonicalPair } from "../lib/game/rules.ts";
 import { hashPassword } from "../lib/auth/password.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
+import { makeHousehold } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5499/hearthlight?schema=public";
@@ -46,15 +47,16 @@ async function main() {
       email: `road-${stamp}@example.test`,
       displayName: "Parent",
       passwordHash: await hashPassword("hunter2hunter2"),
-      role: "ADMIN",
+      role: "PLATFORM_ADMIN",
     },
   });
+  const home = await makeHousehold(db, user);
 
   const [mira, rowan] = await Promise.all([
     db.character.create({
       data: {
         name: "Mira",
-        userId: user.id,
+        userId: user.id, householdId: home,
         race: "Human",
         archetype: "Trickster",
         pronouns: "she/her",
@@ -63,7 +65,7 @@ async function main() {
     db.character.create({
       data: {
         name: "Rowan",
-        userId: user.id,
+        userId: user.id, householdId: home,
         race: "Human",
         archetype: "Guardian",
         pronouns: "he/him",
@@ -85,7 +87,7 @@ async function main() {
   const campaign = await db.campaign.create({
     data: {
       title: "The Barley Field",
-      ownerId: user.id,
+      ownerId: user.id, householdId: home,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "FAMILY_MIXED",

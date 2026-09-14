@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import { PageTitle } from "@/components/ui";
 import { StorytellerForm } from "@/components/settings/storyteller-form";
 import { PROVIDER_PRESETS, apiKeyIsUnreadable, readStoredSettings } from "@/lib/ai/settings";
@@ -7,7 +7,7 @@ import { encryptionSecret } from "@/lib/settings/secret-box";
 export const dynamic = "force-dynamic";
 
 export default async function StorytellerSettingsPage() {
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const [settings, keyUnreadable] = await Promise.all([readStoredSettings(), apiKeyIsUnreadable()]);
 

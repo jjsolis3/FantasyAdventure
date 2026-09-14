@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePlatformAdmin } from "@/lib/auth/session";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { ChapterArt } from "@/components/settings/chapter-art";
 import { shippedChapterArt } from "@/lib/game/scene-picture";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function EditAdventurePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireAdmin();
+  await requirePlatformAdmin();
 
   const storyline = await db.storyline.findUnique({
     where: { id },
@@ -43,7 +43,7 @@ export default async function EditAdventurePage({ params }: { params: Promise<{ 
       />
 
       <div className="mb-6">
-        <Link href="/settings/adventures" className="text-sm text-hearth-300 underline hover:text-hearth-200">
+        <Link href="/admin/adventures" className="text-sm text-hearth-300 underline hover:text-hearth-200">
           ← All adventures
         </Link>
       </div>

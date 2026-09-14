@@ -53,6 +53,19 @@ export function generateHandoverCode(): string {
 }
 
 /**
+ * Generates the code that lets two households adventure together, shaped like
+ * `KIN-K3M9-PQ7T`.
+ *
+ * A fourth prefix, and the one furthest from the others in what it does: the
+ * three above admit somebody to an account, an adventure, or an adventurer.
+ * This one opens a whole family to another family, which is why only the people
+ * who answer for a household may hand it out or take one in.
+ */
+export function generateHouseholdLinkCode(): string {
+  return `KIN-${randomGroups()}`;
+}
+
+/**
  * Generates the code a television shows while it waits to be adopted, shaped
  * like `K3M-9PQ`.
  *

@@ -87,6 +87,14 @@ export async function createCharacterAction(_prev: FormState, formData: FormData
 
   const skills = parseSkills(formData);
 
+  // Refused rather than invented. An adventurer with no household is outside
+  // the boundary every privacy rule in the app is drawn against, and guessing
+  // one — the first household this account can see, say — would put a child's
+  // sheet in somebody else's family quietly and permanently.
+  if (!user.householdId) {
+    return { error: "This account is not part of a household yet. Ask an administrator." };
+  }
+
   const character = await db.character.create({
     data: {
       name,
@@ -94,6 +102,7 @@ export async function createCharacterAction(_prev: FormState, formData: FormData
       archetype,
       pronouns,
       ageBand,
+      householdId: user.householdId,
       ...statColumns(stats),
       // Recorded at the moment she is built, so growth is always measured from
       // what she actually started with rather than from whatever the constant

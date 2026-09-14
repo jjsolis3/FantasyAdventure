@@ -1,67 +1,57 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireHouseholdParent } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 /**
- * One door for everything only an administrator touches.
+ * One door for everything that belongs to a family.
  *
- * These had grown up in three unrelated places — invites in the header,
- * the storyteller under its own path, and nothing at all for the rest — which
- * is fine while there are two of them and confusing at four. Each card says
- * what the page is *for* rather than what it is called, since the person
- * arriving here is usually looking for an outcome.
+ * `/settings` used to be the operator's screen, holding the storyteller's API
+ * key and a list of every adventurer in the installation. That worked while one
+ * person was both the administrator and the only parent. It stopped working the
+ * moment a second family was invited: the two jobs are not the same job, and a
+ * parent who is handed the second must not thereby be handed the first.
+ *
+ * So the installation's half moved to `/admin`, and this is the half a family
+ * actually wants — its own people, and its own invitations. A platform
+ * administrator sees it too, because their own family is one of them.
  */
-export default async function SettingsHubPage() {
-  await requireAdmin();
+export default async function FamilySettingsPage() {
+  const actor = await requireHouseholdParent();
 
-  const [storylines, custom, campaigns, calls, unusedInvites, adventurers] = await Promise.all([
-    db.storyline.count(),
-    db.storyline.count({ where: { isCustom: true } }),
-    db.campaign.count(),
-    db.aiCall.count(),
-    db.inviteCode.count({ where: { redeemedById: null } }),
-    db.character.count(),
+  const scope = actor.everywhere ? {} : { householdId: actor.householdId ?? "" };
+
+  const [household, adventurers, unusedInvites] = await Promise.all([
+    actor.householdId
+      ? db.household.findUnique({
+          where: { id: actor.householdId },
+          select: { name: true, _count: { select: { members: true } } },
+        })
+      : null,
+    db.character.count({ where: scope }),
+    db.inviteCode.count({
+      where: {
+        redeemedById: null,
+        ...(actor.everywhere ? {} : { createdById: actor.user.id }),
+      },
+    }),
   ]);
 
   const cards = [
     {
-      href: "/settings/storyteller",
-      title: "The storyteller",
-      blurb:
-        "Which model tells the story, where to reach it, and whether chapters get pictures. Test it here before a session rather than during one.",
-      note: null,
-    },
-    {
-      href: "/settings/adventures",
-      title: "Adventures",
-      blurb:
-        "Write your own, or edit one of the ones that came with the game. Premise, opening, chapters, and what there is to find.",
-      note: `${storylines} in the library${custom > 0 ? `, ${custom} of them yours` : ""}`,
-    },
-    {
-      href: "/settings/usage",
-      title: "What it has used",
-      blurb:
-        "Every call the storyteller has made, what it cost, and what it actually said — which is the only way to find out why one turn came out strange.",
-      note: `${calls} ${calls === 1 ? "call" : "calls"} across ${campaigns} ${
-        campaigns === 1 ? "adventure" : "adventures"
-      }`,
-    },
-    {
       href: "/settings/adventurers",
       title: "Adventurers",
       blurb:
-        "Everyone in the house, and what they have earned. Starting one again — back to level one, skills and knacks cleared — is here rather than on her own sheet, so it is always something two people agreed on.",
-      note: `${adventurers} across every household`,
+        "Everyone in the family, and what they have earned. Starting one again — back to level one, skills and knacks cleared — is here rather than on her own sheet, so it is always something two people agreed on.",
+      note: `${adventurers} ${adventurers === 1 ? "adventurer" : "adventurers"}`,
     },
     {
-      href: "/invites",
+      href: "/settings/invites",
       title: "Invitations",
       blurb:
-        "Registration is invite-only. Make a code for each person who needs their own sign-in — which is what everyone playing from their own device needs.",
+        "Hearthlight is invite-only. Make a code for each person who needs their own sign-in — which is what everyone playing from their own device needs.",
       note: `${unusedInvites} unused`,
     },
   ];
@@ -69,18 +59,30 @@ export default async function SettingsHubPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
-        eyebrow="Administrator"
+        eyebrow={household?.name ?? "Your household"}
         title="Settings"
-        lead="The parts of this that belong to whoever runs it rather than to whoever is playing."
+        lead="The parts of this that belong to your family rather than to whoever runs the server."
       />
+
+      {actor.everywhere ? (
+        <p className="mb-8 text-sm text-hearth-300/80">
+          You also run this installation.{" "}
+          <Link href="/admin" className="text-hearth-400 underline hover:text-hearth-200">
+            Administration
+          </Link>{" "}
+          is where the storyteller, the adventure library and the households live.
+        </p>
+      ) : null}
 
       <div className="space-y-4">
         {cards.map((card) => (
           <Link key={card.href} href={card.href} className="block">
             <Card className="transition-colors hover:border-hearth-700">
-              <div className="flex flex-wrap items-baseline gap-x-3">
-                <h2 className="font-display text-xl text-hearth-100">{card.title}</h2>
-                {card.note ? <span className="text-sm text-hearth-500">{card.note}</span> : null}
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="font-display text-lg text-hearth-100">{card.title}</h2>
+                {card.note ? (
+                  <span className="text-sm text-hearth-400 tabular-nums">{card.note}</span>
+                ) : null}
               </div>
               <p className="mt-2 text-sm text-hearth-200/70">{card.blurb}</p>
             </Card>

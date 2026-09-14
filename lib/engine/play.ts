@@ -219,12 +219,26 @@ export type AiCallRecord = {
   usage?: TokenUsage | null;
 };
 
-async function logAiCalls(campaignId: string, records: AiCallRecord[], repairs: number) {
+/**
+ * Takes the campaign rather than its id, because the household has to be
+ * written down here and not worked out later.
+ *
+ * `AiCall.campaignId` is SET NULL on delete, so an adventure being tidied away
+ * leaves its usage records alive and ownerless. That is fine for a log and
+ * useless for a bill — "how much did this family use" must not be a question
+ * that deleting an adventure erases the answer to.
+ */
+async function logAiCalls(
+  campaign: { id: string; householdId: string },
+  records: AiCallRecord[],
+  repairs: number,
+) {
   if (records.length === 0) return;
   await db.aiCall
     .createMany({
       data: records.map((record) => ({
-        campaignId,
+        campaignId: campaign.id,
+        householdId: campaign.householdId,
         stage: record.stage,
         model: record.model,
         latencyMs: record.latencyMs,
@@ -740,7 +754,7 @@ export async function beginCampaign(
     return created;
   });
 
-  await logAiCalls(campaign.id, records, 0);
+  await logAiCalls(campaign, records, 0);
 
   return { sceneId: scene.id, narration: narration.trim() };
 }
@@ -1357,7 +1371,7 @@ export async function playTurn(
         },
       });
 
-      await logAiCalls(campaign.id, records, first.repairs);
+      await logAiCalls(campaign, records, first.repairs);
       onProgress?.({ type: "awaiting", awaited });
       return { awaiting: awaited };
     }
@@ -2297,7 +2311,7 @@ export async function playTurn(
   });
 
   await logAiCalls(
-    campaign.id,
+    campaign,
     records,
     result.diagnostics.adjudicationRepairs + result.diagnostics.extractionRepairs,
   );
@@ -2650,7 +2664,7 @@ export async function talkTurn(
     });
   });
 
-  await logAiCalls(campaign.id, records, 0);
+  await logAiCalls(campaign, records, 0);
 
   return { narration, milestones };
 }

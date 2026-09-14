@@ -29,6 +29,7 @@ import { BASE, buildCharacter, submitAndSettle } from "./e2e-helpers.mts";
 import { beginCampaign, playTurn } from "../lib/engine/play.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
 import { CHOSEN_ROAD_KEY } from "../lib/game/forks.ts";
+import { householdOf } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@localhost:5432/hearthlight?schema=public";
@@ -83,11 +84,13 @@ try {
     include: { acts: true },
   });
 
+  const home = await householdOf(db, user.id);
   const campaign = await db.campaign.create({
     data: {
       title: "Which way",
       joinCode: generateJoinCode(),
       ownerId: user.id,
+      householdId: home,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "MIDDLE_GRADE",

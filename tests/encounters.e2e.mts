@@ -28,6 +28,7 @@ import {
 } from "../lib/game/encounters.ts";
 import { hashPassword } from "../lib/auth/password.ts";
 import { generateJoinCode } from "../lib/auth/invite-code.ts";
+import { makeHousehold } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5507/hearthlight?schema=public";
@@ -45,16 +46,17 @@ async function main() {
       email: `enc-${Date.now()}@example.test`,
       displayName: "Parent",
       passwordHash: await hashPassword("hunter2hunter2"),
-      role: "ADMIN",
+      role: "PLATFORM_ADMIN",
     },
   });
+  const home = await makeHousehold(db, user);
 
   const [mira, rowan] = await Promise.all([
     db.character.create({
-      data: { name: "Mira", userId: user.id, race: "Human", archetype: "Trickster", pronouns: "she/her" },
+      data: { name: "Mira", userId: user.id, householdId: home, race: "Human", archetype: "Trickster", pronouns: "she/her" },
     }),
     db.character.create({
-      data: { name: "Rowan", userId: user.id, race: "Human", archetype: "Guardian", pronouns: "they/them" },
+      data: { name: "Rowan", userId: user.id, householdId: home, race: "Human", archetype: "Guardian", pronouns: "they/them" },
     }),
   ]);
 
@@ -71,7 +73,7 @@ async function main() {
     data: {
       title: "Behind the door",
       joinCode: generateJoinCode(),
-      ownerId: user.id,
+      ownerId: user.id, householdId: home,
       storylineId: storyline.id,
       tone: "ADVENTUROUS",
       readingLevel: "MIDDLE_GRADE",

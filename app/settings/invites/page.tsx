@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireHouseholdParent } from "@/lib/auth/session";
 import { revokeInviteAction } from "@/lib/auth/actions";
 import { Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -21,9 +22,17 @@ function statusOf(invite: {
 }
 
 export default async function InvitesPage() {
-  await requireAdmin();
+  const actor = await requireHouseholdParent();
 
   const invites = await db.inviteCode.findMany({
+    // Codes this account made. There was no `where` here at all — every code in
+    // the installation, bootstrap codes included — which was fine while one
+    // person was the only administrator and is one family reading another's
+    // the moment there are two.
+    //
+    // `createdById` rather than a household is a stand-in until invites carry
+    // one; see the note in `revokeInviteAction`.
+    where: actor.everywhere ? {} : { createdById: actor.user.id },
     include: { redeemedBy: { select: { displayName: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -31,10 +40,16 @@ export default async function InvitesPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
-        eyebrow="Administration"
+        eyebrow={actor.everywhere ? "Every invitation" : "Your household"}
         title="Invite codes"
         lead="Hearthlight is invite-only. Create a code for each person you want to let in."
       />
+
+      <p className="mb-8">
+        <Link href="/settings" className="text-sm text-hearth-400 underline hover:text-hearth-200">
+          ← Back to settings
+        </Link>
+      </p>
 
       <div className="space-y-6">
         <Card>

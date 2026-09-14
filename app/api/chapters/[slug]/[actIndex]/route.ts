@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requireAdmin, requireUserForApi } from "@/lib/auth/session";
+import { requirePlatformAdminForApi, requireUserForApi } from "@/lib/auth/session";
 import { sniffImage, MAX_PICTURE_BYTES } from "@/lib/game/pictures";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +53,11 @@ export async function POST(
   { params }: { params: Promise<{ slug: string; actIndex: string }> },
 ) {
   const { slug, actIndex } = await params;
-  const admin = await requireAdmin();
+  const admin = await requirePlatformAdminForApi();
+  // A refusal from a route handler has to *be* the response. It used to use
+  // the redirecting guard, which a POST follows and reports as 200 — see the
+  // note on the API guards in `lib/auth/session.ts`.
+  if (admin instanceof Response) return admin;
 
   const index = Number(actIndex);
   if (!Number.isInteger(index) || index < 1) {
@@ -111,7 +115,8 @@ export async function DELETE(
   { params }: { params: Promise<{ slug: string; actIndex: string }> },
 ) {
   const { slug, actIndex } = await params;
-  await requireAdmin();
+  const refusal = await requirePlatformAdminForApi();
+  if (refusal instanceof Response) return refusal;
 
   await db.chapterImage.deleteMany({
     where: { storylineSlug: slug, actIndex: Number(actIndex) },

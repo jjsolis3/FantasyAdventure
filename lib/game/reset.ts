@@ -105,6 +105,8 @@ import {
 /** What a reset would take away, counted before anybody agrees to it. */
 export type ResetPreview = {
   characterId: string;
+  /** Whose family she belongs to, so a screen can refuse another one's. */
+  householdId: string;
   name: string;
   /**
    * As written on her sheet, so every sentence on the page can be built from
@@ -140,6 +142,7 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
     where: { id: characterId },
     select: {
       id: true,
+      householdId: true,
       name: true,
       pronouns: true,
       archetype: true,
@@ -168,6 +171,7 @@ export async function previewReset(characterId: string): Promise<ResetPreview | 
 
   return {
     characterId: character.id,
+    householdId: character.householdId,
     name: character.name,
     pronouns: character.pronouns,
     archetype: character.archetype,

@@ -77,19 +77,34 @@ try {
   await buildCharacter(admin, "Mira", "Halfling", "Beastfriend");
   const mira = await db.character.findFirstOrThrow({ where: { name: "Mira" } });
 
-  // ---- The hub is for administrators ---------------------------------------
-  await admin.goto(`${BASE}/settings`);
-  check("an administrator reaches the settings hub", admin.url().endsWith("/settings"), admin.url());
+  // ---- The hub is for whoever runs the installation -------------------------
+  //
+  // `/settings` used to be this page and held both jobs at once — the
+  // storyteller's API key beside "your adventurers". The installation's half
+  // lives at `/admin` now, and `/settings` is the family's.
+  await admin.goto(`${BASE}/admin`);
+  check("an administrator reaches the hub", admin.url().endsWith("/admin"), admin.url());
   const hub = await admin.locator("main").innerText();
-  check("and it gathers the four places", ["storyteller", "Adventures", "used", "Invitations"].every(
-    (word) => hub.toLowerCase().includes(word.toLowerCase()),
-  ));
+  check(
+    "and it gathers the four installation places",
+    ["storyteller", "Adventures", "used", "Households"].every((word) =>
+      hub.toLowerCase().includes(word.toLowerCase()),
+    ),
+    hub.replace(/\n+/g, " / ").slice(0, 160),
+  );
+  check(
+    "and offers none of the family's, which are not its business",
+    !hub.includes("Invitations"),
+  );
 
-  for (const path of ["/settings", "/settings/adventures", "/settings/usage"]) {
+  // Every one of these belongs to the installation. `/settings` is deliberately
+  // not in the list any more — it is the player's own family's screen now, and
+  // being turned away from it would be the bug rather than the guard.
+  for (const path of ["/admin", "/admin/storyteller", "/admin/adventures", "/admin/usage"]) {
     await player.goto(`${BASE}${path}`);
     check(
       `a player is turned away from ${path}`,
-      !player.url().includes("/settings"),
+      !player.url().includes("/admin"),
       player.url(),
     );
   }
@@ -127,17 +142,28 @@ try {
   check("it opens on the avatar", (await menu.count()) === 1);
   const menuText = await menu.innerText();
   check("with the profile", menuText.includes("Your profile"));
-  check("the settings, for an administrator", menuText.includes("Settings"));
+  check("the family's settings", menuText.includes("Settings"));
+  check("and the installation's, for whoever runs it", menuText.includes("Administration"));
   check("and signing out at the bottom", menuText.trim().endsWith("Sign out"));
 
   await admin.keyboard.press("Escape");
   check("escape closes it", (await admin.locator('[role="menu"]').count()) === 0);
 
   // A player has a menu too, with one door fewer.
+  //
+  // Not the door it used to be. Every account answers for a household of its
+  // own, so this one does see *Settings* — its own family's people and its own
+  // invitations. What it must never see is *Administration*: the storyteller's
+  // credentials, what every household has cost, and who is in which family.
   await player.goto(`${BASE}/campaigns`);
   await player.click('button[aria-haspopup="menu"]');
   const playerMenu = await player.locator('[role="menu"]').innerText();
-  check("a player is not shown a door they cannot open", !playerMenu.includes("Settings"));
+  check(
+    "a player is not shown the door they cannot open",
+    !playerMenu.includes("Administration"),
+    playerMenu.replace(/\n/g, " / "),
+  );
+  check("but their own family's settings are theirs", playerMenu.includes("Settings"));
   check("but can still reach their profile", playerMenu.includes("Your profile"));
   check("and still sign out", playerMenu.includes("Sign out"));
 
@@ -150,7 +176,7 @@ try {
   await anon.close();
 
   // ---- Writing an adventure -------------------------------------------------
-  await admin.goto(`${BASE}/settings/adventures/new`);
+  await admin.goto(`${BASE}/admin/adventures/new`);
   await admin.fill('input[name="title"]', "The Thing In The Hedge");
   await admin.fill('input[name="tagline"]', "It has been there all week, and it is closer now.");
   await admin.fill(
@@ -201,7 +227,7 @@ try {
   );
 
   // ---- Not offering one ------------------------------------------------------
-  await admin.goto(`${BASE}/settings/adventures`);
+  await admin.goto(`${BASE}/admin/adventures`);
   await submitAndSettle(admin, 'button[aria-label="Stop offering The Thing In The Hedge"]');
 
   const hidden = await db.storyline.findFirstOrThrow({ where: { title: "The Thing In The Hedge" } });
@@ -216,7 +242,7 @@ try {
   // Nothing is ever deleted, because a campaign points at its storyline.
   check(
     "there is no way to delete one",
-    (await admin.goto(`${BASE}/settings/adventures`).then(async () =>
+    (await admin.goto(`${BASE}/admin/adventures`).then(async () =>
       (await admin.locator("main").innerText()).includes("Nothing is ever deleted"),
     )) === true,
   );
@@ -227,7 +253,7 @@ try {
   });
   check("a shipped adventure starts out not custom", shipped.isCustom === false);
 
-  await admin.goto(`${BASE}/settings/adventures/${shipped.id}`);
+  await admin.goto(`${BASE}/admin/adventures/${shipped.id}`);
   const warned = await admin.locator("main").innerText();
   check("editing one warns that it stops being updated", warned.includes("makes it yours") || warned.includes("makes it yours."));
 
@@ -241,7 +267,7 @@ try {
   check("and the edit stuck", afterEdit.tagline === "Ours now.", afterEdit.tagline);
 
   // ---- What it has used ------------------------------------------------------
-  await admin.goto(`${BASE}/settings/usage`);
+  await admin.goto(`${BASE}/admin/usage`);
   const usage = await admin.locator("main").innerText();
   check("the usage page opens", admin.url().endsWith("/usage"));
   check(
@@ -254,7 +280,7 @@ try {
   // Every published price is a decimal — $0.30 per million tokens sent is a
   // typical figure — and a number field that assumes whole numbers refuses them
   // in the browser, before anything of ours is ever asked.
-  await admin.goto(`${BASE}/settings/storyteller`);
+  await admin.goto(`${BASE}/admin/storyteller`);
   await admin.fill('input[name="inputPricePer1M"]', "0.30");
   await admin.fill('input[name="outputPricePer1M"]', "2.50");
   check(
@@ -270,7 +296,7 @@ try {
   check("both of them", priced.outputPricePer1M === 2.5, String(priced.outputPricePer1M));
 
   // With prices set, the usage page reports money rather than counting.
-  await admin.goto(`${BASE}/settings/usage`);
+  await admin.goto(`${BASE}/admin/usage`);
   check(
     "the usage page stops saying it cannot cost anything",
     !(await admin.locator("main").innerText()).includes("counted rather than costed"),

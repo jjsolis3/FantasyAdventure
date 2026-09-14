@@ -41,7 +41,7 @@ export default function Error({
         <p className="text-hearth-200/70">
           Trying again usually works. If it keeps happening, the storyteller may not be running —
           whoever set this up can check it on the{" "}
-          <Link href="/settings/storyteller" className="text-hearth-300 underline hover:text-hearth-200">
+          <Link href="/admin/storyteller" className="text-hearth-300 underline hover:text-hearth-200">
             storyteller page
           </Link>
           .

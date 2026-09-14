@@ -1,0 +1,34 @@
+-- Two kinds of administration, told apart.
+--
+-- `Role.ADMIN` has meant two different things since the day it was written:
+-- *runs this installation* — the storyteller's settings, the shared adventure
+-- library, what everything has cost — and *may put my family's sheets right*.
+-- One family, one administrator, and the two never needed separating.
+--
+-- They do now. A parent who is handed the second job must not thereby be handed
+-- the first: nobody buying a game for their children should be looking at an AI
+-- provider's API key, and nobody's adventurers should be resettable by another
+-- family's parent.
+--
+-- So the installation role says what it is, and family authority lives where it
+-- belongs — in `HouseholdMember.role`, which already exists.
+--
+-- ## Why only one value is renamed
+--
+-- `PLAYER` stays. This application calls the people playing it players, `USER`
+-- is worse English for the domain, and renaming it would churn assertions
+-- across the test suite in exchange for nothing.
+--
+-- ## Why this is safe
+--
+-- A rename is metadata only. Rows are stored as a reference to the enum member,
+-- not as its text, so every account currently holding `ADMIN` holds
+-- `PLATFORM_ADMIN` the instant this runs, with no UPDATE and no window in which
+-- anybody is unable to sign in or administer anything.
+--
+-- This repository has never renamed an enum value before — the only precedents
+-- are two `ADD VALUE`s — so it was run against a scratch database with rows
+-- already in `User` before being trusted, the same way the households backfill
+-- was.
+
+ALTER TYPE "Role" RENAME VALUE 'ADMIN' TO 'PLATFORM_ADMIN';
