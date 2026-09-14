@@ -81,11 +81,16 @@ try {
   check("named after them", dadHome?.household.name === "Dad's household", dadHome?.household.name);
   check("and answers for it", dadHome?.role === "OWNER", dadHome?.role);
 
-  // A second account, which today means a household of its own. Once invites
-  // say what they grant, a code issued *by* a household will land its redeemer
-  // inside that one instead — and this is the check that will say so.
+  // A second family, admitted deliberately. This used to be what *every* code
+  // did, because a code meant one thing; it is now a choice the person writing
+  // the invitation makes, and only whoever runs the installation may make it.
   const code = await db.inviteCode.create({
-    data: { code: generateInviteCode(), createdById: dadHome?.userId, note: "Mira" },
+    data: {
+      code: generateInviteCode(),
+      createdById: dadHome?.userId,
+      grant: "NEW_HOUSEHOLD",
+      forName: "Mira",
+    },
   });
 
   const miraContext = await browser.newContext();
@@ -98,6 +103,11 @@ try {
     "and it is not the household that invited her",
     miraHome?.householdId !== dadHome?.householdId,
     `${miraHome?.household.name} vs ${dadHome?.household.name}`,
+  );
+  check(
+    "she answers for the household she was sent to start",
+    miraHome?.role === "OWNER",
+    miraHome?.role,
   );
 
   console.log("\n-- Each of them can build an adventurer --------------------------");
@@ -202,9 +212,15 @@ try {
 
   console.log("\n-- One family's parent cannot touch another's adventurer ---------");
 
-  // A third household, outside the Solis family entirely.
+  // A third household, outside the Solis family entirely — the friend's family,
+  // in so many words, which is what all of this is being built for.
   const strangerCode = await db.inviteCode.create({
-    data: { code: generateInviteCode(), createdById: dadAfter?.userId, note: "Someone else" },
+    data: {
+      code: generateInviteCode(),
+      createdById: dadAfter?.userId,
+      grant: "NEW_HOUSEHOLD",
+      forName: "Someone else",
+    },
   });
   const strangerContext = await browser.newContext();
   const stranger = await strangerContext.newPage();
@@ -230,12 +246,79 @@ try {
     strangerList.replace(/\n+/g, " / ").slice(0, 120),
   );
 
-  // The action's own refusal is *not* asserted here. Hand-posting to this URL
-  // gets a 404 from Next before any of our code runs — server actions want a
-  // header a raw POST has not got — so a check on it would pass whether the
+  // The reset action's own refusal is *not* asserted here. Hand-posting to that
+  // URL gets a 404 from Next before any of our code runs — server actions want
+  // a header a raw POST has not got — so a check on it would pass whether the
   // guard existed or not, which is the worst kind of green. The rule itself is
   // `mayTouch`, exhaustively covered in `tests/households.test.ts`, and it is
   // the same function both this screen and the action call.
+
+  console.log("\n-- A parent invites a child into their own house -----------------");
+
+  await dad.goto(`${BASE}/settings/invites`);
+  await dad.waitForLoadState("networkidle");
+  await dad.fill('input[name="forName"]', "Bea");
+  await dad.selectOption('select[name="grant"]', "HOUSEHOLD_MEMBER");
+  await dad.selectOption('select[name="intendedRole"]', "MEMBER");
+  await dad.click('button:has-text("Create invite code")');
+  await dad.waitForSelector("text=/Invite created/", { timeout: 10_000 });
+
+  const forBea = await db.inviteCode.findFirstOrThrow({
+    where: { forName: "Bea" },
+    orderBy: { createdAt: "desc" },
+  });
+  check("the code is written for this house", forBea.householdId === solis.id, forBea.householdId ?? "none");
+  check("and says so", forBea.grant === "HOUSEHOLD_MEMBER", forBea.grant);
+  check("and says she plays", forBea.intendedRole === "MEMBER", forBea.intendedRole ?? "none");
+
+  const beaContext = await browser.newContext();
+  const bea = await beaContext.newPage();
+  await register(bea, forBea.code, "Bea", "bea@example.com");
+
+  const beaHome = await membership("bea@example.com");
+  check(
+    "redeeming it lands her in the family, not in a household of her own",
+    beaHome?.householdId === solis.id,
+    `${beaHome?.household.name}`,
+  );
+  check("as somebody who plays", beaHome?.role === "MEMBER", beaHome?.role);
+
+  const solisCount = await db.householdMember.count({ where: { householdId: solis.id } });
+  check("three of them, one family", solisCount === 3, String(solisCount));
+
+  console.log("\n-- Only whoever runs Hearthlight may admit a family --------------");
+
+  check("the operator is offered the choice", (await dad.locator('select[name="grant"]').count()) === 1);
+
+  await stranger.goto(`${BASE}/settings/invites`);
+  await stranger.waitForLoadState("networkidle");
+  check(
+    "another family's parent is not",
+    (await stranger.locator('select[name="grant"]').count()) === 0,
+  );
+
+  // And hiding the menu is a courtesy, not the defence. This posts the grant
+  // anyway — through the real form, so it carries the headers a server action
+  // insists on and actually reaches our code, unlike a raw `request.post`.
+  await stranger.evaluate(() => {
+    const form = document.querySelector("form input[name='forName']")?.closest("form");
+    const hidden = form?.querySelector<HTMLInputElement>("input[name='grant']");
+    if (hidden) hidden.value = "NEW_HOUSEHOLD";
+  });
+  await stranger.fill('input[name="forName"]', "A whole new family");
+  await stranger.click('button:has-text("Create invite code")');
+  await stranger.waitForSelector("text=/runs Hearthlight/", { timeout: 10_000 });
+
+  const smuggled = await db.inviteCode.count({ where: { forName: "A whole new family" } });
+  check("the server refuses it whatever the form said", smuggled === 0, `${smuggled} written`);
+
+  console.log("\n-- And one family's codes are not another's to see ---------------");
+
+  const strangerCodes = (await stranger.textContent("main")) ?? "";
+  check(
+    "she sees neither the family's code nor the bootstrap one",
+    !strangerCodes.includes(forBea.code) && !strangerCodes.includes(bootstrap.code),
+  );
 
   console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} failed.`);
 } finally {

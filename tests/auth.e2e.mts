@@ -154,10 +154,10 @@ try {
     await page.goto(`${BASE}/settings/invites`);
     check("a household parent can reach their invitations", page.url().endsWith("/settings/invites"), page.url());
 
-    await page.fill('input[name="note"]', "Grandma");
+    await page.fill('input[name="forName"]', "Grandma");
     await submitAndSettle(page, 'button:has-text("Create invite code")');
 
-    const invite = await db.inviteCode.findFirst({ where: { note: "Grandma" } });
+    const invite = await db.inviteCode.findFirst({ where: { forName: "Grandma" } });
     newCode = invite?.code ?? "";
     check("admin created an invite", newCode !== "", newCode);
     await page.close();
@@ -177,36 +177,38 @@ try {
     const grandma = await db.user.findUnique({ where: { email: "grandma@example.com" } });
     check("second account is PLAYER", grandma?.role === "PLAYER");
 
-    // A household of her own, not the one that invited her. Today every invite
-    // means "make an account"; when invites start saying what they grant, a
-    // code from a household will land its redeemer *inside* that household
-    // instead — and this check is what will have to change to say so.
+    // And into the household that asked her. This assertion used to say the
+    // opposite, because a code meant "make an account" and where the account
+    // belonged was decided nowhere. A code written on the invitations screen
+    // now says whose house it is for, and this is that sentence coming true:
+    // the person invited into a family arrives in it.
     const grandmaHome = await db.householdMember.findFirst({ where: { userId: grandma?.id } });
     const parentHome = await db.householdMember.findFirst({
       where: { user: { email: "parent@example.com" } },
     });
-    check("and a household of her own, not the one that asked her", grandmaHome !== null);
+    check("and a household", grandmaHome !== null);
     check(
-      "which is a different household from the first account's",
-      grandmaHome !== null && grandmaHome.householdId !== parentHome?.householdId,
+      "which is the one that invited her, rather than one of her own",
+      grandmaHome !== null && grandmaHome.householdId === parentHome?.householdId,
       `${grandmaHome?.householdId} vs ${parentHome?.householdId}`,
     );
-
-    // She reaches her *own* invitations, and this is a change rather than a
-    // regression. She answers for a household — her own — so inviting into it
-    // is hers to do. What she must not reach is the installation's screens.
-    await page.goto(`${BASE}/settings/invites`);
     check(
-      "an ordinary account reaches its own invitations",
-      page.url().endsWith("/settings/invites"),
-      page.url(),
+      "and she arrives as somebody who plays, not somebody who invites",
+      grandmaHome?.role === "MEMBER",
+      grandmaHome?.role,
     );
 
-    const hers = (await page.textContent("main")) ?? "";
+    // She does not reach the invitations screen, and this is the *third* answer
+    // this check has given. It was "only administrators" while there was one
+    // family; then "anybody, because everybody answered for a household of
+    // their own"; and now, since she was invited *into* a house rather than
+    // sent off to start one, she is somebody who plays. Who may hand out codes
+    // for a family is a question about that family, and it is not hers.
+    await page.goto(`${BASE}/settings/invites`);
     check(
-      "and sees only its own codes, not the one that let it in",
-      !hers.includes(newCode),
-      newCode,
+      "somebody who only plays does not hand out invitations",
+      !page.url().endsWith("/settings/invites"),
+      page.url(),
     );
 
     await page.goto(`${BASE}/admin`);

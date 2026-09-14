@@ -119,7 +119,8 @@ logs:
 ```
 
 Open the **Logs** tab in Coolify, copy the code, and register at `/register`.
-That account becomes the administrator and can issue invites from `/invites`.
+That account becomes the administrator and can issue invites from
+`/settings/invites`.
 Once anyone has registered, bootstrap codes stop being generated.
 
 ### Characters and the family twist
@@ -2200,7 +2201,7 @@ this* are different questions and the app needs both answers.
 sign-in looks exactly like three separate households from inside a database, so
 the migration gave every existing account one of its own rather than inventing a
 grouping. Putting the right accounts together is a decision a person makes, at
-**Settings → Households** — which also renames them, since "Dad's household" is
+**Administration → Households** — which also renames them, since "Dad's household" is
 a reasonable guess and "The Solis family" is the truth. Moving an account takes
 its adventurers and its adventures with it, in one transaction, and a household
 nobody is left in is tidied away.
@@ -2209,6 +2210,45 @@ nobody is left in is tidied away.
 delete, so tidying away an adventure used to leave the record of what it cost
 alive and ownerless. Fine for a log, useless for a bill. The household is
 stamped on at the time the call is made.
+
+### Invitations that say what they grant
+
+A code used to mean exactly one thing: *you may create an account*. What that
+account then **became** was decided somewhere else entirely — by counting the
+users table at the moment of registration — and where it **belonged** was not
+decided at all, because there was nowhere for it to belong.
+
+Both facts are on the invitation now, written down by the person who knew them.
+
+| | |
+|---|---|
+| **Joins your household** | They land inside the family that invited them, and see its adventurers. Any owner or parent may write one. |
+| **Starts a household of their own** | A new family is admitted to the installation. **Only whoever runs Hearthlight may write one.** |
+
+That second row is the whole rule: **no family may admit another.** A parent
+invites their own children and nobody else's, which is what makes it safe to
+hand a friend a code without handing them the ability to bring in strangers.
+
+**The household comes off the session, never off the form.** There is no field a
+hand-posted request could set to point an invitation at somebody else's house,
+because the value is never read from the request at all — and the grant picker
+is only drawn for a platform administrator because a menu with one legal item on
+it is a thing to wonder about, not because hiding it is the defence.
+`tests/households.e2e.mts` posts the grant anyway, through the real form so it
+carries the headers a server action insists on, and watches the server refuse it.
+
+**Anything unrecognised is the narrower option.** A form that omits the grant, or
+sends something odd, asks for somebody to join this house. Likewise an unstated
+role means they *play*: a child's account must not arrive able to invite
+strangers because a field was left blank.
+
+**Nobody holding an unspent code found it had changed meaning.** The migration
+stamps every existing code `HOUSEHOLD_MEMBER` and points it at its creator's
+household — which is what each of them effectively already was. A code whose
+creator has since been deleted keeps a null household and behaves exactly as it
+did before, making a household of its own. The bootstrap code is deliberately
+left alone: it is the way into an empty installation, there is no household for
+it to join, and a null household already means *make one*.
 
 ### Twelve means twelve
 
@@ -2466,7 +2506,6 @@ app/
   api/health/       Health endpoint — reports real DB connectivity
   login/ register/  Sign-in and invite-gated sign-up
   profile/          Display name, reading level, tone, password change
-  invites/          Admin-only invite management
   characters/       Party list, builder, and per-character editing
   characters/claim/ Taking on an adventurer somebody else built
   campaigns/        Adventure list, setup flow, campaign page, and the table
@@ -2474,9 +2513,14 @@ app/
   campaigns/[id]/journal/  The whole story, laid out to be read back or printed
   campaigns/[id]/finds/    The quest board: what they set out to do, and carry
   screen/           The television: one adventure, read-only, no sign-in
-  settings/         Administrator hub: storyteller, adventures, usage, invites
-  settings/adventures/     Writing and editing storylines in the app
-  settings/usage/          What every call used, and what it cost
+  settings/         The family's hub: its adventurers, its invitations
+  settings/adventurers/    Fixing and re-laying a sheet in your own household
+  settings/invites/        Codes for your own family, and what each one grants
+  admin/            The installation's hub — platform administrators only
+  admin/storyteller/       Model provider, keys, connection test
+  admin/adventures/        Writing and editing storylines in the app
+  admin/usage/             What every call used, and what it cost
+  admin/households/        Which accounts are one family, and who answers for it
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
@@ -2558,6 +2602,8 @@ tests/
   acquaintances.test.ts  Unit tests — who graduates, and recognising them again
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
+  households.test.ts     Unit tests — naming one, who may act for it, whose it is
+  invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
@@ -2571,7 +2617,8 @@ tests/
   acquaintances.e2e.mts  Two adventures, and somebody who remembers you in the second
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
-  households.e2e.mts  A household each on registering, and making one family of two
+  households.e2e.mts  A household each on registering, making one family of two,
+                      and a code that puts a child inside it rather than beside it
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

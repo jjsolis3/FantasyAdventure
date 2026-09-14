@@ -7,7 +7,13 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createSession, destroySession, requireHouseholdParent, requireUser } from "@/lib/auth/session";
-import { INVITE_ERROR_MESSAGES, checkInviteCode, createInvite, normaliseInviteCode } from "@/lib/auth/invites";
+import {
+  INVITE_ERROR_MESSAGES,
+  checkInviteCode,
+  createInvite,
+  normaliseInviteCode,
+  planInvite,
+} from "@/lib/auth/invites";
 import { createHousehold, householdNameFor } from "@/lib/game/households";
 import { shouldAdminister } from "@/lib/auth/platform-admin";
 
@@ -76,6 +82,10 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   // Who administers this installation. Named by `PLATFORM_ADMIN_EMAIL` when it
   // is set, and otherwise whoever registers first — see `lib/auth/platform-admin.ts`
   // for why the old rule is kept as a fallback rather than removed.
+  //
+  // Note what this is *not* deciding any more: which family they join. That is
+  // the invitation's business now, and it is written on the row rather than
+  // inferred from how many accounts happen to exist.
   const administers = shouldAdminister(email, (await db.user.count()) === 0);
 
   let userId: string;
@@ -95,17 +105,33 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
         },
       });
 
-      // A household of their own, in the same transaction as the account.
+      // Which family they land in, decided by the invitation they used.
       //
-      // Every account has one — the boundary everything private is drawn
-      // around is not a thing anybody should be able to exist outside of, even
-      // for the moment between two writes. Joining somebody *else's* household
-      // rather than starting a fresh one is what an invite will decide once
-      // invites say what they grant; until then, one each.
-      await createHousehold(tx, {
-        ownerId: created.id,
-        name: householdNameFor(displayName),
-      });
+      // Either way they end up in one, in the same transaction as the account:
+      // the boundary everything private is drawn around is not a thing anybody
+      // should exist outside of, even for the moment between two writes.
+      //
+      // A code that points at a household puts them in it. One that does not —
+      // a new-household code, the bootstrap code, or anything written before
+      // this column existed — starts them a house of their own. That fallback
+      // is what makes the migration safe for codes already out in the world.
+      if (invite.grant === "HOUSEHOLD_MEMBER" && invite.householdId) {
+        await tx.householdMember.create({
+          data: {
+            householdId: invite.householdId,
+            userId: created.id,
+            // What the invitation said, and otherwise the ordinary answer: they
+            // play. A child's account should not arrive able to invite
+            // strangers into the house because a field was left blank.
+            role: invite.intendedRole ?? "MEMBER",
+          },
+        });
+      } else {
+        await createHousehold(tx, {
+          ownerId: created.id,
+          name: householdNameFor(displayName),
+        });
+      }
 
       const spent = await tx.inviteCode.updateMany({
         where: { id: invite.inviteId, redeemedById: null },
@@ -255,26 +281,56 @@ export async function changePasswordAction(_prev: FormState, formData: FormData)
 }
 
 const inviteSchema = z.object({
-  note: z.string().trim().max(120, "Keep the note short.").optional(),
   expiresInDays: z.coerce.number().int().min(1).max(365).nullable().catch(null),
+  // Anything unrecognised is the *narrower* of the two. A form that omits this,
+  // or sends something odd, asks for somebody to join this house — never for a
+  // whole new family to be admitted to the installation.
+  grant: z.enum(["NEW_HOUSEHOLD", "HOUSEHOLD_MEMBER"]).catch("HOUSEHOLD_MEMBER"),
+  // Same principle, and the reason `OWNER` is not on this list at all: a
+  // household already has one, and an invitation is not how a second arrives.
+  // A blank or unrecognised field means they play, which is what a child's code
+  // should be when somebody forgets to say.
+  intendedRole: z.enum(["PARENT", "MEMBER"]).catch("MEMBER"),
+  forName: z.string().trim().max(60, "That name is a bit long.").optional(),
 });
 
+/**
+ * Writes an invitation, and refuses the ones that are not the caller's to write.
+ *
+ * Nothing is decided here. The form is parsed, `planInvite` is asked what may
+ * be written, and the answer is written — so the rule about who may admit a
+ * family can be read, and tested, in one place instead of being spread across a
+ * server action that needs a live session to reach.
+ */
 export async function createInviteAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const actor = await requireHouseholdParent();
 
   const parsed = inviteSchema.safeParse({
-    note: formData.get("note") ?? undefined,
     expiresInDays: formData.get("expiresInDays") || null,
+    grant: formData.get("grant") ?? undefined,
+    intendedRole: formData.get("intendedRole") ?? undefined,
+    forName: formData.get("forName") ?? undefined,
   });
 
   if (!parsed.success) {
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
+  const plan = planInvite({
+    actor: { householdId: actor.householdId, everywhere: actor.everywhere },
+    grant: parsed.data.grant,
+    intendedRole: parsed.data.intendedRole,
+  });
+
+  if (!plan.ok) return { error: plan.reason };
+
   await createInvite({
     createdById: actor.user.id,
-    note: parsed.data.note ?? null,
     expiresInDays: parsed.data.expiresInDays,
+    grant: plan.grant,
+    householdId: plan.householdId,
+    intendedRole: plan.intendedRole,
+    forName: parsed.data.forName ?? null,
   });
 
   revalidatePath("/settings/invites");
@@ -289,13 +345,11 @@ export async function revokeInviteAction(formData: FormData): Promise<void> {
   // Only unused codes can be revoked; deleting a redeemed one would erase the
   // record of how an account came to exist.
   //
-  // Scoped to codes this account made, so one family's parent cannot revoke
-  // another's. `createdById` is a stand-in: an invite has no household column
-  // yet, and gets one when invites start saying what they grant. At that point
-  // this becomes a household comparison and stops depending on which particular
-  // parent happened to press the button.
+  // Scoped to this household's codes, so one family's parent cannot revoke
+  // another's — and either parent in a household can tidy up after the other,
+  // which the earlier `createdById` stand-in could not express.
   await db.inviteCode.deleteMany({
-    where: { id, redeemedById: null, ...(actor.everywhere ? {} : { createdById: actor.user.id }) },
+    where: { id, redeemedById: null, ...(actor.everywhere ? {} : { householdId: actor.householdId }) },
   });
   revalidatePath("/settings/invites");
 }

@@ -103,6 +103,7 @@ model Household {
   characters Character[]
   campaigns  Campaign[]
   aiCalls    AiCall[]
+  invites    InviteCode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -186,13 +187,58 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
+/// What a code does when somebody redeems it.
+///
+/// An invitation used to mean exactly one thing — "you may create an account" —
+/// and the role it ended up with was decided by counting the users table. That
+/// is the wrong place for the decision: whether somebody starts a household of
+/// their own or joins an existing one is a fact about *the invitation*, known by
+/// the person who wrote it, and not something to be inferred later.
+enum InviteGrant {
+  /// Starts a household, with the redeemer answering for it. Only whoever runs
+  /// the installation may hand one out — this is how a new family is admitted,
+  /// and no family may admit another.
+  NEW_HOUSEHOLD
+
+  /// Joins the household that issued it. What a parent sends a child.
+  HOUSEHOLD_MEMBER
+}
+
 /// Registration is invite-only: the app sits on a public URL, and without this
 /// anyone who finds it could create an account.
 model InviteCode {
   id   String  @id @default(cuid())
   code String  @unique
-  /// Free-text reminder of who the code was meant for.
+  /// Free-text reminder, and what the seed labels the bootstrap code with.
+  /// `forName` is what the invitations screen writes now; this stays for the
+  /// codes that predate it, and for the one nobody creates by hand.
   note String?
+
+  /// What redeeming it does. Defaulted to joining a household because that is
+  /// what every code written before this column existed effectively was: one
+  /// person's invitation into their own house.
+  grant InviteGrant @default(HOUSEHOLD_MEMBER)
+
+  /// Which household a HOUSEHOLD_MEMBER code joins. Null on NEW_HOUSEHOLD,
+  /// which makes one instead.
+  ///
+  /// Taken from the session of whoever created the code and never from the
+  /// form, so a parent cannot address an invitation at another family's house
+  /// even by hand-posting one.
+  ///
+  /// CASCADE, unlike the soft references elsewhere here: an invitation into a
+  /// household that no longer exists is not a historical record worth keeping,
+  /// it is a code that would redeem into nothing.
+  householdId String?
+  household   Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  /// What the new member may do once they are in. Null means the ordinary
+  /// answer — they play.
+  intendedRole HouseholdRole?
+
+  /// Who the code is for, so a screen can say "for Mira" rather than making a
+  /// parent remember which of two codes was whose.
+  forName String?
 
   createdById String?
   createdBy   User?   @relation("InviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -213,6 +259,7 @@ model InviteCode {
   createdAt DateTime @default(now())
 
   @@index([createdById])
+  @@index([householdId])
 }
 
 /// Server-side session. The cookie carries an opaque random token; only its
