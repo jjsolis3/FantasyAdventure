@@ -239,9 +239,38 @@ model User {
   partyInvitesSent PartyInvite[] @relation("PartyInviter")
   tiesProposed     Relationship[] @relation("TieProposer")
   linksMade        HouseholdLink[] @relation("LinkCreator")
+  passwordResets   PasswordResetToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A one-time link, emailed to somebody who has forgotten their password.
+///
+/// Only the *hash* of the token is stored, exactly as `AuthSession` stores only
+/// the hash of a session token. A database that leaks should not hand over live
+/// password-reset links along with everything else.
+///
+/// This is for accounts that have an address to send to. A child signs in with
+/// a username and holds no address at all, which is why the grown-up next to
+/// her sets her password directly instead — see `lib/auth/member-password.ts`.
+/// The two mechanisms cover the two kinds of account between them.
+model PasswordResetToken {
+  id        String @id @default(cuid())
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  /// Set the moment it is spent. Kept rather than deleted so a second click on
+  /// the same link can say "that link has already been used" instead of the
+  /// blank "not recognised" a missing row would give.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 /// What a code does when somebody redeems it.

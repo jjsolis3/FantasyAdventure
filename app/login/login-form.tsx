@@ -61,7 +61,7 @@ export function LoginForm({ next }: { next?: string }) {
         </Link>
       </div>
 
-      <div className="border-t border-hearth-800/50 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hearth-800/50 pt-4">
         <button
           type="button"
           onClick={() => setKind(asEmail ? "username" : "email")}
@@ -69,6 +69,14 @@ export function LoginForm({ next }: { next?: string }) {
         >
           {asEmail ? "I sign in with a username" : "I sign in with an email address"}
         </button>
+
+        {/* Only on the email side: a child has no address to send a link to, and
+            offering her one would be a dead end. Her parent sets her password. */}
+        {asEmail ? (
+          <Link href="/forgot" className="text-sm text-hearth-300 underline hover:text-hearth-200">
+            Forgotten your password?
+          </Link>
+        ) : null}
       </div>
     </form>
   );

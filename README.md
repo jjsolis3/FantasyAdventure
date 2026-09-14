@@ -2402,33 +2402,70 @@ every session that account had, because if the reason for the reset was that a
 sibling knew the old password, a still-live session on the sibling's tablet
 would defeat the exercise.
 
-### Why there is no "email me a reset link"
+### Forgetting a password when you do have an address
 
-It is a fair question and the answer is a calculation rather than a limitation.
+Two kinds of account, two answers, and between them they cover everybody —
+which is the point of a username being a child's account and only a child's.
 
-Sending mail means a provider account, credentials in the deployment, a domain
-with SPF and DKIM records or the mail lands in spam, a token table, and two more
-pages. Hearthlight has six runtime dependencies and no mailer.
+A **grown-up** holds an address, so `/forgot` emails a one-time link.
 
-What that buys is nothing for the people who need reset most: **a child has no
-address to send anything to.** It would serve the grown-ups, and every grown-up
-already has somebody who can help them — a household's people have their owner,
-and a household's owner has whoever runs the installation.
+**Only the hash of the link is stored**, exactly as `AuthSession` stores only
+the hash of a session token: a database that leaks should not hand over live
+reset links along with everything else. A link is good for an hour, works once,
+and making a new one kills any earlier unspent one so the most recent email is
+always the live one.
 
-That leaves exactly one account with nobody above it: the administrator's own.
-For that there is `scripts/set-password.mts`, run on the machine that holds the
+**Asking says the same sentence whether or not the address is registered**, or
+the form becomes a way to test which addresses have accounts here. A spent or
+expired link, though, *is* told apart from an unrecognised one — somebody who
+clicks twice, or whose mail client prefetched the link, should be told what
+happened rather than left assuming they mistyped. None of those three messages
+says anything about whether an account exists.
+
+**Spending one ends every session on the account.** If the reason for the reset
+was that somebody else had got in, a live session of theirs would otherwise
+survive the password change and defeat the whole exercise. The lockout is
+cleared too, since somebody resetting has usually locked themselves out first.
+
+**The link is built from `APP_URL`, never from the request's `Host` header.** A
+reset link is the one thing here that hands an account to whoever holds it, and
+a header an attacker controls would let them have the link built to point at
+their own machine and emailed to the real owner. Unset, no email is sent and the
+screen says so.
+
+**Mail is one connection URL**, because every provider hands you exactly that
+string and splitting it into five fields is an invitation to get one wrong:
+
+```
+SMTP_URL="smtps://user:password@smtp.example.com:465"
+MAIL_FROM="Hearthlight <hearth@yourdomain>"
+```
+
+Anything that speaks SMTP works — a Gmail app password, Fastmail, SES, Resend's
+SMTP bridge — so nothing is tied to a provider. The sending domain needs SPF and
+DKIM records or the mail lands in spam. **Unconfigured, the feature is off
+rather than broken:** the screen says to ask whoever runs Hearthlight, which is
+true and actionable, instead of pretending to send and silently dropping it.
+
+This is the only reason Hearthlight ever emails anybody. No digests, no
+notifications, no "your adventure is waiting" nudges.
+
+### The one account nobody is above
+
+Everybody has somebody who can help them back in: a child has her parent, a
+household has whoever runs the installation. The administrator has nobody, by
+design — an account a household owner could reset would be a route to the
+storyteller's API key.
+
+So the escape hatch is where the trust already is, on the machine that holds the
 database:
 
 ```
 DATABASE_URL=… npx tsx scripts/set-password.mts you@example.com 'a long new password'
 ```
 
-A shell on that machine can read the database anyway, which is precisely why it
-is safe to allow there and not safe to put on a screen.
-
-**When that calculation changes:** the day Hearthlight holds families who are
-not yours to telephone. Self-service reset is a support-cost question, and the
-support cost is currently one person who can be asked directly.
+A shell there can read the database anyway, which is precisely why it is safe to
+allow there and not safe to put on a screen.
 
 ### Twelve means twelve
 
@@ -2787,6 +2824,7 @@ tests/
   households.test.ts     Unit tests — naming one, who may act for it, whose it is
   invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
   member-password.test.ts  Unit tests — who may help somebody back into their account
+  password-reset.test.ts   Unit tests — the token, the window, and what a spent link says
   handle.test.ts         Unit tests — what a child may sign in with, and what shows it
   visibility.test.ts     Unit tests — one pair one row, and who can see whom
   auth.e2e.mts      Browser-driven auth flow
@@ -2807,6 +2845,7 @@ tests/
   families.e2e.mts    Two families: strangers, agreed, travelling, and stopped —
                       and the adventure that survives the stopping
   people.e2e.mts      A forgotten password, the lock it came with, and who may lift it
+  forgot.e2e.mts      A reset link: once, in an hour, and never for a child
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter
