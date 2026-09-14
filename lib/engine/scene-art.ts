@@ -14,6 +14,7 @@ import { drawScene, ImagesUnavailableError, sceneArtPrompt } from "@/lib/ai/imag
 import { resolveImageConfig } from "@/lib/ai/settings";
 import { memberCampaignFilter } from "@/lib/game/access";
 import { needsGenerating } from "@/lib/game/scene-picture";
+import { pictureVerdictFor } from "@/lib/billing/usage";
 
 export type SceneArtOutcome =
   | { ok: true; sceneId: string; drawn: boolean }
@@ -38,10 +39,18 @@ export async function ensureSceneArt(
       id: true,
       title: true,
       tone: true,
+      householdId: true,
       storyline: { select: { title: true, slug: true } },
     },
   });
   if (!campaign) return { ok: false, reason: "Adventure not found." };
+
+  // Whose plan pays, checked before the chapter is even looked at. The
+  // household that owns the adventure, not whoever is watching it — a guest
+  // from a linked family should not be buying pictures for somebody else's
+  // story, nor be the reason there are none.
+  const allowed = await pictureVerdictFor(campaign.householdId);
+  if (!allowed.ok) return { ok: false, reason: allowed.reason };
 
   const scene = await db.scene.findFirst({
     where: { id: sceneId, campaignId },

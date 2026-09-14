@@ -2229,13 +2229,21 @@ That second row is the whole rule: **no family may admit another.** A parent
 invites their own children and nobody else's, which is what makes it safe to
 hand a friend a code without handing them the ability to bring in strangers.
 
-**The household comes off the session, never off the form.** There is no field a
-hand-posted request could set to point an invitation at somebody else's house,
-because the value is never read from the request at all — and the grant picker
-is only drawn for a platform administrator because a menu with one legal item on
-it is a thing to wonder about, not because hiding it is the defence.
-`tests/households.e2e.mts` posts the grant anyway, through the real form so it
-carries the headers a server action insists on, and watches the server refuse it.
+**A family's invitation comes off the session, never off the form.** A parent's
+screen has no field that could point an invitation at somebody else's house, and
+a hand-posted one is refused rather than quietly redirected — a request that
+pointed somewhere it may not go deserves to be told so, and a refusal is a thing
+a test can see where a silent substitution looks exactly like the ordinary path.
+`tests/plans.e2e.mts` and `tests/households.e2e.mts` both post the grant anyway,
+through the real form so it carries the headers a server action insists on, and
+watch the server refuse it.
+
+**Admitting a family is not on the family screen.** It used to be: the picker
+above was drawn on `/settings/invites` for whoever ran the installation, which
+put the one decision about how many families exist on the screen a parent uses
+to invite their nine-year-old, visible to exactly one account. It lives on
+[`/admin/invites`](#admitting-a-family-and-helping-one) now, and
+`/settings/invites` offers one kind of code to everybody.
 
 **Anything unrecognised is the narrower option.** A form that omits the grant, or
 sends something odd, asks for somebody to join this house. Likewise an unstated
@@ -2504,6 +2512,151 @@ true and actionable, instead of pretending to send and silently dropping it.
 This is the only reason Hearthlight ever emails anybody. No digests, no
 notifications, no "your adventure is waiting" nudges.
 
+### Admitting a family, and helping one
+
+Two things only whoever runs the installation may do, on one screen at
+`/admin/invites`.
+
+**Admitting a family** is the act that decides how many families exist, and if
+this ever sells subscriptions it is the thing being sold. A household cannot do
+it — `planInvite` refuses a `NEW_HOUSEHOLD` grant from anybody without
+`everywhere`, and has since invitations learned to say what they grant. What
+changed is where it is asked for.
+
+**Inviting somebody into a named family** was impossible before, and its absence
+was not theoretical. A household whose only grown-up forgets their password has
+nobody: a parent can reset a child, whoever runs the installation can reset a
+parent — but adding a *second* grown-up to a family that cannot manage it
+themselves meant writing a row into the database by hand. That is not a remedy,
+it is an outage with a workaround.
+
+So `planInvite` takes a target household, and honours it for an administrator
+only. The ordinary path is untouched — a parent's form carries no target and a
+blank one is not a target, so both parents' codes still land in their own house.
+A parent who *does* send one is refused by name.
+
+### Handing the installation on
+
+`PLATFORM_ADMIN_EMAIL` decides who administers a server **at the moment an
+account registers**, and `User.role` was written in exactly one place. So
+changing the variable on a running server does nothing to the accounts already
+on it — which is correct, and was also the whole of the story: there was no way
+to move the role afterwards except an `UPDATE` typed into a database console.
+
+There is a control on `/admin/households` now, with three refusals:
+
+**Only an administrator may hand it on**, checked in the rule rather than
+trusted to the screen it happens to be drawn on.
+
+**Never your own account.** Not caution — a shape. The hand-over is always
+performed by the account *receiving* it: promote the new one, sign in as it, and
+retire the old one from there. That proves the new sign-in works while the old
+one can still put it right, which is the one thing a database `UPDATE` could
+never do for you.
+
+**Never the last administrator**, so an installation cannot end up with nobody
+able to reach the storyteller's settings.
+
+And one about who may be given it: an account that signs in with a **username**
+may not. Those are children's accounts — that is the entire reason the column
+exists — and the storyteller's API keys are not a thing to put one keystroke
+away from a nine-year-old. It keeps this agreeing with `shouldAdminister`, which
+has always required an address.
+
+### What a plan allows
+
+Households were built as the privacy boundary with the note that they would
+become the tenant boundary if this ever became something families paid for. This
+is that, and it re-lays nothing: every ceiling clips in at a function an earlier
+stage had already put in the right place.
+
+| Ceiling | Where it is asked |
+|---|---|
+| People in the family | `planInvite`'s caller, counting **codes handed out as well as people in** |
+| Families you adventure with | `redeemLinkCodeAction` |
+| Adventures on the go | campaign creation |
+| Turns a month | `loadCampaign` — the one door every model call comes through |
+| Pictures | both places one is actually drawn |
+
+**Capabilities, not plan names.** Nothing in the app asks *"is this household on
+Homestead?"*. It asks `entitlements.campaigns`, and `lib/billing/plans.ts` turns
+a plan into numbers. A cap site that reads a plan name has to be found and
+edited every time the pricing changes, and there is always one that gets missed.
+
+**Hard numbers, not feature flags.** A turn is three model calls before any
+picture, and a family playing a long Saturday can take forty turns — a hundred
+and twenty calls. A plan that says *images: yes* and nothing about volume is a
+plan where one enthusiastic household eats the margin of ten. `AiCall` has
+carried a household id since the day households existed, precisely so this could
+be measured before it was ever priced.
+
+**Seats count the codes, not just the people.** Registration redeems a code that
+was valid when it was written, so a household that minted twenty in one sitting
+would otherwise arrive at twenty members having passed the check exactly zero
+times.
+
+**A failed payment stops new things without stopping the story.** `PAST_DUE`
+takes away starting — new adventures, new invitations, new families — and leaves
+the adventure already under way playable to its end. There is a nine-year-old on
+the other side of that decision and she did not enter the card details. Only a
+cancellation stops play, and even then nothing is deleted: the chronicle stays,
+and reading it back is gated on nothing. The refusals say *which* it is, because
+being told "you have reached your limit" when a card was declined costs an
+afternoon.
+
+**A missing subscription row resolves to the smallest allowance**, not the
+largest. Failing towards free costs a family an upgrade prompt; failing towards
+unlimited costs the installation money it never charged for.
+
+**And nothing is metered here unless you ask for it.** `DEFAULT_PLAN` is
+`UNMETERED` — no ceiling on anything — because this is a repository a family can
+clone and run at home, and the default behaviour of a thing you host yourself
+should not be a sales funnel. Every household that existed before subscriptions
+did was backfilled `UNMETERED` for the same reason: nobody running a local model
+agreed to a turn limit, and inventing one for them retrospectively would be a
+worse thing to do than having no caps at all. An installation that sells
+subscriptions sets `DEFAULT_PLAN=HEARTH`.
+
+There is no payment processor yet. The plan and its state are set by hand on
+`/admin/households`, which is how a comped family or a support case gets handled
+anyway, and which is what the columns a webhook will eventually write already
+are.
+
+### Before anybody is charged
+
+Not code, and not advice — this is a note about what is still open, written down
+so it does not get discovered on the day the first card is taken. **I am not a
+lawyer and this needs one.**
+
+**A parent setting it up is most of the answer, and not all of it.** Hearthlight
+is explicitly for children under 13, which in the United States makes whoever
+runs a paid installation an operator under COPPA — and that is decided by who
+the service is *for*, not by who clicked register. What the app's shape already
+gets right is the consent flow: a parent creates the household, a parent issues
+the child's code, and a child's account holds no email address at all, which is
+the best kind of data minimisation because the data is never collected. That is
+the right structure and it was built on purpose.
+
+What the structure does not supply is the rest of the obligation. Consent has to
+be **informed**, which means a privacy notice saying plainly what is collected —
+display names, free-text narration, generated portraits — and, critically, that
+**all of it is sent to a third-party model provider**. It has to be revocable,
+which means deletion on request, per household, actually implemented. Those are
+documents and features, not an account hierarchy.
+
+One thing helps more than it looks: taking a payment from the parent's own card
+is one of the FTC's recognised methods of verifying that a parent is a parent.
+The subscription work and the consent work point the same way.
+
+**The provider's terms are a separate question, and the account shape cannot
+answer it.** Several hosted model providers prohibit under-13 end users outright,
+or prohibit knowingly submitting their data — and the child is the end user here
+whatever the billing relationship says. That is a contract between the operator
+and the provider, and it has to be read against whichever one is actually in
+use. Running against a local model sidesteps it completely, which is part of why
+`UNMETERED` is the default and why self-hosting stays a first-class way to run
+this.
+
 ### The one account nobody is above
 
 Everybody has somebody who can help them back in: a child has her parent, a
@@ -2711,6 +2864,8 @@ In the application's **Environment Variables** tab:
 | `APP_VERSION` | Optional; surfaces on `/api/health` so you can tell which build is live |
 | `SEED_ON_START` | `true` (set `false` once you manage storylines by hand) |
 | `COOKIE_SECURE` | Optional. Leave unset — it follows `X-Forwarded-Proto` automatically. Set `true` to force secure cookies once you are on https. |
+| `PLATFORM_ADMIN_EMAIL` | Optional but strongly recommended. The address that becomes the administrator on registering. Unset, the first account to reach `/register` takes the installation. **It only applies at registration** — to move the role on a server that is already running, use the control on `/admin/households`. |
+| `DEFAULT_PLAN` | Optional. `UNMETERED` by default: no ceiling on people, adventures, turns or pictures, which is what a family running their own copy should get. Set `HEARTH` to put every newly registered household on the trial. |
 
 ### 4. Health check and domain
 
@@ -2786,14 +2941,16 @@ app/
   screen/           The television: one adventure, read-only, no sign-in
   settings/         The family's hub: its adventurers, its invitations
   settings/adventurers/    Fixing and re-laying a sheet in your own household
-  settings/invites/        Codes for your own family, and what each one grants
+  settings/invites/        Codes for your own family — one kind, into your house
   settings/families/       The families yours has agreed to adventure with
   settings/people/         Who is in your family, and helping one of them back in
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
   admin/adventures/        Writing and editing storylines in the app
   admin/usage/             What every call used, and what it cost
-  admin/households/        Which accounts are one family, and who answers for it
+  admin/households/        Which accounts are one family, who answers for it,
+                           who runs the installation, and what each family pays
+  admin/invites/           Admitting a family, and inviting into a named one
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
@@ -2810,9 +2967,14 @@ lib/
     password.ts     scrypt hashing, parameters embedded per hash
     session.ts      Server-side sessions; requireUser, requirePlatformAdmin,
                     requireHouseholdParent
-    invites.ts      Code validation and redemption
+    invites.ts      Code validation, redemption, and who may write which grant
     invite-code.ts  Pure generator — import-free so the seed can use it
+    platform-admin.ts  Who administers an installation, and handing it on
     actions.ts      Server actions for every auth form
+  billing/
+    plans.ts        What each plan allows, as numbers — no database, no session
+    caps.ts         One ceiling per function: an allowance, a count, a sentence
+    usage.ts        What a household has used, and the one-line gate each site asks
   ai/
     provider.ts     OpenAI-compatible and Anthropic clients
     images.ts       The drawing request, and the prompt it is safe to send
@@ -2900,6 +3062,10 @@ tests/
                       and the adventure that survives the stopping
   people.e2e.mts      A forgotten password, the lock it came with, and who may lift it
   forgot.e2e.mts      A reset link: once, in an hour, and never for a child
+  entitlements.test.ts  What each plan allows, and every sentence a ceiling says
+  platform-role.test.ts Handing the installation on, and the three refusals
+  plans.e2e.mts       Admitting a family, a seat cap that bites, a card that
+                      failed, and the installation changing hands
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

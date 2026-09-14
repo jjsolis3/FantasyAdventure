@@ -8,6 +8,7 @@
 
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client.ts";
+import { turnVerdictFor } from "@/lib/billing/usage";
 import { buildContext, type MemoryContext, type TurnContext } from "@/lib/ai/context";
 import {
   conversationPrompt,
@@ -270,14 +271,47 @@ async function logAiCalls(
 }
 
 /**
+ * Raised when a household has used its month.
+ *
+ * A class rather than a bare `Error` so a route can tell "you are out of turns"
+ * from "the model server is unreachable" if it ever needs to. The message is
+ * written to be read aloud at a table, because that is where it lands: the turn
+ * routes stream it straight through to the screen the family is looking at.
+ */
+export class OutOfTurnsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OutOfTurnsError";
+  }
+}
+
+/**
  * Loads a campaign with everything the prompt needs.
  *
  * Scoped to the people at the table rather than to the account that created it:
  * once a household has joined with the code, their adventurer is in the party
  * and they can play the turn like anybody else.
+ *
+ * **This is also where the month's turns are counted**, because every one of
+ * this module's four exits that spends a model call comes through here and
+ * nothing else does. A cap written at the four call sites instead would be a
+ * cap that is right at three of them by the end of the year. If a read-only
+ * path ever needs this loader, give it one that does not charge rather than
+ * making the charge conditional.
+ *
+ * The household that *owns* the adventure pays for it, not whoever pressed the
+ * button. A guest from a linked family travelling in somebody else's story
+ * should not be spending their own allowance on it — and the alternative, each
+ * player paying for their own turns, would mean a joint adventure stopping
+ * halfway through for one child and carrying on for the other.
+ *
+ * The count comes *after* the load rather than before it, so the common case —
+ * a family with turns left, or no ceiling at all — pays for one query instead
+ * of two. Refusing after loading wastes the load, and refusing is the rare
+ * case; charging every turn to make the rare one cheaper is the wrong trade.
  */
 async function loadCampaign(campaignId: string, userId: string) {
-  return db.campaign.findFirst({
+  const campaign = await db.campaign.findFirst({
     where: memberCampaignFilter(campaignId, userId),
     include: {
       storyline: { include: { acts: { orderBy: { index: "asc" } } } },
@@ -305,6 +339,13 @@ async function loadCampaign(campaignId: string, userId: string) {
       memories: true,
     },
   });
+
+  if (campaign) {
+    const budget = await turnVerdictFor(campaign.householdId);
+    if (!budget.ok) throw new OutOfTurnsError(budget.reason);
+  }
+
+  return campaign;
 }
 
 type LoadedCampaign = NonNullable<Awaited<ReturnType<typeof loadCampaign>>>;

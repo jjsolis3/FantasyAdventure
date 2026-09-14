@@ -5,6 +5,7 @@ import { ImagesUnavailableError, drawScene, portraitPrompt } from "@/lib/ai/imag
 import { lookOf, lookSentence } from "@/lib/game/wardrobe";
 import { lookKey } from "@/lib/game/character-picture";
 import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
+import { pictureVerdictFor } from "@/lib/billing/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     select: {
       id: true,
       name: true,
+      householdId: true,
       race: true,
       archetype: true,
       ageBand: true,
@@ -82,6 +84,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     },
   });
   if (!character) return Response.json({ error: "Adventurer not found." }, { status: 404 });
+
+  // 402 rather than 503: the drawing service is fine, this family's plan does
+  // not include it. A status code that says "come back later" would have the
+  // browser doing exactly that, forever.
+  const allowed = await pictureVerdictFor(character.householdId);
+  if (!allowed.ok) return Response.json({ error: allowed.reason }, { status: 402 });
 
   const config = await resolveImageConfig();
   if (!config) {

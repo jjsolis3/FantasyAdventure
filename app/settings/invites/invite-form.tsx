@@ -1,55 +1,40 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { createInviteAction, type FormState } from "@/lib/auth/actions";
 import { Alert, Field, SelectField } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
 /**
- * Writing an invitation, and saying what it grants.
+ * Writing an invitation into your own house.
  *
- * The grant picker only appears for whoever runs Hearthlight, because a parent
- * has exactly one legal option and a menu with one item on it is not a choice,
- * it is a thing to wonder about. Hiding it is a courtesy, not a defence:
- * `createInviteAction` refuses a `NEW_HOUSEHOLD` grant from anybody else
- * whether or not this form offered it.
+ * There is one kind of code on this screen and there is no picker, because
+ * there is nothing to pick. A family invites the people it wants playing
+ * alongside it — a grandparent, a cousin, a friend of the children's — and that
+ * is the whole of what a family may hand out. Admitting a *new family* is a
+ * different act with a different cost, and it lives on `/admin/invites` where
+ * whoever runs Hearthlight can see all of them at once.
+ *
+ * The picker used to be here, shown to platform administrators only. That put
+ * the one decision about how many families exist on the screen a parent uses to
+ * invite their nine-year-old, visible to exactly one account, which is how a
+ * thing gets forgotten.
+ *
+ * Hiding it was never the defence in any case. `planInvite` refuses a
+ * `NEW_HOUSEHOLD` grant from anybody who does not run the installation, whether
+ * or not a form offered it, and refuses a household id aimed at anybody else's
+ * family the same way.
  */
-export function InviteForm({ mayAdmitFamilies }: { mayAdmitFamilies: boolean }) {
+export function InviteForm() {
   const [state, formAction] = useActionState<FormState, FormData>(createInviteAction, null);
-  const [grant, setGrant] = useState("HOUSEHOLD_MEMBER");
   const created = state !== null && state.error === "";
-  const newHousehold = mayAdmitFamilies && grant === "NEW_HOUSEHOLD";
 
   return (
     <form action={formAction} className="space-y-5">
       {state?.error ? <Alert>{state.error}</Alert> : null}
       {created ? <Alert tone="success">Invite created — it is at the top of the list below.</Alert> : null}
 
-      {mayAdmitFamilies ? (
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-hearth-200">What does this code do?</span>
-          <select
-            name="grant"
-            value={grant}
-            onChange={(event) => setGrant(event.target.value)}
-            className="w-full rounded-lg border border-hearth-800/70 bg-hearth-950/60 px-3 py-2 text-hearth-100 focus:border-hearth-600 focus:ring-2 focus:ring-hearth-600/30 focus:outline-none"
-          >
-            <option value="HOUSEHOLD_MEMBER" className="bg-hearth-950">
-              Joins your household
-            </option>
-            <option value="NEW_HOUSEHOLD" className="bg-hearth-950">
-              Starts a household of their own
-            </option>
-          </select>
-          <span className="mt-1.5 block text-sm text-hearth-400">
-            {newHousehold
-              ? "They become the head of a new family and can invite their own children. They will not see your adventurers, and you will not see theirs, until the two households are linked."
-              : "They join your family and can see the adventurers in it."}
-          </span>
-        </label>
-      ) : (
-        <input type="hidden" name="grant" value="HOUSEHOLD_MEMBER" />
-      )}
+      <input type="hidden" name="grant" value="HOUSEHOLD_MEMBER" />
 
       <Field
         label="Who is this for?"
@@ -60,18 +45,16 @@ export function InviteForm({ mayAdmitFamilies }: { mayAdmitFamilies: boolean }) 
         hint="Optional — it just labels the code in the list below, so you can remember who you gave it to."
       />
 
-      {newHousehold ? null : (
-        <SelectField
-          label="What will they do here?"
-          name="intendedRole"
-          defaultValue="MEMBER"
-          options={[
-            { value: "MEMBER", label: "Play — make and play their own adventurers" },
-            { value: "PARENT", label: "Help run the household — also invites and fixes sheets" },
-          ]}
-          hint="A child's code is the first one, and it is the only one that can be redeemed with a username instead of an email address. The second is for another grown-up in the house."
-        />
-      )}
+      <SelectField
+        label="What will they do here?"
+        name="intendedRole"
+        defaultValue="MEMBER"
+        options={[
+          { value: "MEMBER", label: "Play — make and play their own adventurers" },
+          { value: "PARENT", label: "Help run the household — also invites and fixes sheets" },
+        ]}
+        hint="A child's code is the first one, and it is the only one that can be redeemed with a username instead of an email address. The second is for another grown-up in the house."
+      />
 
       <Field
         label="Expires after (days)"

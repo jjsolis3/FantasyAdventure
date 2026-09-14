@@ -70,20 +70,35 @@ export type InvitePlan =
  *     A parent invites their own children and nobody else's; admitting another
  *     family is not something one family does to another.
  *   - **A member invitation is stamped with the caller's own household**, taken
- *     from their session. The form is not consulted, and there is no argument
- *     here it could reach: `householdId` comes off the actor or not at all, so
- *     a hand-posted request has nothing to point at another family's house.
+ *     from their session. A parent has no way to address one at another family:
+ *     `targetHouseholdId` is refused outright for them rather than quietly
+ *     ignored, because a request that aimed somewhere it may not go deserves an
+ *     answer saying so.
+ *   - **Whoever runs the installation may aim one anywhere**, which is the one
+ *     thing this rule could not express before. A family whose only grown-up
+ *     has lost their password, or who needs a second parent adding and cannot
+ *     manage it themselves, has to be reachable by somebody — otherwise the
+ *     only remedy is a hand-written row in the database, which is not a remedy.
  *
  * It is a plain function rather than four lines inside the server action so the
  * refusals can be tested without a browser and a live session. The action still
  * decides nothing: it parses, asks this, and writes the answer.
+ *
+ * Note what this deliberately does *not* ask: whether the household has room
+ * for another person. That is a question about what the family has paid for
+ * rather than about who may act, and it is `seatVerdict`'s — see
+ * `lib/billing/caps.ts`. Two questions, two modules, so neither can be
+ * accidentally satisfied by answering the other.
  */
 export function planInvite(input: {
   actor: { householdId: string | null; everywhere: boolean };
   grant: InviteGrant;
   intendedRole: HouseholdRole | null;
+  /** Which household to invite into, when it is not the caller's own. */
+  targetHouseholdId?: string | null;
 }): InvitePlan {
   const { actor, grant } = input;
+  const target = input.targetHouseholdId?.trim() || null;
 
   if (grant === "NEW_HOUSEHOLD") {
     if (!actor.everywhere) {
@@ -99,14 +114,26 @@ export function planInvite(input: {
     return { ok: true, grant, householdId: null, intendedRole: null };
   }
 
-  if (!actor.householdId) {
+  if (target && !actor.everywhere) {
+    return {
+      ok: false,
+      reason: "You can only invite people into your own household.",
+    };
+  }
+
+  // The caller's own household is still the answer whenever nothing else was
+  // named, so the ordinary path through this function is unchanged: a parent's
+  // form carries no target, and never could.
+  const householdId = target ?? actor.householdId;
+
+  if (!householdId) {
     return { ok: false, reason: "This account is not part of a household yet. Ask an administrator." };
   }
 
   return {
     ok: true,
     grant,
-    householdId: actor.householdId,
+    householdId,
     // Blank means they play. A child's account should not arrive able to invite
     // strangers into the house because a field was left unset.
     intendedRole: input.intendedRole ?? "MEMBER",

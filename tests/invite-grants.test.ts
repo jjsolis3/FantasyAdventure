@@ -89,3 +89,61 @@ test("an account in no household cannot invite anybody into it", () => {
   const plan = planInvite({ actor: stray, grant: "HOUSEHOLD_MEMBER", intendedRole: null });
   assert.equal(plan.ok, false);
 });
+
+// ---- Inviting into somebody else's house -----------------------------------
+
+test("whoever runs Hearthlight may aim an invitation at a named family", () => {
+  // The gap this rule had. A family whose only grown-up has forgotten their
+  // password, or who needs a second parent adding and cannot manage it between
+  // them, has to be reachable by somebody — and the alternative was writing a
+  // row into the database by hand, which is not a remedy, it is an outage with
+  // a workaround.
+  const plan = planInvite({
+    actor: operator,
+    grant: "HOUSEHOLD_MEMBER",
+    intendedRole: "PARENT",
+    targetHouseholdId: "hh_okonkwo",
+  });
+  assert.equal(plan.ok && plan.householdId, "hh_okonkwo");
+});
+
+test("and a parent who aims one is refused rather than quietly redirected", () => {
+  // Silently stamping their own household would be safe and dishonest. A
+  // request that pointed somewhere it may not go deserves to be told so — and a
+  // refusal is a thing a test can see, where a quiet substitution looks exactly
+  // like the ordinary path.
+  const plan = planInvite({
+    actor: parent,
+    grant: "HOUSEHOLD_MEMBER",
+    intendedRole: "MEMBER",
+    targetHouseholdId: "hh_okonkwo",
+  });
+  assert.equal(plan.ok, false);
+  assert.match(plan.ok ? "" : plan.reason, /only invite people into your own household/);
+});
+
+test("a blank target is not a target", () => {
+  // Forms post empty strings. One must not read as "aim this somewhere", or
+  // every ordinary invitation from an administrator would take the other path.
+  const plan = planInvite({
+    actor: parent,
+    grant: "HOUSEHOLD_MEMBER",
+    intendedRole: "MEMBER",
+    targetHouseholdId: "   ",
+  });
+  assert.equal(plan.ok && plan.householdId, "hh_solis");
+});
+
+test("an administrator in no household of their own can still help one", () => {
+  // Registration makes a household in the same transaction as the account, so
+  // this is not an ordinary state — but an installation whose operator does not
+  // play should not thereby lose the ability to fix anybody's family.
+  const nomad = { householdId: null, everywhere: true };
+  const plan = planInvite({
+    actor: nomad,
+    grant: "HOUSEHOLD_MEMBER",
+    intendedRole: "PARENT",
+    targetHouseholdId: "hh_okonkwo",
+  });
+  assert.equal(plan.ok && plan.householdId, "hh_okonkwo");
+});

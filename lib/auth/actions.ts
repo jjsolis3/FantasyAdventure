@@ -18,6 +18,7 @@ import { normaliseHandle, usernameProblem } from "@/lib/auth/handle";
 import { signInColumns, signInProblem } from "@/lib/auth/change-sign-in";
 import { createHousehold, householdNameFor } from "@/lib/game/households";
 import { shouldAdminister } from "@/lib/auth/platform-admin";
+import { seatVerdictFor } from "@/lib/billing/usage";
 
 /** Shape returned to every auth form. `null` means nothing has been submitted yet. */
 export type FormState = { error: string; fieldErrors?: Record<string, string> } | null;
@@ -369,6 +370,11 @@ const inviteSchema = z.object({
   // should be when somebody forgets to say.
   intendedRole: z.enum(["PARENT", "MEMBER"]).catch("MEMBER"),
   forName: z.string().trim().max(60, "That name is a bit long.").optional(),
+  // Which family to invite into, when it is not the caller's own. Only the
+  // administration screen offers it, and `planInvite` refuses it from anybody
+  // who is not running the installation — so parsing it here is not the same as
+  // honouring it.
+  targetHouseholdId: z.string().trim().max(60).optional(),
 });
 
 /**
@@ -387,6 +393,7 @@ export async function createInviteAction(_prev: FormState, formData: FormData): 
     grant: formData.get("grant") ?? undefined,
     intendedRole: formData.get("intendedRole") ?? undefined,
     forName: formData.get("forName") ?? undefined,
+    targetHouseholdId: formData.get("targetHouseholdId") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -397,9 +404,25 @@ export async function createInviteAction(_prev: FormState, formData: FormData): 
     actor: { householdId: actor.householdId, everywhere: actor.everywhere },
     grant: parsed.data.grant,
     intendedRole: parsed.data.intendedRole,
+    targetHouseholdId: parsed.data.targetHouseholdId ?? null,
   });
 
   if (!plan.ok) return { error: plan.reason };
+
+  // A household that does not exist would otherwise surface as a foreign-key
+  // violation from the middle of `createInvite` — an error page rather than a
+  // sentence. Only reachable when an administrator named one, since every other
+  // path takes the id off a session that is by definition real.
+  if (plan.householdId && plan.householdId !== actor.householdId) {
+    const exists = await db.household.findUnique({
+      where: { id: plan.householdId },
+      select: { id: true },
+    });
+    if (!exists) return { error: "That family could not be found." };
+  }
+
+  const seats = await seatVerdictFor(plan.householdId);
+  if (!seats.ok) return { error: seats.reason };
 
   await createInvite({
     createdById: actor.user.id,
@@ -411,6 +434,7 @@ export async function createInviteAction(_prev: FormState, formData: FormData): 
   });
 
   revalidatePath("/settings/invites");
+  revalidatePath("/admin/invites");
   return { error: "" };
 }
 
