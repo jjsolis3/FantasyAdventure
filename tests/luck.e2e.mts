@@ -112,9 +112,21 @@ async function main() {
 
   await beginCampaign(campaign.id, user.id);
 
-  // Enough turns that a 31% chance per turn is all but certain to land at least
-  // once, and few enough that this finishes in under a minute.
-  const TURNS = 14;
+  // A ceiling rather than a target: the loop below stops the moment it has seen
+  // both things it needs, so in the ordinary case this costs nothing and the
+  // run is over in a handful of turns.
+  //
+  // It is high because the sample that matters is smaller than it looks. Luck
+  // lifts a COMPLICATION or a PARTIAL and nothing else — a success has nothing
+  // to save and a natural 1 is left alone deliberately — so of fourteen rolls
+  // only a few are ever eligible, and at roughly one chance in two per eligible
+  // roll, "fourteen turns" was really "four or five coin flips". That failed a
+  // full sweep once, on a run where the code was perfectly correct.
+  //
+  // The comment this replaces said 31%. The real figure is 48% and has been
+  // since the stat budget moved, which is its own small lesson about numbers
+  // written down in prose beside the constant they describe.
+  const TURNS = 40;
   const rolled: DiceMetadata[] = [];
 
   for (let turn = 0; turn < TURNS; turn += 1) {
