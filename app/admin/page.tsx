@@ -20,15 +20,23 @@ export const dynamic = "force-dynamic";
 export default async function AdminHubPage() {
   await requirePlatformAdmin();
 
-  const [storylines, custom, campaigns, calls, households] = await Promise.all([
+  const [storylines, custom, campaigns, calls, households, waiting] = await Promise.all([
     db.storyline.count(),
     db.storyline.count({ where: { isCustom: true } }),
     db.campaign.count(),
     db.aiCall.count(),
     db.household.count(),
+    db.inviteCode.count({ where: { redeemedById: null } }),
   ]);
 
   const cards = [
+    {
+      href: "/admin/invites",
+      title: "Invitations",
+      blurb:
+        "Admitting a new family, which is the one thing no family can do for itself — and inviting somebody into a household that cannot manage it, when a parent has locked themselves out.",
+      note: `${waiting} ${waiting === 1 ? "code" : "codes"} waiting to be used`,
+    },
     {
       href: "/admin/storyteller",
       title: "The storyteller",

@@ -72,6 +72,7 @@ ALL=(
   auth characters campaigns play rounds invites quests loadout growth knacks
   acquaintances personal-quests progression settings admin households families people forgot screen bonds
   briefing chapters chronicle companions dials dreams encounters forks levels luck pressure
+  plans
   rebalance reset
   rivals
   table-dice table-view talk ties wardrobe

@@ -19,6 +19,7 @@ import { currentRound } from "@/lib/game/rounds";
 import { questBoard } from "@/lib/game/quests";
 import { QuestList, QuestSummaryLink } from "@/components/campaign/quest-list";
 import { resolveImageConfig } from "@/lib/ai/settings";
+import { pictureVerdictFor } from "@/lib/billing/usage";
 import { PartySheets, type PartySheet } from "@/components/play/party-sheets";
 import { PlayLayout } from "@/components/play/play-layout";
 import { ScenePicture } from "@/components/play/scene-picture";
@@ -114,7 +115,12 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
   // Pictures are off unless a table has set up somewhere to draw them, so this
   // asks once per page rather than letting every browser find out by failing.
-  const picturesOn = (await resolveImageConfig()) !== null;
+  // The family's plan is the second half of the same question — `ensureSceneArt`
+  // refuses either way, and this is what stops four browsers polling for a
+  // picture that is never going to arrive.
+  const picturesOn =
+    (await resolveImageConfig()) !== null &&
+    (await pictureVerdictFor(campaign.householdId)).ok;
   // Only OWN_DEVICE campaigns have a waiting room; a shared screen keeps its
   // answers on the page until they are sent.
   const round = campaign.inputMode === "OWN_DEVICE" ? await currentRound(campaign.id) : null;

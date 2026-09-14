@@ -8,6 +8,7 @@ import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { generateJoinCode } from "@/lib/auth/invite-code";
 import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
+import { campaignVerdictFor } from "@/lib/billing/usage";
 import type { FormState } from "@/lib/auth/actions";
 
 const campaignSchema = z.object({
@@ -140,6 +141,12 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
   if (!user.householdId) {
     return { error: "This account is not part of a household yet. Ask an administrator." };
   }
+
+  // Last, after every other objection, so a family who has filled the form in
+  // wrong is told about that rather than about their plan. Only adventures
+  // still going count — see `LIVE` in `lib/billing/usage.ts`.
+  const room = await campaignVerdictFor(user.householdId);
+  if (!room.ok) return { error: room.reason };
 
   const campaign = await createWithJoinCode({
     ownerId: user.id,

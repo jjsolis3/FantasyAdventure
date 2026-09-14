@@ -10,6 +10,7 @@ import { Face } from "@/components/character/face";
 import { earnedWearables, lookOf } from "@/lib/game/wardrobe";
 import { characterPicture } from "@/lib/game/character-picture";
 import { resolveImageConfig } from "@/lib/ai/settings";
+import { pictureVerdictFor } from "@/lib/billing/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,13 @@ export default async function LookPage({ params }: { params: Promise<{ id: strin
     : [];
 
   // Asked once per page rather than letting the button find out by failing.
-  const picturesOn = (await resolveImageConfig()) !== null;
+  // Two questions, both of which have to be yes: whether anybody has set up
+  // somewhere to draw, and whether this family's plan includes drawing. The
+  // route refuses either way — this only decides whether to offer the button,
+  // and an offer that is always refused is worse than no offer.
+  const picturesOn =
+    (await resolveImageConfig()) !== null &&
+    (await pictureVerdictFor(character.householdId)).ok;
   const picture = characterPicture({
     id: character.id,
     name: character.name,

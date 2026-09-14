@@ -19,6 +19,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin } from "@/lib/auth/session";
 import { createHousehold, mayActForHousehold } from "@/lib/game/households";
+import { mayChangePlatformRole } from "@/lib/auth/platform-admin";
 
 export type HouseholdFormState = { error: string; done?: string } | null;
 
@@ -154,6 +155,136 @@ const ROLE_WORDS: Record<string, string> = {
   MEMBER: "playing",
 };
 
+const PLANS = ["HEARTH", "HOMESTEAD", "KEEP", "UNMETERED"] as const;
+const STATUSES = ["TRIALING", "ACTIVE", "PAST_DUE", "CANCELED"] as const;
+
+/**
+ * Puts a household on a plan, by hand.
+ *
+ * The lever that exists before a payment processor does, and the one that will
+ * still be needed after: somebody has to be able to comp a family, put a friend
+ * on unmetered, or park an account that is being argued about, without any of
+ * it going through a card. When Stripe arrives its webhook writes these same
+ * two columns and this stays exactly as useful.
+ *
+ * Plan and status are set together because they answer different questions and
+ * both have to be sayable. A family whose card failed is still *on* Homestead —
+ * they are `PAST_DUE` — and quietly moving them to Hearth instead would mean
+ * working out what they were on again when the payment goes through.
+ *
+ * Deliberately not something a household can do to itself. Choosing a plan is
+ * going to be a checkout page; this is the administrator's override, and an
+ * override a customer can reach is not an override.
+ */
+export async function setPlanAction(
+  _prev: HouseholdFormState,
+  formData: FormData,
+): Promise<HouseholdFormState> {
+  await requirePlatformAdmin();
+
+  const householdId = String(formData.get("householdId") ?? "");
+  const plan = String(formData.get("plan") ?? "");
+  const status = String(formData.get("status") ?? "");
+
+  if (!householdId) return { error: "Pick a household." };
+  if (!PLANS.includes(plan as (typeof PLANS)[number])) return { error: "That is not a plan." };
+  if (!STATUSES.includes(status as (typeof STATUSES)[number])) {
+    return { error: "That is not a state an account can be in." };
+  }
+
+  const household = await db.household.findUnique({
+    where: { id: householdId },
+    select: { name: true },
+  });
+  if (!household) return { error: "That household no longer exists." };
+
+  // Upsert rather than update: households made before subscriptions existed got
+  // a row from the migration and registration writes one, so this should always
+  // find something — but "should always" is how a screen ends up throwing at
+  // the one administrator who can fix it.
+  await db.subscription.upsert({
+    where: { householdId },
+    update: {
+      plan: plan as (typeof PLANS)[number],
+      status: status as (typeof STATUSES)[number],
+    },
+    create: {
+      householdId,
+      plan: plan as (typeof PLANS)[number],
+      status: status as (typeof STATUSES)[number],
+    },
+  });
+
+  revalidatePath("/admin/households");
+  revalidatePath("/settings");
+  return { error: "", done: `${household.name} is on ${plan}, ${status.toLowerCase()}.` };
+}
+
+/**
+ * Hands the installation to another account, or takes it back.
+ *
+ * The second place `User.role` is written, and until now there was only one:
+ * `registerAction`. That meant `PLATFORM_ADMIN_EMAIL` decided who administered
+ * a server at the moment an account was created and never again — change it
+ * afterwards and nothing happens, because the variable is consulted at
+ * registration and the role is a column. The only way to move it was a hand-
+ * written `UPDATE`, which is a fine answer for the one person who wrote this
+ * and no answer at all for anybody else.
+ *
+ * Every refusal is `mayChangePlatformRole`'s, which is a plain function for the
+ * usual reason: the interesting cases are the ones that say no, and a no you
+ * can only reach by signing in as two different accounts in a browser is a no
+ * that stops being tested.
+ */
+export async function setPlatformRoleAction(
+  _prev: HouseholdFormState,
+  formData: FormData,
+): Promise<HouseholdFormState> {
+  const actor = await requirePlatformAdmin();
+
+  const userId = String(formData.get("userId") ?? "");
+  const makeAdmin = String(formData.get("makeAdmin") ?? "") === "true";
+  if (!userId) return { error: "Pick somebody." };
+
+  const target = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, displayName: true, email: true, role: true },
+  });
+  if (!target) return { error: "That account no longer exists." };
+
+  // Administrators other than the target, which is the count the rule wants —
+  // "is this the last one?" rather than "how many are there?".
+  const otherAdmins = await db.user.count({
+    where: { role: "PLATFORM_ADMIN", id: { not: target.id } },
+  });
+
+  const verdict = mayChangePlatformRole({
+    actor: { id: actor.id, platformAdmin: actor.role === "PLATFORM_ADMIN" },
+    target: {
+      id: target.id,
+      platformAdmin: target.role === "PLATFORM_ADMIN",
+      hasEmail: target.email !== null,
+      displayName: target.displayName,
+    },
+    makeAdmin,
+    otherAdmins,
+  });
+  if (!verdict.ok) return { error: verdict.reason };
+
+  await db.user.update({
+    where: { id: target.id },
+    data: { role: makeAdmin ? "PLATFORM_ADMIN" : "PLAYER" },
+  });
+
+  revalidatePath("/admin/households");
+  return {
+    error: "",
+    done: makeAdmin
+      ? `${target.displayName} runs Hearthlight now.`
+      : `${target.displayName} no longer runs Hearthlight.`,
+  };
+}
+
 /** Renames a household, so "Dad's household" can become "The Solis family". */
 export async function renameHouseholdAction(
   _prev: HouseholdFormState,
@@ -221,6 +352,9 @@ export async function householdOverview() {
             role: true,
             user: { select: { id: true, displayName: true, email: true, username: true, role: true } },
           },
+        },
+        subscription: {
+          select: { plan: true, status: true, currentPeriodStart: true, currentPeriodEnd: true },
         },
         _count: { select: { characters: true, campaigns: true } },
       },

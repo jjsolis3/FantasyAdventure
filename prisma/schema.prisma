@@ -99,13 +99,14 @@ model Household {
   /// which is the whole of what "both sides agreed" needs to mean.
   linkCode String @unique
 
-  members    HouseholdMember[]
-  characters Character[]
-  campaigns  Campaign[]
-  aiCalls    AiCall[]
-  invites    InviteCode[]
-  linksA     HouseholdLink[]   @relation("HouseholdA")
-  linksB     HouseholdLink[]   @relation("HouseholdB")
+  members      HouseholdMember[]
+  characters   Character[]
+  campaigns    Campaign[]
+  aiCalls      AiCall[]
+  invites      InviteCode[]
+  linksA       HouseholdLink[]   @relation("HouseholdA")
+  linksB       HouseholdLink[]   @relation("HouseholdB")
+  subscription Subscription?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,6 +188,89 @@ enum HouseholdRole {
   PARENT
   /// Plays. The role a child's account is given.
   MEMBER
+}
+
+/// What a family is paying for, if anything.
+///
+/// One row per household, always — registration writes one in the same
+/// transaction as the household, and the migration gave one to everybody who
+/// already existed. A missing row is a fault rather than "the free plan", and
+/// `entitlementsFor` treats it as one by resolving to the *smallest* allowance:
+/// failing towards free costs a family an upgrade prompt, failing towards
+/// unlimited costs the installation money it never charged for.
+///
+/// Nothing here is read directly by the game. Every question the app asks goes
+/// through `entitlementsFor`, which turns a plan into numbers — so a cap site
+/// never says `plan === "HOMESTEAD"`, and the pricing can change without
+/// hunting for the places that assumed it would not.
+model Subscription {
+  id String @id @default(cuid())
+
+  householdId String    @unique
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  plan   Plan               @default(UNMETERED)
+  status SubscriptionStatus @default(ACTIVE)
+
+  /// When the current month began, for counting turns against.
+  ///
+  /// Rolled forward arithmetically rather than by a job — see `periodStart` in
+  /// `lib/billing/usage.ts`. There is no scheduler in this app and adding one
+  /// so a column could be kept current would be a strange reason to have one.
+  currentPeriodStart DateTime  @default(now())
+  /// When it runs out, for a screen to say so. Null while nothing is being paid.
+  currentPeriodEnd   DateTime?
+
+  /// The payment processor's own ids, when there is one.
+  ///
+  /// Nullable because the caps are built and enforced before any money changes
+  /// hands: a household on `UNMETERED` never touches a processor, and a
+  /// self-hosted installation never will. Unique so a webhook can find its
+  /// household by the id it was given rather than by anything it guessed.
+  externalCustomerId     String? @unique
+  externalSubscriptionId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// The ladder. What each one actually allows lives in `lib/billing/plans.ts`,
+/// as numbers, because a ceiling is a commercial decision that changes and a
+/// database enum is a migration.
+enum Plan {
+  /// Try it: a parent and a child, one adventure, no pictures.
+  HEARTH
+  /// One family, playing properly. What most households should be on.
+  HOMESTEAD
+  /// Cousins, grandparents, several adventures at once.
+  KEEP
+
+  /// No ceiling of any kind.
+  ///
+  /// What a family running their own copy on their own machine gets, and what
+  /// every household that existed before subscriptions did was given by the
+  /// migration. Nobody on a self-hosted installation with a local model agreed
+  /// to a turn limit, and inventing one for them retrospectively would be worse
+  /// than having no limits at all.
+  UNMETERED
+}
+
+/// Where the account stands, which is a different question from which plan.
+///
+/// The two are kept apart because a failed card must not silently change what a
+/// family is on — they are still on Homestead, they are just `PAST_DUE`, and
+/// when the payment goes through nothing has to be worked out again.
+enum SubscriptionStatus {
+  /// Before anybody has been asked for a card.
+  TRIALING
+  /// Paid, or self-hosted and not paying anybody.
+  ACTIVE
+  /// A payment failed. Adventures under way carry on; nothing new may start.
+  /// There is a child on the other side of that decision and she did not enter
+  /// the card details.
+  PAST_DUE
+  /// Ended. Everything written stays readable — only play and starting stop.
+  CANCELED
 }
 
 /// Someone who can sign in. Their authority over a family lives in

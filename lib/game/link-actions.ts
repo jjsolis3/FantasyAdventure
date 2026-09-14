@@ -25,6 +25,7 @@ import { db } from "@/lib/db";
 import { requireHouseholdParent } from "@/lib/auth/session";
 import { generateHouseholdLinkCode, normaliseInviteCode } from "@/lib/auth/invite-code";
 import { canonicalLink } from "@/lib/game/visibility";
+import { linkVerdictFor } from "@/lib/billing/usage";
 
 export type LinkFormState = { error: string; done?: string } | null;
 
@@ -68,6 +69,16 @@ export async function redeemLinkCodeAction(
   if (already) {
     return { error: `You already adventure with ${other.name}.` };
   }
+
+  // Asked of the household doing the redeeming only, not of both.
+  //
+  // It has to be one-sided, or a family on a small plan could stop a family on
+  // a large one from linking to anybody — and worse, the refusal would have to
+  // say *why*, which means telling one household something about another
+  // household's account. Whoever is spending the allowance is the one who typed
+  // the code.
+  const room = await linkVerdictFor(actor.householdId);
+  if (!room.ok) return { error: room.reason };
 
   await db.householdLink.create({ data: { ...pair, createdById: actor.user.id } });
 

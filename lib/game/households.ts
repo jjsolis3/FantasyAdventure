@@ -16,11 +16,13 @@
 import type { Prisma } from "@/generated/prisma/client.ts";
 import { isUniqueViolation } from "@/lib/db";
 import { generateHouseholdLinkCode } from "@/lib/auth/invite-code";
+import { defaultPlan } from "@/lib/billing/plans";
 
 /** Enough of a client to make a household. Accepts `db` or a transaction. */
 type HouseholdClient = {
   household: Prisma.TransactionClient["household"];
   householdMember: Prisma.TransactionClient["householdMember"];
+  subscription: Prisma.TransactionClient["subscription"];
 };
 
 /**
@@ -58,6 +60,21 @@ export async function createHousehold(
 
       await db.householdMember.create({
         data: { householdId: household.id, userId: input.ownerId, role: "OWNER" },
+      });
+
+      // In the same breath as the household, for the same reason the membership
+      // is: a household that exists without one is a household whose allowance
+      // has to be guessed, and `entitlementsFor` guesses *downwards* — a family
+      // would register and be told their brand-new subscription had ended.
+      await db.subscription.create({
+        data: {
+          householdId: household.id,
+          plan: defaultPlan(),
+          // Self-hosted installations leave `DEFAULT_PLAN` alone and get
+          // `UNMETERED`, where "trialing" would be a lie about a thing nobody is
+          // selling. Anything else really is a trial until a card is entered.
+          status: defaultPlan() === "UNMETERED" ? "ACTIVE" : "TRIALING",
+        },
       });
 
       return household;

@@ -2,8 +2,17 @@ import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth/session";
 import { signInKind, signInName } from "@/lib/auth/handle";
 import { householdOverview } from "@/lib/game/household-actions";
+import { UNLIMITED, describeAllowance, entitlementsFor } from "@/lib/billing/plans";
+import type { Plan, SubscriptionStatus } from "@/generated/prisma/enums";
 import { Card, PageTitle } from "@/components/ui";
-import { MemberRole, MoveAccount, NewHousehold, RenameHousehold } from "./household-forms";
+import {
+  HouseholdPlan,
+  MemberRole,
+  MoveAccount,
+  NewHousehold,
+  PlatformRole,
+  RenameHousehold,
+} from "./household-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +21,37 @@ const ROLE_LABELS: Record<string, string> = {
   PARENT: "may invite and put right",
   MEMBER: "plays",
 };
+
+/**
+ * What the plan above actually allows, in the numbers the caps compare against.
+ *
+ * Written out rather than left in a module nobody reading this screen has open,
+ * because the question an administrator arrives with is "why was that refused?"
+ * and the answer is one of these five numbers.
+ */
+function allowanceLine(household: {
+  subscription: { plan: string; status: string } | null;
+  members: unknown[];
+  _count: { characters: number; campaigns: number };
+}): string {
+  const entitlements = entitlementsFor(
+    household.subscription as { plan: Plan; status: SubscriptionStatus } | null,
+  );
+
+  const parts = [
+    `${describeAllowance(household.members.length, entitlements.seats)} in the house`,
+    `${describeAllowance(household._count.campaigns, entitlements.campaigns)} adventures`,
+    entitlements.turnsPerMonth >= UNLIMITED
+      ? "turns uncounted"
+      : `${entitlements.turnsPerMonth} turns a month`,
+    entitlements.pictures ? "pictures" : "no pictures",
+  ];
+
+  if (!entitlements.mayStart) parts.push("cannot start anything new");
+  if (!entitlements.mayPlay) parts.push("cannot play");
+
+  return parts.join(" · ");
+}
 
 /**
  * Who is in which family.
@@ -24,7 +64,7 @@ const ROLE_LABELS: Record<string, string> = {
  * wants their own household gets moved out again.
  */
 export default async function HouseholdsPage() {
-  await requirePlatformAdmin();
+  const actor = await requirePlatformAdmin();
   const { households, strays } = await householdOverview();
 
   const choices = households.map((household) => ({ id: household.id, name: household.name }));
@@ -133,6 +173,16 @@ export default async function HouseholdsPage() {
                       name={member.user.displayName}
                       role={member.role}
                     />
+                    {/* Not on your own row. The hand-over is done by whoever is
+                        receiving it — see `mayChangePlatformRole`, which refuses
+                        it server-side whether or not this renders. */}
+                    {member.user.id === actor.id ? null : (
+                      <PlatformRole
+                        userId={member.user.id}
+                        name={member.user.displayName}
+                        isAdmin={member.user.role === "PLATFORM_ADMIN"}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -150,6 +200,23 @@ export default async function HouseholdsPage() {
             <p className="mt-3 font-mono text-xs text-hearth-400">{household.linkCode}</p>
 
             <RenameHousehold householdId={household.id} name={household.name} />
+
+            {/* What this family is allowed, and the only way to change it until
+                there is a checkout page. The numbers beside it are the ceilings
+                the caps actually compare against, so an administrator can see
+                why an invitation or an adventure was refused without reading
+                `lib/billing/plans.ts`. */}
+            <div className="mt-4 border-t border-hearth-800/50 pt-3">
+              <HouseholdPlan
+                householdId={household.id}
+                name={household.name}
+                plan={household.subscription?.plan ?? "UNMETERED"}
+                status={household.subscription?.status ?? "ACTIVE"}
+              />
+              <p className="mt-2 text-xs text-hearth-500">
+                {allowanceLine(household)}
+              </p>
+            </div>
           </Card>
         ))}
       </div>

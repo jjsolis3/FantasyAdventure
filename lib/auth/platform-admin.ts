@@ -61,3 +61,87 @@ export function bootstrapBannerLine(): string {
     ? `  Registering as ${named} makes that account the administrator.`
     : "  That account becomes the administrator.";
 }
+
+export type RoleVerdict = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Handing the installation to somebody else, or taking it back.
+ *
+ * `PLATFORM_ADMIN_EMAIL` only decides who becomes an administrator **at
+ * registration**, and `User.role` was written in exactly one place —
+ * `registerAction`. So changing the environment variable on a running server
+ * did nothing to the accounts already on it, and there was no way at all to
+ * move the role afterwards except by editing a row by hand. That is a bad
+ * enough answer for one person with pgAdmin open; it is not an answer at all
+ * for anybody else.
+ *
+ * Three refusals, and the second is the interesting one:
+ *
+ *   1. **Only an administrator may hand it on.** Obvious, and checked here
+ *      rather than trusted to the screen the control happens to be on.
+ *
+ *   2. **Never your own account.** Not caution — a shape. A hand-over done this
+ *      way is always performed *by the account receiving it*: you promote the
+ *      new one, sign in as it, and it retires the old one. That proves the new
+ *      account actually works while the old one can still fix it. Allowing
+ *      self-demotion would let somebody give away the last working key and find
+ *      out afterwards that the new one does not turn.
+ *
+ *   3. **Never the last administrator**, so an installation cannot be left with
+ *      nobody able to reach the storyteller's settings.
+ *
+ * And one about who may be given it: an account that signs in with a username
+ * rather than an address. Those are children's accounts — that is the whole
+ * reason the column exists — and the installation's API keys are not a thing to
+ * put one keystroke away from a nine-year-old. It also keeps this agreeing with
+ * `shouldAdminister`, which has always required an address.
+ */
+export function mayChangePlatformRole(input: {
+  actor: { id: string; platformAdmin: boolean };
+  target: { id: string; platformAdmin: boolean; hasEmail: boolean; displayName: string };
+  /** True to hand it over, false to take it back. */
+  makeAdmin: boolean;
+  /** Administrators other than the target. */
+  otherAdmins: number;
+}): RoleVerdict {
+  const { actor, target, makeAdmin, otherAdmins } = input;
+
+  if (!actor.platformAdmin) {
+    return { ok: false, reason: "Only whoever runs Hearthlight can hand it on." };
+  }
+
+  if (actor.id === target.id) {
+    return {
+      ok: false,
+      reason:
+        "You cannot change your own. Give it to the other account first, sign in as that one, " +
+        "and retire this one from there — that way you find out the new sign-in works while " +
+        "this one can still put it right.",
+    };
+  }
+
+  if (makeAdmin) {
+    if (target.platformAdmin) return { ok: false, reason: `${target.displayName} already does.` };
+    if (!target.hasEmail) {
+      return {
+        ok: false,
+        reason:
+          `${target.displayName} signs in with a username rather than an email address, which is ` +
+          "what a child's account does. Running the installation needs an address.",
+      };
+    }
+    return { ok: true };
+  }
+
+  if (!target.platformAdmin) return { ok: false, reason: `${target.displayName} already does not.` };
+  if (otherAdmins === 0) {
+    return {
+      ok: false,
+      reason:
+        `${target.displayName} is the only administrator. Give somebody else the installation ` +
+        "first, or there will be nobody who can reach the storyteller's settings.",
+    };
+  }
+
+  return { ok: true };
+}
