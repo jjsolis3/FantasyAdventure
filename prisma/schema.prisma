@@ -103,9 +103,50 @@ model Household {
   characters Character[]
   campaigns  Campaign[]
   aiCalls    AiCall[]
+  invites    InviteCode[]
+  linksA     HouseholdLink[]   @relation("HouseholdA")
+  linksB     HouseholdLink[]   @relation("HouseholdB")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Two households that have agreed to adventure together.
+///
+/// **No pending state, deliberately.** A `Relationship` needs `proposedById`
+/// and `confirmedAt` because it *asserts* something about somebody else's
+/// character — "your daughter is my son's sister" earns real bond levels, so it
+/// has to be agreed to. A link asserts nothing. One household shares its
+/// `linkCode`; the other redeems it. Sharing is one consent and redeeming is
+/// the other, and a row existing is the whole of what "both sides agreed" needs
+/// to mean.
+///
+/// The pair is stored sorted — see `canonicalLink` — so two households are one
+/// row whichever of them redeemed, in the same idiom `canonicalPair` uses for
+/// ties. The unique constraint is then real rather than decorative.
+///
+/// Deleting it is symmetric: either side may, without asking. A family that
+/// wants out of an arrangement should not need the other family's cooperation
+/// to get out of it.
+model HouseholdLink {
+  id String @id @default(cuid())
+
+  householdAId String
+  householdA   Household @relation("HouseholdA", fields: [householdAId], references: [id], onDelete: Cascade)
+
+  householdBId String
+  householdB   Household @relation("HouseholdB", fields: [householdBId], references: [id], onDelete: Cascade)
+
+  /// Who redeemed the code. Kept for the screen that says how this came about;
+  /// SET NULL because the link belongs to the households, not to the person who
+  /// happened to type the code.
+  createdById String?
+  createdBy   User?   @relation("LinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([householdAId, householdBId])
+  @@index([householdBId])
 }
 
 /// What authority one account has in one household.
@@ -152,9 +193,25 @@ enum HouseholdRole {
 /// `HouseholdMember` rather than here — `Role` below is about this
 /// installation, not about anybody's family.
 model User {
-  id           String @id @default(cuid())
+  id String @id @default(cuid())
+
   /// Always stored lowercased so sign-in is case-insensitive.
-  email        String @unique
+  ///
+  /// Nullable since children got accounts of their own. A nine-year-old has no
+  /// address, and the workarounds a family reaches for — `mum+mira@gmail.com`,
+  /// or sharing a login — are all worse than letting her sign in with a name.
+  /// Whoever answers for a household still needs one; that is enforced in
+  /// `registerAction`, beside the decision it depends on.
+  email String? @unique
+
+  /// What a child signs in with instead. Lowercase, letters/digits/-/_ — see
+  /// `lib/auth/handle.ts` for why the shape is that narrow.
+  ///
+  /// The database insists an account has at least one of these two: a row with
+  /// neither could never sign in again, and nothing in the application would
+  /// notice it had happened.
+  username String? @unique
+
   passwordHash String
   displayName  String
   role         Role   @default(PLAYER)
@@ -181,9 +238,56 @@ model User {
   roundAnswers   RoundAnswer[]
   partyInvitesSent PartyInvite[] @relation("PartyInviter")
   tiesProposed     Relationship[] @relation("TieProposer")
+  linksMade        HouseholdLink[] @relation("LinkCreator")
+  passwordResets   PasswordResetToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A one-time link, emailed to somebody who has forgotten their password.
+///
+/// Only the *hash* of the token is stored, exactly as `AuthSession` stores only
+/// the hash of a session token. A database that leaks should not hand over live
+/// password-reset links along with everything else.
+///
+/// This is for accounts that have an address to send to. A child signs in with
+/// a username and holds no address at all, which is why the grown-up next to
+/// her sets her password directly instead — see `lib/auth/member-password.ts`.
+/// The two mechanisms cover the two kinds of account between them.
+model PasswordResetToken {
+  id        String @id @default(cuid())
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  /// Set the moment it is spent. Kept rather than deleted so a second click on
+  /// the same link can say "that link has already been used" instead of the
+  /// blank "not recognised" a missing row would give.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// What a code does when somebody redeems it.
+///
+/// An invitation used to mean exactly one thing — "you may create an account" —
+/// and the role it ended up with was decided by counting the users table. That
+/// is the wrong place for the decision: whether somebody starts a household of
+/// their own or joins an existing one is a fact about *the invitation*, known by
+/// the person who wrote it, and not something to be inferred later.
+enum InviteGrant {
+  /// Starts a household, with the redeemer answering for it. Only whoever runs
+  /// the installation may hand one out — this is how a new family is admitted,
+  /// and no family may admit another.
+  NEW_HOUSEHOLD
+
+  /// Joins the household that issued it. What a parent sends a child.
+  HOUSEHOLD_MEMBER
 }
 
 /// Registration is invite-only: the app sits on a public URL, and without this
@@ -191,8 +295,36 @@ model User {
 model InviteCode {
   id   String  @id @default(cuid())
   code String  @unique
-  /// Free-text reminder of who the code was meant for.
+  /// Free-text reminder, and what the seed labels the bootstrap code with.
+  /// `forName` is what the invitations screen writes now; this stays for the
+  /// codes that predate it, and for the one nobody creates by hand.
   note String?
+
+  /// What redeeming it does. Defaulted to joining a household because that is
+  /// what every code written before this column existed effectively was: one
+  /// person's invitation into their own house.
+  grant InviteGrant @default(HOUSEHOLD_MEMBER)
+
+  /// Which household a HOUSEHOLD_MEMBER code joins. Null on NEW_HOUSEHOLD,
+  /// which makes one instead.
+  ///
+  /// Taken from the session of whoever created the code and never from the
+  /// form, so a parent cannot address an invitation at another family's house
+  /// even by hand-posting one.
+  ///
+  /// CASCADE, unlike the soft references elsewhere here: an invitation into a
+  /// household that no longer exists is not a historical record worth keeping,
+  /// it is a code that would redeem into nothing.
+  householdId String?
+  household   Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  /// What the new member may do once they are in. Null means the ordinary
+  /// answer — they play.
+  intendedRole HouseholdRole?
+
+  /// Who the code is for, so a screen can say "for Mira" rather than making a
+  /// parent remember which of two codes was whose.
+  forName String?
 
   createdById String?
   createdBy   User?   @relation("InviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -213,6 +345,7 @@ model InviteCode {
   createdAt DateTime @default(now())
 
   @@index([createdById])
+  @@index([householdId])
 }
 
 /// Server-side session. The cookie carries an opaque random token; only its

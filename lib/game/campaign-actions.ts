@@ -7,6 +7,7 @@ import type { Prisma } from "@/generated/prisma/client.ts";
 import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { generateJoinCode } from "@/lib/auth/invite-code";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 import type { FormState } from "@/lib/auth/actions";
 
 const campaignSchema = z.object({
@@ -101,9 +102,19 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
   // count toward the party size here so an adventure can be set up in one go,
   // but they do not become party members until they say yes — and the adventure
   // will not begin until enough of them have.
+  //
+  // Scoped to who you can actually see, the same rule the picker draws from.
+  // It used to be `userId: { not: id }` alone, which accepted **any** account's
+  // adventurer: the screen offered a short list, but the screen is not the
+  // rule, and a hand-posted id could reach a stranger's child.
   const inviteIds = idsFrom(formData, "inviteIds").filter((id) => !partyIds.includes(id));
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const invitees = await db.character.findMany({
-    where: { id: { in: inviteIds }, userId: { not: user.id } },
+    where: {
+      id: { in: inviteIds },
+      userId: { not: user.id },
+      ...visibleCharacterWhere(user.id, householdIds),
+    },
     select: { id: true },
   });
   if (invitees.length !== inviteIds.length) {

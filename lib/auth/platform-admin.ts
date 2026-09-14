@@ -32,10 +32,14 @@ export function namedPlatformAdmin(): string | null {
  * not a second way in. With an address configured, being first counts for
  * nothing, which is the whole point.
  */
-export function shouldAdminister(email: string, firstAccount: boolean): boolean {
+export function shouldAdminister(email: string | null, firstAccount: boolean): boolean {
   const named = namedPlatformAdmin();
-  if (named) return email.trim().toLowerCase() === named;
-  return firstAccount;
+  // A child's account has no address at all, so it matches no named
+  // administrator — and cannot take the installation through the fallback
+  // either, since the only invitation that reaches the fallback is one that
+  // starts a household, and those are required to sign in with an address.
+  if (named) return email !== null && email.trim().toLowerCase() === named;
+  return email !== null && firstAccount;
 }
 
 /**

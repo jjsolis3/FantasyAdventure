@@ -8,7 +8,8 @@ import { DeleteCharacter } from "@/components/character/delete-character";
 import { PortraitUpload } from "@/components/character/portrait-upload";
 import { Handover } from "@/components/character/handover";
 import { RelationshipEditor, type RelationRow } from "@/components/character/relationship-editor";
-import { pendingFor, reachableCharacterWhere } from "@/lib/game/ties";
+import { pendingFor } from "@/lib/game/ties";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 import {
   kindFromPerspective,
   nextSkillLevel,
@@ -145,14 +146,15 @@ export default async function CharacterPage({ params }: { params: Promise<{ id: 
     }
   }
 
-  // Everybody at your table — see `reachableCharacterWhere`. Scoped to the
-  // table rather than to this character, and that distinction is the whole bug
-  // it fixes: a newly made adventurer has travelled with nobody, so the old
+  // Everybody you can see — see `visibleCharacterWhere`. Scoped to the
+  // household rather than to this character, and that distinction is the whole
+  // bug it fixes: a newly made adventurer has travelled with nobody, so the old
   // rule offered an empty list at exactly the moment a family most wants to say
   // who he is. A father who has handed his old character to his daughters, and
   // made a new one, can now say he is their father.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const others = await db.character.findMany({
-    where: { id: { not: character.id }, ...reachableCharacterWhere(user.id) },
+    where: { id: { not: character.id }, ...visibleCharacterWhere(user.id, householdIds) },
     select: { id: true, name: true, userId: true, user: { select: { displayName: true } } },
     orderBy: { createdAt: "asc" },
   });

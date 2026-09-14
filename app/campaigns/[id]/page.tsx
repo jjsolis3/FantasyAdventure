@@ -6,6 +6,7 @@ import { deleteCampaignAction } from "@/lib/game/campaign-actions";
 import { leaveCampaignAction } from "@/lib/game/party-actions";
 import { memberCampaignFilter } from "@/lib/game/access";
 import { invitableCharacters } from "@/lib/game/invites";
+import { visibleHouseholdIds } from "@/lib/game/visibility";
 import { cancelInviteAction, inviteCharacterAction } from "@/lib/game/invite-actions";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -117,7 +118,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   // Only the owner sends invitations, and only while the story has not started.
   const canInvite = isOwner && campaign.status === "SETUP" && roomLeft > 0;
   const invitable = canInvite
-    ? await invitableCharacters(user.id, {
+    ? await invitableCharacters(user.id, await visibleHouseholdIds(db, user.householdId), {
         exclude: [...partyIds, ...pendingInvites.map((invite) => invite.characterId)],
       })
     : [];

@@ -119,7 +119,8 @@ logs:
 ```
 
 Open the **Logs** tab in Coolify, copy the code, and register at `/register`.
-That account becomes the administrator and can issue invites from `/invites`.
+That account becomes the administrator and can issue invites from
+`/settings/invites`.
 Once anyone has registered, bootstrap codes stop being generated.
 
 ### Characters and the family twist
@@ -2200,7 +2201,7 @@ this* are different questions and the app needs both answers.
 sign-in looks exactly like three separate households from inside a database, so
 the migration gave every existing account one of its own rather than inventing a
 grouping. Putting the right accounts together is a decision a person makes, at
-**Settings → Households** — which also renames them, since "Dad's household" is
+**Administration → Households** — which also renames them, since "Dad's household" is
 a reasonable guess and "The Solis family" is the truth. Moving an account takes
 its adventurers and its adventures with it, in one transaction, and a household
 nobody is left in is tidied away.
@@ -2209,6 +2210,262 @@ nobody is left in is tidied away.
 delete, so tidying away an adventure used to leave the record of what it cost
 alive and ownerless. Fine for a log, useless for a bill. The household is
 stamped on at the time the call is made.
+
+### Invitations that say what they grant
+
+A code used to mean exactly one thing: *you may create an account*. What that
+account then **became** was decided somewhere else entirely — by counting the
+users table at the moment of registration — and where it **belonged** was not
+decided at all, because there was nowhere for it to belong.
+
+Both facts are on the invitation now, written down by the person who knew them.
+
+| | |
+|---|---|
+| **Joins your household** | They land inside the family that invited them, and see its adventurers. Any owner or parent may write one. |
+| **Starts a household of their own** | A new family is admitted to the installation. **Only whoever runs Hearthlight may write one.** |
+
+That second row is the whole rule: **no family may admit another.** A parent
+invites their own children and nobody else's, which is what makes it safe to
+hand a friend a code without handing them the ability to bring in strangers.
+
+**The household comes off the session, never off the form.** There is no field a
+hand-posted request could set to point an invitation at somebody else's house,
+because the value is never read from the request at all — and the grant picker
+is only drawn for a platform administrator because a menu with one legal item on
+it is a thing to wonder about, not because hiding it is the defence.
+`tests/households.e2e.mts` posts the grant anyway, through the real form so it
+carries the headers a server action insists on, and watches the server refuse it.
+
+**Anything unrecognised is the narrower option.** A form that omits the grant, or
+sends something odd, asks for somebody to join this house. Likewise an unstated
+role means they *play*: a child's account must not arrive able to invite
+strangers because a field was left blank.
+
+**Nobody holding an unspent code found it had changed meaning.** The migration
+stamps every existing code `HOUSEHOLD_MEMBER` and points it at its creator's
+household — which is what each of them effectively already was. A code whose
+creator has since been deleted keeps a null household and behaves exactly as it
+did before, making a household of its own. The bootstrap code is deliberately
+left alone: it is the way into an empty installation, there is no household for
+it to join, and a null household already means *make one*.
+
+### Families who adventure together
+
+Households made the boundary. This is what reads it.
+
+Until now the question *"whose adventurers can I see?"* had **two** answers in
+two modules, and neither was right. The party picker asked for
+`{ userId: { not: userId } }` — every character in the database, offered in a
+dropdown with the name of the adult who plays them. Ties asked a narrower
+question scoped to your own table. One question, two rules, and they had drifted
+exactly as far apart as you would expect.
+
+There is one rule now, `visibleCharacterWhere`, and it says: **your own
+household, the households yours has agreed to play with, and anybody you are
+actually travelling with.**
+
+**Agreeing is two actions, not a request and an approval.** One family shares
+its `KIN-XXXX-XXXX` code; the other types it in at **Settings → Families**.
+Sharing is one consent and redeeming is the other, and a row existing is the
+whole of what "both sides agreed" needs to mean — so there is no inbox, no
+pending state and nothing to chase. The pair is stored sorted, so two households
+are one row whichever of them typed the code.
+
+Only a household's owner or parent may share or redeem. A nine-year-old should
+not be able to attach her family to strangers because a code arrived in a chat.
+
+**Unlinking does not end an adventure**, and that is the part worth knowing
+before you use it. Cut the link and the two families vanish from each other's
+pickers immediately; no new sharing is possible. But everybody already in a
+party keeps the story and keeps each other, because party membership flows
+through `PartyMember` and never mentions households at all. A half-played
+Saturday does not disappear because two adults stopped agreeing.
+
+**Two real holes closed here.** The invite-target checks in
+`campaign-actions.ts` and `invite-actions.ts` were `userId: { not: user.id }` —
+the screen offered a short list, but the screen is not the rule, and a
+hand-posted id reached any account's child. And the portrait and art routes held
+**hand-written copies** of the access rule that never imported the helper: in a
+one-family app a duplicated rule is a smell, between two families it is a leak,
+because moving the rule leaves the copy answering the old question. Both now
+import it.
+
+**The two codes keep two different scopes**, each the smallest that does its
+job. A `KIN-` code links two families and lets them see each other's adventurers.
+A `PARTY-` code adds one adventurer to one adventure, and grants exactly what
+party membership grants: that campaign and the sheets of the people in it — not
+the household's other children.
+
+Gating the join code on a household link was tried and reversed. It sounded
+safer and was not: linking is a *household* act, so an aunt handed a code across
+the room would have had to expose every child in both families, permanently, in
+order to join one evening. A rule that pushes people into over-linking costs more
+privacy than it saves. What remains is that a leaked `PARTY-` code admits its
+holder to that one adventure until the host rotates it.
+
+**And `needsConsent` became a gift rather than a restriction.** It compared
+*account* ids, which meant that on this very installation, where a father and
+his two daughters each have their own sign-in, saying "Mira is Bramble's sister"
+needed a nine-year-old to go and confirm her own family's paperwork before the
+tie earned a single bond point. It compares households now: inside one family a
+tie is agreed on the spot, and only a claim about another family's child waits.
+
+### Signing in without an email address
+
+Registration required a unique email, which a nine-year-old has not got. The
+workarounds a family reaches for are all bad in the same way: a parent invents
+`mum+mira@gmail.com`, or hands over an address the child cannot read, or
+everybody shares one login and the point of separate sheets goes away. None of
+those is a child having an account.
+
+An account is now identified by **an address or a username**.
+
+**Which kind is stated, never guessed.** This briefly worked by looking for an
+`@` in what was typed, and two things were wrong with that: a child had to read
+a label about email to type something that is not email, and a username could
+never contain an at-sign for a reason she would never see. So the sign-up form
+asks outright, and the sign-in page has a button reading *"I sign in with a
+username"* that relabels the box in place. The choice travels with the form and
+decides which column is searched. Nothing inspects the text.
+
+A button rather than a second page: it relabels without a page load, so a
+half-typed password survives the change of mind, and there is one form with one
+error path instead of two to keep in step.
+
+**A username can be almost anything** — dots, spaces, digits first, whatever a
+child can remember and type. Case and stray spaces are normalised away, and a
+run of inner whitespace collapses to one, so `  9  MIRA.B  ` signs her in as
+`9 mira.b`. A sign-in that fails on invisible whitespace is one she cannot
+diagnose and will blame on herself.
+
+**The one exception is `@`**, and it is not about parsing any more. A username
+of `dad@example.com` would be indistinguishable from a real address in every
+conversation about who is who. Two columns keep the *software* unconfused; this
+keeps the people unconfused — and the administrator's household list names which
+kind each account is, so nobody has to infer it from punctuation.
+
+**A username is a child's account, and only a child's.** Every grown-up here has
+an address, and holding one is what makes an account ordinary: it is how they
+are reached when something goes wrong, how a password reset finds them, and who
+the bill belongs to if this ever takes money.
+
+The invitation already says which this is, because somebody decided it when they
+wrote the code — a `MEMBER` plays, anyone else helps run a family — so the rule
+reads off the invitation rather than trusting the sign-up form, and the two
+cannot disagree. A code written for a grown-up cannot be spent on a username
+however the page is driven, and whoever *starts* a household needs an address
+for the same reason twice over.
+
+It also means a username-only account can never become the platform
+administrator: a null address matches no named one, and the first-account
+fallback is only reachable by an invitation that demands an email.
+
+**The database insists an account has at least one of the two.** A row with
+neither could never sign in again and nothing in the application would notice —
+no screen lists accounts by how they authenticate, so it would sit there until
+somebody tried months later. A `CHECK` constraint is cheap, total, and
+impossible to forget at one call site out of three.
+
+**It is also a compliance asset.** A child account that never collects an email
+is an account holding almost no personal data about a child: a display name she
+chose, and the things her character did. If Hearthlight ever takes money it is a
+service for under-13s, and the least data that makes the thing work is the only
+defensible amount.
+
+### Forgetting a password
+
+A nine-year-old will forget her password. Until recently that was the end of the
+account and everything on it: a password was set at registration and changed
+only on the profile screen, which asks for the current one. No reset, no
+override. Neither her parent nor whoever runs the installation could help.
+
+**The grown-up next to her sets a new one**, at **Settings → Your family**.
+Nothing is emailed, because her account holds no address to email — that is the
+whole point of her signing in with a username.
+
+**Authority runs downwards and never sideways or up.** An owner may reset a
+parent or a member of their own household; a parent may reset a member only, so
+"promote the eldest so she can help" does not quietly become "the eldest can
+take the household from you"; a member resets nobody; and whoever runs the
+installation may help any family, because somebody has to be able to. Nobody
+resets a platform administrator through household authority — being the owner of
+the household that person lives in is not a route to the storyteller's API key —
+and nobody resets themselves here, because knowing your own password means the
+profile screen, which asks for it.
+
+**Two things go with the password.** The lock, because a forgotten password and
+a locked account arrive together — she tried eight times before asking for help,
+and a reset that left the lock in place would hand her a new password that also
+does not work, for fifteen minutes, with no explanation she could act on. And
+every session that account had, because if the reason for the reset was that a
+sibling knew the old password, a still-live session on the sibling's tablet
+would defeat the exercise.
+
+### Forgetting a password when you do have an address
+
+Two kinds of account, two answers, and between them they cover everybody —
+which is the point of a username being a child's account and only a child's.
+
+A **grown-up** holds an address, so `/forgot` emails a one-time link.
+
+**Only the hash of the link is stored**, exactly as `AuthSession` stores only
+the hash of a session token: a database that leaks should not hand over live
+reset links along with everything else. A link is good for an hour, works once,
+and making a new one kills any earlier unspent one so the most recent email is
+always the live one.
+
+**Asking says the same sentence whether or not the address is registered**, or
+the form becomes a way to test which addresses have accounts here. A spent or
+expired link, though, *is* told apart from an unrecognised one — somebody who
+clicks twice, or whose mail client prefetched the link, should be told what
+happened rather than left assuming they mistyped. None of those three messages
+says anything about whether an account exists.
+
+**Spending one ends every session on the account.** If the reason for the reset
+was that somebody else had got in, a live session of theirs would otherwise
+survive the password change and defeat the whole exercise. The lockout is
+cleared too, since somebody resetting has usually locked themselves out first.
+
+**The link is built from `APP_URL`, never from the request's `Host` header.** A
+reset link is the one thing here that hands an account to whoever holds it, and
+a header an attacker controls would let them have the link built to point at
+their own machine and emailed to the real owner. Unset, no email is sent and the
+screen says so.
+
+**Mail is one connection URL**, because every provider hands you exactly that
+string and splitting it into five fields is an invitation to get one wrong:
+
+```
+SMTP_URL="smtps://user:password@smtp.example.com:465"
+MAIL_FROM="Hearthlight <hearth@yourdomain>"
+```
+
+Anything that speaks SMTP works — a Gmail app password, Fastmail, SES, Resend's
+SMTP bridge — so nothing is tied to a provider. The sending domain needs SPF and
+DKIM records or the mail lands in spam. **Unconfigured, the feature is off
+rather than broken:** the screen says to ask whoever runs Hearthlight, which is
+true and actionable, instead of pretending to send and silently dropping it.
+
+This is the only reason Hearthlight ever emails anybody. No digests, no
+notifications, no "your adventure is waiting" nudges.
+
+### The one account nobody is above
+
+Everybody has somebody who can help them back in: a child has her parent, a
+household has whoever runs the installation. The administrator has nobody, by
+design — an account a household owner could reset would be a route to the
+storyteller's API key.
+
+So the escape hatch is where the trust already is, on the machine that holds the
+database:
+
+```
+DATABASE_URL=… npx tsx scripts/set-password.mts you@example.com 'a long new password'
+```
+
+A shell there can read the database anyway, which is precisely why it is safe to
+allow there and not safe to put on a screen.
 
 ### Twelve means twelve
 
@@ -2466,7 +2723,6 @@ app/
   api/health/       Health endpoint — reports real DB connectivity
   login/ register/  Sign-in and invite-gated sign-up
   profile/          Display name, reading level, tone, password change
-  invites/          Admin-only invite management
   characters/       Party list, builder, and per-character editing
   characters/claim/ Taking on an adventurer somebody else built
   campaigns/        Adventure list, setup flow, campaign page, and the table
@@ -2474,9 +2730,16 @@ app/
   campaigns/[id]/journal/  The whole story, laid out to be read back or printed
   campaigns/[id]/finds/    The quest board: what they set out to do, and carry
   screen/           The television: one adventure, read-only, no sign-in
-  settings/         Administrator hub: storyteller, adventures, usage, invites
-  settings/adventures/     Writing and editing storylines in the app
-  settings/usage/          What every call used, and what it cost
+  settings/         The family's hub: its adventurers, its invitations
+  settings/adventurers/    Fixing and re-laying a sheet in your own household
+  settings/invites/        Codes for your own family, and what each one grants
+  settings/families/       The families yours has agreed to adventure with
+  settings/people/         Who is in your family, and helping one of them back in
+  admin/            The installation's hub — platform administrators only
+  admin/storyteller/       Model provider, keys, connection test
+  admin/adventures/        Writing and editing storylines in the app
+  admin/usage/             What every call used, and what it cost
+  admin/households/        Which accounts are one family, and who answers for it
   api/campaigns/[id]/turn/   SSE endpoint that runs and streams a turn
   api/campaigns/[id]/round/  Answering, and changing an answer, in a round
   api/campaigns/[id]/state/  The small poll every other screen watches
@@ -2558,6 +2821,12 @@ tests/
   acquaintances.test.ts  Unit tests — who graduates, and recognising them again
   usage.test.ts     Unit tests — counting and costing, and refusing to guess
   invites.test.ts   Unit tests — who is offered along, and in what order
+  households.test.ts     Unit tests — naming one, who may act for it, whose it is
+  invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
+  member-password.test.ts  Unit tests — who may help somebody back into their account
+  password-reset.test.ts   Unit tests — the token, the window, and what a spent link says
+  handle.test.ts         Unit tests — what a child may sign in with, and what shows it
+  visibility.test.ts     Unit tests — one pair one row, and who can see whom
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder
   campaigns.e2e.mts   Browser-driven campaign setup
@@ -2571,7 +2840,12 @@ tests/
   acquaintances.e2e.mts  Two adventures, and somebody who remembers you in the second
   personal-quests.e2e.mts  Two households, two different boards, one reveal
   admin.e2e.mts       Writing an adventure, reading the usage, uploading a portrait
-  households.e2e.mts  A household each on registering, and making one family of two
+  households.e2e.mts  A household each on registering, making one family of two,
+                      and a code that puts a child inside it rather than beside it
+  families.e2e.mts    Two families: strangers, agreed, travelling, and stopped —
+                      and the adventure that survives the stopping
+  people.e2e.mts      A forgotten password, the lock it came with, and who may lift it
+  forgot.e2e.mts      A reset link: once, in an hour, and never for a child
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

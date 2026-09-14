@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AccountMenu } from "@/components/account-menu";
 import { mayActForHousehold } from "@/lib/game/households";
+import { signInName } from "@/lib/auth/handle";
 import { NavLinks } from "@/components/nav-links";
 
 /**
@@ -43,7 +44,7 @@ export async function SiteHeader() {
         {user ? (
           <AccountMenu
             displayName={user.displayName}
-            email={user.email}
+            signIn={signInName(user)}
             isAdmin={user.role === "PLATFORM_ADMIN"}
             runsAHousehold={
               user.role === "PLATFORM_ADMIN" || mayActForHousehold(user.householdRole)

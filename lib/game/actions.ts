@@ -19,7 +19,8 @@ import {
   type RelationshipKind,
   type StatBlock,
 } from "@/lib/game/rules";
-import { needsConsent, reachableCharacterWhere } from "@/lib/game/ties";
+import { needsConsent } from "@/lib/game/ties";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 
 const characterSchema = z.object({
   name: z.string().trim().min(1, "Every adventurer needs a name.").max(60, "That name is very long."),
@@ -249,20 +250,23 @@ export async function setRelationshipAction(_prev: FormState, formData: FormData
   const from = await db.character.findFirst({ where: { id: fromId, userId: user.id } });
   if (!from) return { error: "Character not found." };
 
-  // …to anybody at your table — see `reachableCharacterWhere`. Scoped to the
-  // table rather than to `from`, because a newly made adventurer has been
+  // …to anybody you can see — see `visibleCharacterWhere`. Scoped to the
+  // household rather than to `from`, because a newly made adventurer has been
   // nowhere yet, and that is exactly when a family wants to say who he is.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const to = await db.character.findFirst({
-    where: { id: toId, ...reachableCharacterWhere(user.id) },
-    select: { id: true, userId: true },
+    where: { id: toId, ...visibleCharacterWhere(user.id, householdIds) },
+    select: { id: true, householdId: true },
   });
   if (!to) return { error: "That adventurer is not at your table." };
 
   const pair = canonicalPair(fromId, toId, kind as RelationshipKind);
-  // Yours to say on your own, or a claim about somebody else's adventurer that
+  // Yours to say on your own, or a claim about another family's adventurer that
   // they get to answer. Confirmed on the spot in the first case: asking a
-  // household to agree with itself is ceremony for nobody.
-  const confirmedAt = needsConsent(user.id, to.userId) ? null : new Date();
+  // household to agree with itself is ceremony for nobody — and on this
+  // installation, where each of three people in one family has their own
+  // sign-in, that ceremony used to be demanded every single time.
+  const confirmedAt = needsConsent(user.householdId, to.householdId) ? null : new Date();
 
   await db.relationship.upsert({
     where: {

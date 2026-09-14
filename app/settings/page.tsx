@@ -23,7 +23,7 @@ export default async function FamilySettingsPage() {
 
   const scope = actor.everywhere ? {} : { householdId: actor.householdId ?? "" };
 
-  const [household, adventurers, unusedInvites] = await Promise.all([
+  const [household, adventurers, unusedInvites, linkedFamilies] = await Promise.all([
     actor.householdId
       ? db.household.findUnique({
           where: { id: actor.householdId },
@@ -31,13 +31,19 @@ export default async function FamilySettingsPage() {
         })
       : null,
     db.character.count({ where: scope }),
-    db.inviteCode.count({
-      where: {
-        redeemedById: null,
-        ...(actor.everywhere ? {} : { createdById: actor.user.id }),
-      },
-    }),
+    // By household, not by who happened to type it — so either parent's count
+    // matches what either parent sees on the screen itself.
+    db.inviteCode.count({ where: { redeemedById: null, ...scope } }),
+    actor.householdId
+      ? db.householdLink.count({
+          where: {
+            OR: [{ householdAId: actor.householdId }, { householdBId: actor.householdId }],
+          },
+        })
+      : 0,
   ]);
+
+  const householdSize = household?._count.members ?? 0;
 
   const cards = [
     {
@@ -53,6 +59,23 @@ export default async function FamilySettingsPage() {
       blurb:
         "Hearthlight is invite-only. Make a code for each person who needs their own sign-in — which is what everyone playing from their own device needs.",
       note: `${unusedInvites} unused`,
+    },
+    {
+      href: "/settings/people",
+      title: "Your family",
+      blurb:
+        "Everybody with a sign-in of their own. This is also where you help somebody who has forgotten their password — a child has no email address to send a reset to, so you set a new one and tell her.",
+      note: `${householdSize} ${householdSize === 1 ? "person" : "people"}`,
+    },
+    {
+      href: "/settings/families",
+      title: "Families you adventure with",
+      blurb:
+        "Swap codes with another family and your two sets of adventurers can travel together. Until you do, neither family can see the other's — which is the point.",
+      note:
+        linkedFamilies === 0
+          ? "none yet"
+          : `${linkedFamilies} ${linkedFamilies === 1 ? "family" : "families"}`,
     },
   ];
 

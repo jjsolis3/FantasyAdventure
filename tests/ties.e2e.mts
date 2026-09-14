@@ -23,7 +23,8 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { beginCampaign, playTurn } from "../lib/engine/play.ts";
-import { isConfirmed, needsConsent, reachableCharacterWhere } from "../lib/game/ties.ts";
+import { isConfirmed, needsConsent } from "../lib/game/ties.ts";
+import { visibleCharacterWhere, visibleHouseholdIds } from "../lib/game/visibility.ts";
 import { waitingPointsFor } from "../lib/game/waiting-points.ts";
 import { STATS, STAT_BUDGET, canonicalPair, statsOf } from "../lib/game/rules.ts";
 import { resetCharacter } from "../lib/game/reset.ts";
@@ -41,10 +42,11 @@ function check(label: string, condition: boolean, detail = "") {
   if (!condition) failures += 1;
 }
 
-/** The household this account may name a tie to. */
-async function reachableFor(userId: string, exclude: string) {
+/** The adventurers this account may name a tie to. */
+async function reachableFor(userId: string, householdId: string, exclude: string) {
+  const householdIds = await visibleHouseholdIds(db, householdId);
   return db.character.findMany({
-    where: { id: { not: exclude }, ...reachableCharacterWhere(userId) },
+    where: { id: { not: exclude }, ...visibleCharacterWhere(userId, householdIds) },
     select: { id: true, name: true },
     orderBy: { createdAt: "asc" },
   });
@@ -133,7 +135,7 @@ async function main() {
     },
   });
 
-  const reachable = await reachableFor(dad.id, orin.id);
+  const reachable = await reachableFor(dad.id, dadHome, orin.id);
   console.log(`     the new adventurer can be related to: ${reachable.map((c) => c.name).join(", ") || "nobody"}`);
   check(
     "a brand-new adventurer can reach the girls he has never travelled with",
@@ -161,7 +163,7 @@ async function main() {
 
   console.log("\n-- Saying he is their father -----------------------------------");
   const toMira = canonicalPair(orin.id, mira.id, "PARENT");
-  check("this one needs the other household's yes", needsConsent(dad.id, older.id));
+  check("this one needs the other household's yes", needsConsent(dadHome, olderHome));
 
   const proposal = await db.relationship.create({
     data: { ...toMira, proposedById: dad.id, confirmedAt: null },
@@ -250,7 +252,7 @@ async function main() {
       pronouns: "they/them",
     },
   });
-  check("needs nobody's permission", !needsConsent(dad.id, dad.id));
+  check("needs nobody's permission", !needsConsent(dadHome, dadHome));
   const own = await db.relationship.create({
     data: {
       ...canonicalPair(orin.id, bramble.id, "SIBLING"),

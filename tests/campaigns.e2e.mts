@@ -72,7 +72,7 @@ try {
   await page.goto(`${BASE}/register`);
   await page.fill('input[name="inviteCode"]', bootstrap.code);
   await page.fill('input[name="displayName"]', "Parent");
-  await page.fill('input[name="email"]', "parent@example.com");
+  await page.fill('input[name="handle"]', "parent@example.com");
   await page.fill('input[name="password"]', "a long enough password");
   await submitAndSettle(page);
   await page.waitForURL(`${BASE}/`);
@@ -208,7 +208,7 @@ try {
     await stranger.goto(`${BASE}/register`);
     await stranger.fill('input[name="inviteCode"]', invite.code);
     await stranger.fill('input[name="displayName"]', "Stranger");
-    await stranger.fill('input[name="email"]', "stranger@example.com");
+    await stranger.fill('input[name="handle"]', "stranger@example.com");
     await stranger.fill('input[name="password"]', "another long password");
     await submitAndSettle(stranger);
     await stranger.waitForURL(`${BASE}/`);

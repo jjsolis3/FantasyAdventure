@@ -25,14 +25,11 @@ export default async function InvitesPage() {
   const actor = await requireHouseholdParent();
 
   const invites = await db.inviteCode.findMany({
-    // Codes this account made. There was no `where` here at all — every code in
+    // This household's codes. There was no `where` here at all — every code in
     // the installation, bootstrap codes included — which was fine while one
     // person was the only administrator and is one family reading another's
     // the moment there are two.
-    //
-    // `createdById` rather than a household is a stand-in until invites carry
-    // one; see the note in `revokeInviteAction`.
-    where: actor.everywhere ? {} : { createdById: actor.user.id },
+    where: actor.everywhere ? {} : { householdId: actor.householdId },
     include: { redeemedBy: { select: { displayName: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -53,7 +50,7 @@ export default async function InvitesPage() {
 
       <div className="space-y-6">
         <Card>
-          <InviteForm />
+          <InviteForm mayAdmitFamilies={actor.everywhere} />
         </Card>
 
         <Card>
@@ -76,10 +73,20 @@ export default async function InvitesPage() {
                       {status.label}
                     </span>
 
+                    {/* What the code does, which used to be nowhere on this
+                        screen because every code did the same thing. */}
+                    {invite.grant === "NEW_HOUSEHOLD" ? (
+                      <span className="rounded-full border border-hearth-600/50 bg-hearth-800/40 px-2.5 py-0.5 text-xs text-hearth-300">
+                        New family
+                      </span>
+                    ) : null}
+
                     <span className="min-w-0 flex-1 truncate text-sm text-hearth-400">
                       {invite.redeemedBy
                         ? `Used by ${invite.redeemedBy.displayName}`
-                        : (invite.note ?? (invite.isBootstrap ? "Bootstrap code" : ""))}
+                        : (invite.forName ??
+                          invite.note ??
+                          (invite.isBootstrap ? "Bootstrap code" : ""))}
                       {!invite.redeemedById && invite.expiresAt
                         ? ` · expires ${invite.expiresAt.toLocaleDateString()}`
                         : ""}

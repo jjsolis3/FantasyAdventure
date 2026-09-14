@@ -13,6 +13,8 @@
 import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
+import { householdOf, inviteInto } from "./e2e-helpers.mjs";
+import { generateInviteCode } from "../lib/auth/invite-code.ts";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3300";
 const connectionString =
@@ -65,7 +67,7 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', "HEARTH-XXXX-XXXX");
     await page.fill('input[name="displayName"]', "Impostor");
-    await page.fill('input[name="email"]', "impostor@example.com");
+    await page.fill('input[name="handle"]', "impostor@example.com");
     await page.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(page);
     check("registration rejects an unknown invite code", /not recognised/i.test(await alertText(page)));
@@ -79,7 +81,7 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', bootstrap.code);
     await page.fill('input[name="displayName"]', "Too Short");
-    await page.fill('input[name="email"]', "short@example.com");
+    await page.fill('input[name="handle"]', "short@example.com");
     await page.fill('input[name="password"]', "short");
     await submitAndSettle(page);
     check("registration rejects a short password", (await db.user.count()) === 0);
@@ -94,14 +96,14 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', bootstrap.code.toLowerCase()); // case-insensitive
     await page.fill('input[name="displayName"]', "Parent");
-    await page.fill('input[name="email"]', "  Parent@Example.COM  "); // trimmed and lowercased
+    await page.fill('input[name="handle"]', "  Parent@Example.COM  "); // trimmed and lowercased
     await page.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
 
     const user = await db.user.findFirst();
     check("first account created", user !== null);
-    check("email normalised", user?.email === "parent@example.com", user?.email);
+    check("email normalised", user?.email === "parent@example.com", user?.email ?? "(none)");
     check("first account administers the installation", user?.role === "PLATFORM_ADMIN", user?.role);
 
     // Registering makes a household in the same transaction as the account.
@@ -139,7 +141,7 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', bootstrap.code);
     await page.fill('input[name="displayName"]', "Second");
-    await page.fill('input[name="email"]', "second@example.com");
+    await page.fill('input[name="handle"]', "second@example.com");
     await page.fill('input[name="password"]', "another long password");
     await submitAndSettle(page);
     check("invite cannot be reused", /already been used/i.test(await alertText(page)));
@@ -154,10 +156,10 @@ try {
     await page.goto(`${BASE}/settings/invites`);
     check("a household parent can reach their invitations", page.url().endsWith("/settings/invites"), page.url());
 
-    await page.fill('input[name="note"]', "Grandma");
+    await page.fill('input[name="forName"]', "Grandma");
     await submitAndSettle(page, 'button:has-text("Create invite code")');
 
-    const invite = await db.inviteCode.findFirst({ where: { note: "Grandma" } });
+    const invite = await db.inviteCode.findFirst({ where: { forName: "Grandma" } });
     newCode = invite?.code ?? "";
     check("admin created an invite", newCode !== "", newCode);
     await page.close();
@@ -169,7 +171,7 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', newCode);
     await page.fill('input[name="displayName"]', "Grandma");
-    await page.fill('input[name="email"]', "grandma@example.com");
+    await page.fill('input[name="handle"]', "grandma@example.com");
     await page.fill('input[name="password"]', "grandmas long password");
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
@@ -177,36 +179,38 @@ try {
     const grandma = await db.user.findUnique({ where: { email: "grandma@example.com" } });
     check("second account is PLAYER", grandma?.role === "PLAYER");
 
-    // A household of her own, not the one that invited her. Today every invite
-    // means "make an account"; when invites start saying what they grant, a
-    // code from a household will land its redeemer *inside* that household
-    // instead — and this check is what will have to change to say so.
+    // And into the household that asked her. This assertion used to say the
+    // opposite, because a code meant "make an account" and where the account
+    // belonged was decided nowhere. A code written on the invitations screen
+    // now says whose house it is for, and this is that sentence coming true:
+    // the person invited into a family arrives in it.
     const grandmaHome = await db.householdMember.findFirst({ where: { userId: grandma?.id } });
     const parentHome = await db.householdMember.findFirst({
       where: { user: { email: "parent@example.com" } },
     });
-    check("and a household of her own, not the one that asked her", grandmaHome !== null);
+    check("and a household", grandmaHome !== null);
     check(
-      "which is a different household from the first account's",
-      grandmaHome !== null && grandmaHome.householdId !== parentHome?.householdId,
+      "which is the one that invited her, rather than one of her own",
+      grandmaHome !== null && grandmaHome.householdId === parentHome?.householdId,
       `${grandmaHome?.householdId} vs ${parentHome?.householdId}`,
     );
-
-    // She reaches her *own* invitations, and this is a change rather than a
-    // regression. She answers for a household — her own — so inviting into it
-    // is hers to do. What she must not reach is the installation's screens.
-    await page.goto(`${BASE}/settings/invites`);
     check(
-      "an ordinary account reaches its own invitations",
-      page.url().endsWith("/settings/invites"),
-      page.url(),
+      "and she arrives as somebody who plays, not somebody who invites",
+      grandmaHome?.role === "MEMBER",
+      grandmaHome?.role,
     );
 
-    const hers = (await page.textContent("main")) ?? "";
+    // She does not reach the invitations screen, and this is the *third* answer
+    // this check has given. It was "only administrators" while there was one
+    // family; then "anybody, because everybody answered for a household of
+    // their own"; and now, since she was invited *into* a house rather than
+    // sent off to start one, she is somebody who plays. Who may hand out codes
+    // for a family is a question about that family, and it is not hers.
+    await page.goto(`${BASE}/settings/invites`);
     check(
-      "and sees only its own codes, not the one that let it in",
-      !hers.includes(newCode),
-      newCode,
+      "somebody who only plays does not hand out invitations",
+      !page.url().endsWith("/settings/invites"),
+      page.url(),
     );
 
     await page.goto(`${BASE}/admin`);
@@ -221,24 +225,149 @@ try {
     await page.close();
   }
 
+  // ---- A child signs in without an email address --------------------------
+  //
+  // The thing a nine-year-old could not do until now. Registration wanted a
+  // unique address, and the workarounds a family reaches for — mum+mira@, or a
+  // shared login — are all worse than letting her sign in with a name. An
+  // account that never collects an address is also an account holding almost no
+  // personal data about a child, which matters more the moment this is a
+  // service rather than a copy on one family's server.
+  {
+    const parent = await db.user.findUniqueOrThrow({ where: { email: "parent@example.com" } });
+    const parentHousehold = await householdOf(db, parent.id);
+    const forMira = await inviteInto(db, {
+      householdId: parentHousehold,
+      createdById: parent.id,
+      forName: "Mira",
+    });
+
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(`${BASE}/register`);
+    await page.fill('input[name="inviteCode"]', forMira.code);
+    await page.fill('input[name="displayName"]', "Mira");
+    await page.selectOption('select[name="handleKind"]', "username");
+    // Deliberately a username the old shape rules would have refused: a dot, a
+    // space, and a digit first. Nothing infers a kind from the text any more,
+    // so all of that is hers to choose.
+    await page.fill('input[name="handle"]', "9 mira.b");
+    await page.fill('input[name="password"]', "a long enough password");
+    await submitAndSettle(page);
+    await page.waitForURL(`${BASE}/`);
+
+    const mira = await db.user.findUnique({ where: { username: "9 mira.b" } });
+    check("a child can register with a username", mira !== null);
+    check("and holds no email address at all", mira?.email === null, mira?.email ?? "(none)");
+    check(
+      "and lands in the family that invited her",
+      (await db.householdMember.findFirst({ where: { userId: mira?.id } }))?.householdId ===
+        parentHousehold,
+    );
+    check("without being handed the installation", mira?.role === "PLAYER", mira?.role);
+
+    await page.close();
+
+    // And she can sign in with it from a cold browser, typed the way a child
+    // types her own name. A fresh context rather than this one: registering
+    // already signed her in, so `/login` would simply bounce her home and the
+    // check would pass without ever testing a sign-in.
+    const again = await (await browser.newContext()).newPage();
+    await again.goto(`${BASE}/login`);
+    await again.click('button:has-text("I sign in with a username")');
+    await again.fill('input[name="handle"]', "  9  MIRA.B  ");
+    await again.fill('input[name="password"]', "a long enough password");
+    await submitAndSettle(again);
+    check(
+      "and signs in with it after pressing the button, whatever the capitals and spaces",
+      again.url() === `${BASE}/`,
+      again.url(),
+    );
+
+    // Without pressing that button, the same text is looked for among the email
+    // addresses and found nowhere — which is the whole mechanism, and the reason
+    // nothing has to inspect what was typed.
+    const wrongDoor = await (await browser.newContext()).newPage();
+    await wrongDoor.goto(`${BASE}/login`);
+    await wrongDoor.fill('input[name="handle"]', "9 mira.b");
+    await wrongDoor.fill('input[name="password"]', "a long enough password");
+    await submitAndSettle(wrongDoor);
+    check(
+      "and the same text is not found while the form is asking for an email",
+      wrongDoor.url() !== `${BASE}/`,
+      wrongDoor.url(),
+    );
+    await wrongDoor.close();
+    await again.close();
+  }
+
+  // ---- But whoever answers for a family still needs an address -------------
+  {
+    const parent = await db.user.findUniqueOrThrow({ where: { email: "parent@example.com" } });
+    const newFamily = await db.inviteCode.create({
+      data: { code: generateInviteCode(), grant: "NEW_HOUSEHOLD", createdById: parent.id },
+    });
+
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(`${BASE}/register`);
+    await page.fill('input[name="inviteCode"]', newFamily.code);
+    await page.fill('input[name="displayName"]', "A friend");
+    await page.selectOption('select[name="handleKind"]', "username");
+    await page.fill('input[name="handle"]', "friendly");
+    await page.fill('input[name="password"]', "a long enough password");
+    await submitAndSettle(page);
+
+    check(
+      "a username is refused for somebody starting a family",
+      /email address/i.test(await alertText(page)),
+      await alertText(page),
+    );
+    check("and no account was made", (await db.user.count({ where: { username: "friendly" } })) === 0);
+
+    // The same code, with an address, goes through — so the refusal was about
+    // the handle and not about the invitation being broken.
+    await page.close();
+
+    // The *same* code, with an address, from a clean page — so the refusal above
+    // is shown to be about the handle rather than about the invitation being
+    // spent or broken. A clean page rather than a re-fill of the refused one,
+    // because re-submitting a form that has just grown an error banner is a
+    // fight with React's reconciliation, not a test of anything.
+    const retry = await (await browser.newContext()).newPage();
+    await retry.goto(`${BASE}/register`);
+    await retry.fill('input[name="inviteCode"]', newFamily.code);
+    await retry.fill('input[name="displayName"]', "A friend");
+    await retry.fill('input[name="handle"]', "friend@example.com");
+    await retry.fill('input[name="password"]', "a long enough password");
+    await submitAndSettle(retry);
+
+    const made = await db.user.findUnique({ where: { email: "friend@example.com" } });
+    check("the same invitation works with one", made !== null, made ? "" : await alertText(retry));
+    check(
+      "and that one does start a household of its own",
+      made !== null &&
+        (await db.householdMember.findFirst({ where: { userId: made.id } }))?.role === "OWNER",
+    );
+    await retry.close();
+  }
+
   // ---- Login: wrong password, unknown account, then success ---------------
   {
     const page = await (await browser.newContext()).newPage();
     await page.goto(`${BASE}/login`);
 
-    await page.fill('input[name="email"]', "parent@example.com");
+    await page.fill('input[name="handle"]', "parent@example.com");
     await page.fill('input[name="password"]', "definitely wrong");
     await submitAndSettle(page);
     const wrongPasswordMessage = await alertText(page);
     check("wrong password rejected", /incorrect/i.test(wrongPasswordMessage), wrongPasswordMessage);
     check("failed attempt recorded", (await db.user.findUnique({ where: { email: "parent@example.com" } }))?.failedLoginAttempts === 1);
 
-    await page.fill('input[name="email"]', "nobody@example.com");
+    await page.fill('input[name="handle"]', "nobody@example.com");
     await page.fill('input[name="password"]', "definitely wrong");
     await submitAndSettle(page);
     check("unknown account gives an identical message", (await alertText(page)) === wrongPasswordMessage);
 
-    await page.fill('input[name="email"]', "PARENT@example.com"); // case-insensitive
+    await page.fill('input[name="handle"]', "PARENT@example.com"); // case-insensitive
     await page.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
@@ -259,7 +388,7 @@ try {
   {
     const page = await (await browser.newContext()).newPage();
     await page.goto(`${BASE}/login`);
-    await page.fill('input[name="email"]', "parent@example.com");
+    await page.fill('input[name="handle"]', "parent@example.com");
     await page.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
@@ -294,7 +423,7 @@ try {
   {
     const page = await (await browser.newContext()).newPage();
     await page.goto(`${BASE}/login`);
-    await page.fill('input[name="email"]', "parent@example.com");
+    await page.fill('input[name="handle"]', "parent@example.com");
     await page.fill('input[name="password"]', "a brand new long password");
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
@@ -318,7 +447,7 @@ try {
     await page.goto(`${BASE}/login`);
 
     for (let attempt = 1; attempt <= 8; attempt += 1) {
-      await page.fill('input[name="email"]', "grandma@example.com");
+      await page.fill('input[name="handle"]', "grandma@example.com");
       await page.fill('input[name="password"]', `wrong guess ${attempt}`);
       await submitAndSettle(page);
     }
@@ -327,7 +456,7 @@ try {
     check("account locks after repeated failures", (locked?.lockedUntil?.getTime() ?? 0) > Date.now());
 
     // Even the correct password is refused while the lock stands.
-    await page.fill('input[name="email"]', "grandma@example.com");
+    await page.fill('input[name="handle"]', "grandma@example.com");
     await page.fill('input[name="password"]', "grandmas long password");
     await submitAndSettle(page);
     check("correct password refused while locked", /Too many failed attempts/i.test(await alertText(page)), await alertText(page));

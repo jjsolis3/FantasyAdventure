@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { requireUserForApi } from "@/lib/auth/session";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -84,27 +85,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const user = await requireUserForApi();
   if (user instanceof Response) return user;
 
+  // Her household, the families it plays with, and anybody at the same table.
+  // The portrait appears on party sheets every player can already see, so this
+  // is the same audience — and it now asks the same *function* they do, rather
+  // than a hand-written copy of the rule that would keep the old answer after
+  // the rule moved.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const character = await db.character.findFirst({
-    where: {
-      id,
-      OR: [
-        { userId: user.id },
-        // Somebody at the same table. The portrait appears on the party sheets
-        // every player can already see, so this is the same audience.
-        {
-          partyMemberships: {
-            some: {
-              campaign: {
-                OR: [
-                  { ownerId: user.id },
-                  { party: { some: { character: { userId: user.id } } } },
-                ],
-              },
-            },
-          },
-        },
-      ],
-    },
+    where: { id, ...visibleCharacterWhere(user.id, householdIds) },
     select: { portrait: true },
   });
 

@@ -33,23 +33,19 @@
  */
 
 import type { Prisma } from "@/generated/prisma/client.ts";
-import { memberCampaignWhere } from "@/lib/game/access";
 
 /**
- * Adventurers this account may declare a tie *to*.
+ * Who a tie may reach is no longer decided here.
  *
- * Your own, plus anybody travelling in an adventure you own or are in. The
- * declaring character is always one of yours — that is checked separately, and
- * it is what stops anybody arranging other people's families.
+ * `reachableCharacterWhere` used to live in this module and answer a slightly
+ * different question from the one the party picker asked — your own table for
+ * ties, the entire database for invitations. Two rules for one question, and
+ * they drifted exactly as far apart as you would expect. Both are now
+ * `visibleCharacterWhere` in `lib/game/visibility.ts`.
+ *
+ * What stays here is consent: whether a claim about somebody's character needs
+ * that household's yes.
  */
-export function reachableCharacterWhere(userId: string): Prisma.CharacterWhereInput {
-  return {
-    OR: [
-      { userId },
-      { partyMemberships: { some: { campaign: memberCampaignWhere(userId) } } },
-    ],
-  };
-}
 
 /** A stored tie, as much of it as the rules below need. */
 export type TieRow = {
@@ -76,12 +72,27 @@ export const CONFIRMED_TIES: Prisma.RelationshipWhereInput = { confirmedAt: { no
 /**
  * Whether declaring this tie needs somebody else to agree.
  *
- * The question is about accounts, not characters: two adventurers that both
- * answer to you are one household talking to itself, and asking it to confirm
- * its own proposal would be ceremony for nobody.
+ * The question is about **households**, not accounts — and that is a gift
+ * rather than a restriction. It used to compare account ids, which meant that
+ * on this very installation, where a father and his two daughters each have
+ * their own sign-in, saying "Mira is Bramble's sister" needed a nine-year-old
+ * to go and confirm her own family's paperwork before the tie earned a single
+ * bond point. One family talking to itself, made to hold a ceremony.
+ *
+ * A household is the honest unit: inside one, a tie is confirmed on the spot.
+ * Reaching into another — a friend's family, now that there can be one — is a
+ * claim about somebody else's child and waits for their yes.
+ *
+ * Two nulls do **not** match. An account outside every household is not an
+ * ordinary state, and the safe answer to "may this nobody speak for that
+ * nobody" is no.
  */
-export function needsConsent(fromUserId: string, toUserId: string): boolean {
-  return fromUserId !== toUserId;
+export function needsConsent(
+  fromHouseholdId: string | null | undefined,
+  toHouseholdId: string | null | undefined,
+): boolean {
+  if (!fromHouseholdId || !toHouseholdId) return true;
+  return fromHouseholdId !== toHouseholdId;
 }
 
 /**

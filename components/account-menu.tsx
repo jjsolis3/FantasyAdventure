@@ -19,12 +19,13 @@ import { logoutAction } from "@/lib/auth/actions";
  */
 export function AccountMenu({
   displayName,
-  email,
+  signIn,
   isAdmin,
   runsAHousehold,
 }: {
   displayName: string;
-  email: string;
+  /** The address or username this account signs in with. */
+  signIn: string;
   /** Runs this installation — the storyteller, the library, what it all cost. */
   isAdmin: boolean;
   /** Answers for a family — its invitations, and putting its sheets right. */
@@ -84,7 +85,7 @@ export function AccountMenu({
         >
           <div className="border-b border-hearth-800/60 px-4 py-3">
             <p className="truncate text-sm text-hearth-100">{displayName}</p>
-            <p className="truncate text-xs text-hearth-500">{email}</p>
+            <p className="truncate text-xs text-hearth-500">{signIn}</p>
           </div>
 
           <MenuLink href="/profile">Your profile</MenuLink>

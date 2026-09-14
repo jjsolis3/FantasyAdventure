@@ -10,7 +10,7 @@ import {
 } from "@/lib/game/household-actions";
 import { SubmitButton } from "@/components/submit-button";
 
-type Account = { id: string; displayName: string; email: string };
+type Account = { id: string; displayName: string; signIn: string };
 type Choice = { id: string; name: string };
 
 /** Whatever the last thing you did had to say about itself. */
@@ -58,7 +58,7 @@ export function MoveAccount({
           >
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.displayName} — {account.email}
+                {account.displayName} — {account.signIn}
               </option>
             ))}
           </select>

@@ -46,6 +46,23 @@ export AI_BASE_URL="http://127.0.0.1:${MOCK_PORT}/v1"
 export AI_MODEL="${AI_MODEL:-mock}"
 export AUTH_SECRET="${AUTH_SECRET:-test-secret-test-secret-test-secret}"
 
+# Password reset needs to read as *configured*, or `tests/forgot.e2e.mts` takes
+# the "this installation cannot send email" path and the assertions that matter
+# — that asking says the same thing for a registered and an unregistered
+# address — never run.
+#
+# The SMTP address is deliberately dead. Nothing leaves the machine: the
+# connection is refused instantly, `sendMail` catches it and logs, and the action
+# behaves exactly as it does in production when a mail server is down. What is
+# under test is the token and the wording, not the network.
+#
+# Exported here rather than in `passes_for`, because those only reach the mock
+# server and the test process — the server action runs inside `next start`,
+# which inherits this.
+export APP_URL="${APP_URL:-${E2E_BASE_URL}}"
+export SMTP_URL="${SMTP_URL:-smtp://e2e:e2e@127.0.0.1:1}"
+export MAIL_FROM="${MAIL_FROM:-Hearthlight <hearth@example.test>}"
+
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "DATABASE_URL is not set. Point it at a scratch database." >&2
   exit 1
@@ -53,7 +70,7 @@ fi
 
 ALL=(
   auth characters campaigns play rounds invites quests loadout growth knacks
-  acquaintances personal-quests progression settings admin households screen bonds
+  acquaintances personal-quests progression settings admin households families people forgot screen bonds
   briefing chapters chronicle companions dials dreams encounters forks levels luck pressure
   rebalance reset
   rivals

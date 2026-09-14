@@ -60,7 +60,9 @@ export async function createSession(userId: string): Promise<void> {
 
 export type SessionUser = {
   id: string;
-  email: string;
+  /** Null for a child's account, which signs in with a username instead. */
+  email: string | null;
+  username: string | null;
   displayName: string;
   /** What this account may do to the *installation*. See `Role`. */
   role: Role;
@@ -130,6 +132,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   return {
     id: session.user.id,
     email: session.user.email,
+    username: session.user.username,
     displayName: session.user.displayName,
     role: session.user.role,
     householdId: membership?.householdId ?? null,

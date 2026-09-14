@@ -1,48 +1,37 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  CONFIRMED_TIES,
-  isConfirmed,
-  needsConsent,
-  pendingFor,
-  reachableCharacterWhere,
-} from "../lib/game/ties.ts";
+import { CONFIRMED_TIES, isConfirmed, needsConsent, pendingFor } from "../lib/game/ties.ts";
 import { canonicalPair, reciprocalOf, RELATIONSHIP_KINDS } from "../lib/game/rules.ts";
 
-// ---- Who you can reach ------------------------------------------------------
-
-test("reach covers your own adventurers and everybody at your table", () => {
-  const where = reachableCharacterWhere("me");
-  const branches = where.OR as Record<string, unknown>[];
-
-  // Your own.
-  assert.deepEqual(branches[0], { userId: "me" });
-
-  // And anybody in an adventure you own or are travelling in — the same
-  // definition `memberCampaignWhere` uses everywhere else, so the two cannot
-  // drift into disagreeing about who is at your table.
-  const table = JSON.stringify(branches[1]);
-  assert.match(table, /partyMemberships/);
-  assert.match(table, /ownerId/);
-  assert.match(table, /party/);
-});
-
-test("reach is not keyed on the character doing the declaring", () => {
-  // The bug this replaced: the old rule asked whether THIS character had
-  // already shared a campaign, so a newly made adventurer could reach nobody —
-  // which is exactly when a family wants to say who he is.
-  const where = JSON.stringify(reachableCharacterWhere("me"));
-  assert.doesNotMatch(where, /characterId/);
-});
+// Who a tie may reach is no longer asked here — `reachableCharacterWhere` and
+// the party picker's rule were two answers to one question, and they are now
+// `visibleCharacterWhere`. Its shape is asserted in `tests/visibility.test.ts`.
 
 // ---- Who has to agree -------------------------------------------------------
 
 test("a tie inside one household needs nobody's permission", () => {
-  assert.equal(needsConsent("me", "me"), false);
+  // This is the assertion that changed, and it is a gift rather than a
+  // restriction. It used to compare *account* ids — so on this very
+  // installation, where a father and his two daughters each have their own
+  // sign-in, "Mira is Bramble's sister" needed a nine-year-old to confirm her
+  // own family's paperwork before the tie earned a single bond point.
+  assert.equal(needsConsent("hh_solis", "hh_solis"), false);
 });
 
-test("a tie that touches another household does", () => {
-  assert.equal(needsConsent("me", "my-daughter"), true);
+test("a tie that reaches into another family does", () => {
+  // The friend's family. A claim about somebody else's child earns real things
+  // — bond levels, Family Moves — so it waits for their yes.
+  assert.equal(needsConsent("hh_solis", "hh_friends"), true);
+});
+
+test("and an account belonging to no household is never taken as agreeing", () => {
+  // Two nulls must not match. Not an ordinary state, but the answer to "may
+  // this nobody speak for that nobody" has to be no rather than an accidental
+  // yes from two blanks comparing equal.
+  assert.equal(needsConsent(null, null), true);
+  assert.equal(needsConsent("hh_solis", null), true);
+  assert.equal(needsConsent(null, "hh_solis"), true);
+  assert.equal(needsConsent(undefined, undefined), true);
 });
 
 test("a tie counts only once it has been agreed to", () => {

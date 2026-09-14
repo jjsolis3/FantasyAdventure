@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
+import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
 
 /**
  * Asking, cancelling, accepting, declining.
@@ -32,8 +33,18 @@ export async function inviteCharacterAction(formData: FormData): Promise<void> {
   if (!campaign || campaign.status === "COMPLETE") return;
 
   // Your own adventurers are added directly; there is nobody to ask.
+  //
+  // Scoped to who you can actually see. This used to be `userId: { not: id }`
+  // alone, which accepted **any** account's adventurer — the picker only
+  // offered your own table, but the picker is not the rule, and a hand-posted
+  // id could reach a stranger's child.
+  const householdIds = await visibleHouseholdIds(db, user.householdId);
   const character = await db.character.findFirst({
-    where: { id: characterId, userId: { not: user.id } },
+    where: {
+      id: characterId,
+      userId: { not: user.id },
+      ...visibleCharacterWhere(user.id, householdIds),
+    },
     select: { id: true },
   });
   if (!character) return;
