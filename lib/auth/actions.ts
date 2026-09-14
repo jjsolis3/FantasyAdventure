@@ -14,6 +14,7 @@ import {
   normaliseInviteCode,
   planInvite,
 } from "@/lib/auth/invites";
+import { looksLikeEmail, normaliseHandle, usernameProblem } from "@/lib/auth/handle";
 import { createHousehold, householdNameFor } from "@/lib/game/households";
 import { shouldAdminister } from "@/lib/auth/platform-admin";
 
@@ -35,12 +36,14 @@ const registerSchema = z.object({
     .trim()
     .min(1, "Tell us what to call you.")
     .max(60, "That name is a bit long."),
-  email: z.email("That does not look like an email address.").max(200),
+  // One box, two kinds of answer. The `@` decides which, and a username is
+  // forbidden from containing one, so nothing can be read both ways.
+  handle: z.string().trim().min(1, "Choose how you will sign in.").max(200),
   password: passwordSchema,
 });
 
 const loginSchema = z.object({
-  email: z.string().min(1, "Enter your email."),
+  handle: z.string().min(1, "Enter your email or username."),
   password: z.string().min(1, "Enter your password."),
 });
 
@@ -57,7 +60,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   const parsed = registerSchema.safeParse({
     inviteCode: formData.get("inviteCode"),
     displayName: formData.get("displayName"),
-    email: formData.get("email"),
+    handle: formData.get("handle"),
     password: formData.get("password"),
   });
 
@@ -65,7 +68,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  const email = parsed.data.email.trim().toLowerCase();
+  const handle = normaliseHandle(parsed.data.handle);
   const code = normaliseInviteCode(parsed.data.inviteCode);
 
   const invite = await checkInviteCode(code);
@@ -73,8 +76,50 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
     return { error: INVITE_ERROR_MESSAGES[invite.reason], fieldErrors: { inviteCode: INVITE_ERROR_MESSAGES[invite.reason] } };
   }
 
-  if (await db.user.findUnique({ where: { email }, select: { id: true } })) {
-    return { error: "An account already exists for that email.", fieldErrors: { email: "An account already exists for that email." } };
+  // Whether this invitation starts a family or joins one. Computed once, and
+  // used for two different decisions below — which household they land in, and
+  // whether they are allowed to sign in without an address. Two conditions
+  // spelled out separately would be two things to keep in step.
+  const startsHousehold = !(invite.grant === "HOUSEHOLD_MEMBER" && invite.householdId);
+
+  const asEmail = looksLikeEmail(handle);
+
+  // Whoever answers for a household needs a real address: they are the contact
+  // when something goes wrong, they are who a password reset would reach, and
+  // they are the billing contact if this ever takes money. A child joining a
+  // family needs none of that, and is better off holding none of it.
+  if (startsHousehold && !asEmail) {
+    return {
+      error: "Whoever starts a family signs in with an email address.",
+      fieldErrors: {
+        handle: "An email address, please — the grown-up who answers for a family needs one.",
+      },
+    };
+  }
+
+  if (asEmail) {
+    if (!z.email().safeParse(handle).success) {
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: { handle: "That does not look like an email address." },
+      };
+    }
+  } else {
+    const problem = usernameProblem(handle);
+    if (problem) {
+      return { error: "Please fix the highlighted fields.", fieldErrors: { handle: problem } };
+    }
+  }
+
+  const taken = await db.user.findFirst({
+    where: asEmail ? { email: handle } : { username: handle },
+    select: { id: true },
+  });
+  if (taken) {
+    const message = asEmail
+      ? "An account already exists for that email."
+      : "Somebody already signs in with that username. Try another.";
+    return { error: message, fieldErrors: { handle: message } };
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
@@ -86,7 +131,11 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   // Note what this is *not* deciding any more: which family they join. That is
   // the invitation's business now, and it is written on the row rather than
   // inferred from how many accounts happen to exist.
-  const administers = shouldAdminister(email, (await db.user.count()) === 0);
+  //
+  // A username-only account can never be handed the installation: the named
+  // address matches nothing, and the first-account fallback cannot fire because
+  // the bootstrap invitation starts a household and therefore demands an email.
+  const administers = shouldAdminister(asEmail ? handle : null, (await db.user.count()) === 0);
 
   let userId: string;
   try {
@@ -98,7 +147,8 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 
       const created = await tx.user.create({
         data: {
-          email,
+          email: asEmail ? handle : null,
+          username: asEmail ? null : handle,
           displayName,
           passwordHash,
           role: administers ? "PLATFORM_ADMIN" : "PLAYER",
@@ -115,7 +165,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
       // a new-household code, the bootstrap code, or anything written before
       // this column existed — starts them a house of their own. That fallback
       // is what makes the migration safe for codes already out in the world.
-      if (invite.grant === "HOUSEHOLD_MEMBER" && invite.householdId) {
+      if (!startsHousehold && invite.householdId) {
         await tx.householdMember.create({
           data: {
             householdId: invite.householdId,
@@ -156,7 +206,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
+    handle: formData.get("handle"),
     password: formData.get("password"),
   });
 
@@ -164,12 +214,19 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  const email = parsed.data.email.trim().toLowerCase();
-  const user = await db.user.findUnique({ where: { email } });
+  // One box, either kind of handle. `findFirst` rather than `findUnique`
+  // because two columns are being asked about; both are unique, and a username
+  // cannot contain an `@`, so at most one row can ever match.
+  const handle = normaliseHandle(parsed.data.handle);
+  const user = await db.user.findFirst({
+    where: { OR: [{ email: handle }, { username: handle }] },
+  });
 
   // Deliberately vague: saying "no such account" would let anyone test which
-  // email addresses are registered.
-  const genericError = { error: "Email or password is incorrect." };
+  // addresses and usernames are registered. Usernames make that worse rather
+  // than better — they are guessable in a way addresses are not — so the
+  // vagueness matters more here than it did.
+  const genericError = { error: "That sign-in or password is incorrect." };
 
   if (!user) {
     // Spend comparable time on unknown accounts so response timing does not

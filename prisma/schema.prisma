@@ -193,9 +193,25 @@ enum HouseholdRole {
 /// `HouseholdMember` rather than here — `Role` below is about this
 /// installation, not about anybody's family.
 model User {
-  id           String @id @default(cuid())
+  id String @id @default(cuid())
+
   /// Always stored lowercased so sign-in is case-insensitive.
-  email        String @unique
+  ///
+  /// Nullable since children got accounts of their own. A nine-year-old has no
+  /// address, and the workarounds a family reaches for — `mum+mira@gmail.com`,
+  /// or sharing a login — are all worse than letting her sign in with a name.
+  /// Whoever answers for a household still needs one; that is enforced in
+  /// `registerAction`, beside the decision it depends on.
+  email String? @unique
+
+  /// What a child signs in with instead. Lowercase, letters/digits/-/_ — see
+  /// `lib/auth/handle.ts` for why the shape is that narrow.
+  ///
+  /// The database insists an account has at least one of these two: a row with
+  /// neither could never sign in again, and nothing in the application would
+  /// notice it had happened.
+  username String? @unique
+
   passwordHash String
   displayName  String
   role         Role   @default(PLAYER)

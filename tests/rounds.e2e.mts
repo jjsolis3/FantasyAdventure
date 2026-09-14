@@ -73,7 +73,7 @@ async function register(context: BrowserContext, code: string, name: string, ema
   await page.goto(`${BASE}/register`);
   await page.fill('input[name="inviteCode"]', code);
   await page.fill('input[name="displayName"]', name);
-  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="handle"]', email);
   await page.fill('input[name="password"]', "a long enough password");
   await submitAndSettle(page);
   await page.waitForURL(`${BASE}/`);

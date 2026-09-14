@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth/session";
+import { signInName } from "@/lib/auth/handle";
 import { householdOverview } from "@/lib/game/household-actions";
 import { Card, PageTitle } from "@/components/ui";
 import { MemberRole, MoveAccount, NewHousehold, RenameHousehold } from "./household-forms";
@@ -31,7 +32,7 @@ export default async function HouseholdsPage() {
     household.members.map((member) => ({
       id: member.user.id,
       displayName: member.user.displayName,
-      email: member.user.email,
+      signIn: signInName(member.user),
     })),
   );
 
@@ -62,7 +63,7 @@ export default async function HouseholdsPage() {
           <ul className="mt-3 space-y-1 text-sm text-amber-100">
             {strays.map((stray) => (
               <li key={stray.id}>
-                · {stray.displayName} — {stray.email}
+                · {stray.displayName} — {signInName(stray)}
               </li>
             ))}
           </ul>
@@ -73,7 +74,14 @@ export default async function HouseholdsPage() {
         <h2 className="font-display text-lg text-hearth-100">Move somebody</h2>
         <div className="mt-3">
           <MoveAccount
-            accounts={[...accounts, ...strays.map((s) => ({ ...s }))]}
+            accounts={[
+              ...accounts,
+              ...strays.map((stray) => ({
+                id: stray.id,
+                displayName: stray.displayName,
+                signIn: signInName(stray),
+              })),
+            ]}
             households={choices}
           />
         </div>
@@ -108,7 +116,7 @@ export default async function HouseholdsPage() {
                 {household.members.map((member) => (
                   <li key={member.user.id}>
                     · <span className="text-hearth-100">{member.user.displayName}</span>{" "}
-                    <span className="text-hearth-400">{member.user.email}</span> —{" "}
+                    <span className="text-hearth-400">{signInName(member.user)}</span> —{" "}
                     {ROLE_LABELS[member.role] ?? member.role}
                     {member.user.role === "PLATFORM_ADMIN" ? (
                       <span className="text-moss-400"> · administers this installation</span>

@@ -74,7 +74,7 @@ try {
   await page.goto(`${BASE}/register`);
   await page.fill('input[name="inviteCode"]', bootstrap.code);
   await page.fill('input[name="displayName"]', "Parent");
-  await page.fill('input[name="email"]', "parent@example.com");
+  await page.fill('input[name="handle"]', "parent@example.com");
   await page.fill('input[name="password"]', "a long enough password");
   await submitAndSettle(page);
   await page.waitForURL(`${BASE}/`);

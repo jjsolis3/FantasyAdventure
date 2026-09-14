@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
+import { signInName } from "@/lib/auth/handle";
 import { Card, PageTitle } from "@/components/ui";
 import { PasswordForm, ProfileForm } from "./profile-forms";
 
@@ -11,7 +12,7 @@ export default async function ProfilePage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
-      <PageTitle eyebrow="Your account" title={user.displayName} lead={user.email} />
+      <PageTitle eyebrow="Your account" title={user.displayName} lead={signInName(user)} />
 
       <div className="space-y-6">
         <Card>

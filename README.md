@@ -2311,6 +2311,45 @@ needed a nine-year-old to go and confirm her own family's paperwork before the
 tie earned a single bond point. It compares households now: inside one family a
 tie is agreed on the spot, and only a claim about another family's child waits.
 
+### Signing in without an email address
+
+Registration required a unique email, which a nine-year-old has not got. The
+workarounds a family reaches for are all bad in the same way: a parent invents
+`mum+mira@gmail.com`, or hands over an address the child cannot read, or
+everybody shares one login and the point of separate sheets goes away. None of
+those is a child having an account.
+
+An account is now identified by **an address or a username**. One box on both
+forms takes either, and the `@` decides which — a username is forbidden from
+containing one, so no string can be read both ways, and `mira@` is an *invalid
+address* rather than a surprising username.
+
+**A username is deliberately narrow**: lowercase letters, digits, dashes and
+underscores, starting with a letter. No dots, so nothing ever looks half like an
+address; no spaces, because "mira b" typed back with two spaces is a sign-in
+failure a nine-year-old cannot diagnose and will blame on herself. Case and
+stray spaces are normalised away, so `  Mira-B  ` signs her in.
+
+**Whoever answers for a household still needs an address.** They are the contact
+when something goes wrong, they are who a password reset would reach, and they
+are the billing contact if this ever takes money. That rule is tied to the same
+condition that decides whether an invitation starts a household, so the two
+cannot drift apart — and it means a username-only account can never become the
+platform administrator, since a null address matches no named one and the
+first-account fallback is only reachable by an invitation that demands an email.
+
+**The database insists an account has at least one of the two.** A row with
+neither could never sign in again and nothing in the application would notice —
+no screen lists accounts by how they authenticate, so it would sit there until
+somebody tried months later. A `CHECK` constraint is cheap, total, and
+impossible to forget at one call site out of three.
+
+**It is also a compliance asset.** A child account that never collects an email
+is an account holding almost no personal data about a child: a display name she
+chose, and the things her character did. If Hearthlight ever takes money it is a
+service for under-13s, and the least data that makes the thing work is the only
+defensible amount.
+
 ### Twelve means twelve
 
 A household hit the same wall twice, from two directions. Resetting a character
@@ -2666,6 +2705,7 @@ tests/
   invites.test.ts   Unit tests — who is offered along, and in what order
   households.test.ts     Unit tests — naming one, who may act for it, whose it is
   invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
+  handle.test.ts         Unit tests — what a child may sign in with, and what shows it
   visibility.test.ts     Unit tests — one pair one row, and who can see whom
   auth.e2e.mts      Browser-driven auth flow
   characters.e2e.mts  Browser-driven character builder

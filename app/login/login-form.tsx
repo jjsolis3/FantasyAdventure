@@ -18,11 +18,10 @@ export function LoginForm({ next }: { next?: string }) {
       {state?.error ? <Alert>{state.error}</Alert> : null}
 
       <Field
-        label="Email"
-        name="email"
-        type="email"
-        autoComplete="email"
-        error={state?.fieldErrors?.email}
+        label="Email or username"
+        name="handle"
+        autoComplete="username"
+        error={state?.fieldErrors?.handle}
       />
       <Field
         label="Password"

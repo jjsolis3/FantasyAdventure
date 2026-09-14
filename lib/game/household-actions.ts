@@ -216,7 +216,7 @@ export async function householdOverview() {
           select: {
             id: true,
             role: true,
-            user: { select: { id: true, displayName: true, email: true, role: true } },
+            user: { select: { id: true, displayName: true, email: true, username: true, role: true } },
           },
         },
         _count: { select: { characters: true, campaigns: true } },
@@ -227,7 +227,7 @@ export async function householdOverview() {
     // this one — a silent zero is no use to somebody wondering why.
     db.user.findMany({
       where: { households: { none: {} } },
-      select: { id: true, displayName: true, email: true },
+      select: { id: true, displayName: true, email: true, username: true },
       orderBy: { createdAt: "asc" },
     }),
   ]);

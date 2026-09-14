@@ -31,7 +31,16 @@ export function RegisterForm({ isFirstAccount }: { isFirstAccount: boolean }) {
         placeholder="Dad, Nana, Alex…"
         error={state?.fieldErrors?.displayName}
       />
-      <Field label="Email" name="email" type="email" autoComplete="email" error={state?.fieldErrors?.email} />
+      {/* One box, either kind of answer — `type="text"` rather than `email`,
+          or the browser refuses a username before the server ever sees it. */}
+      <Field
+        label="How will you sign in?"
+        name="handle"
+        autoComplete="username"
+        placeholder="you@example.com — or a username"
+        error={state?.fieldErrors?.handle}
+        hint="A grown-up should use an email address. A child can use a simple username like mira-b, with no email at all."
+      />
       <Field
         label="Password"
         name="password"
