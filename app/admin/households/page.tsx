@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth/session";
-import { signInName } from "@/lib/auth/handle";
+import { signInKind, signInName } from "@/lib/auth/handle";
 import { householdOverview } from "@/lib/game/household-actions";
 import { Card, PageTitle } from "@/components/ui";
 import { MemberRole, MoveAccount, NewHousehold, RenameHousehold } from "./household-forms";
@@ -116,7 +116,14 @@ export default async function HouseholdsPage() {
                 {household.members.map((member) => (
                   <li key={member.user.id}>
                     · <span className="text-hearth-100">{member.user.displayName}</span>{" "}
-                    <span className="text-hearth-400">{signInName(member.user)}</span> —{" "}
+                    <span className="text-hearth-400">{signInName(member.user)}</span>
+                    {/* Said out loud, because a username may be anything now —
+                        including text that reads exactly like somebody's email
+                        address. The software is never confused (two columns,
+                        two sign-in pages); a person reading this list could be. */}
+                    {signInKind(member.user) === "username" ? (
+                      <span className="text-hearth-500"> (username)</span>
+                    ) : null} —{" "}
                     {ROLE_LABELS[member.role] ?? member.role}
                     {member.user.role === "PLATFORM_ADMIN" ? (
                       <span className="text-moss-400"> · administers this installation</span>

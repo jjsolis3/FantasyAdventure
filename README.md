@@ -2319,24 +2319,39 @@ workarounds a family reaches for are all bad in the same way: a parent invents
 everybody shares one login and the point of separate sheets goes away. None of
 those is a child having an account.
 
-An account is now identified by **an address or a username**. One box on both
-forms takes either, and the `@` decides which — a username is forbidden from
-containing one, so no string can be read both ways, and `mira@` is an *invalid
-address* rather than a surprising username.
+An account is now identified by **an address or a username**.
 
-**A username is deliberately narrow**: lowercase letters, digits, dashes and
-underscores, starting with a letter. No dots, so nothing ever looks half like an
-address; no spaces, because "mira b" typed back with two spaces is a sign-in
-failure a nine-year-old cannot diagnose and will blame on herself. Case and
-stray spaces are normalised away, so `  Mira-B  ` signs her in.
+**Which kind is stated, never guessed.** This briefly worked by looking for an
+`@` in what was typed, and two things were wrong with that: a child had to read
+a label about email to type something that is not email, and a username could
+never contain an at-sign for a reason she would never see. So the sign-up form
+asks outright, and the sign-in page has a button reading *"I sign in with a
+username"* that relabels the box in place. The choice travels with the form and
+decides which column is searched. Nothing inspects the text.
+
+A button rather than a second page: it relabels without a page load, so a
+half-typed password survives the change of mind, and there is one form with one
+error path instead of two to keep in step.
+
+**A username can be almost anything** — dots, spaces, digits first, whatever a
+child can remember and type. Case and stray spaces are normalised away, and a
+run of inner whitespace collapses to one, so `  9  MIRA.B  ` signs her in as
+`9 mira.b`. A sign-in that fails on invisible whitespace is one she cannot
+diagnose and will blame on herself.
+
+**The one exception is `@`**, and it is not about parsing any more. A username
+of `dad@example.com` would be indistinguishable from a real address in every
+conversation about who is who. Two columns keep the *software* unconfused; this
+keeps the people unconfused — and the administrator's household list names which
+kind each account is, so nobody has to infer it from punctuation.
 
 **Whoever answers for a household still needs an address.** They are the contact
 when something goes wrong, they are who a password reset would reach, and they
-are the billing contact if this ever takes money. That rule is tied to the same
-condition that decides whether an invitation starts a household, so the two
-cannot drift apart — and it means a username-only account can never become the
-platform administrator, since a null address matches no named one and the
-first-account fallback is only reachable by an invitation that demands an email.
+are the billing contact if this ever takes money. That rule hangs off the same
+value that decides whether an invitation starts a household, so the two cannot
+drift apart — and it means a username-only account can never become the platform
+administrator, since a null address matches no named one and the first-account
+fallback is only reachable by an invitation that demands an email.
 
 **The database insists an account has at least one of the two.** A row with
 neither could never sign in again and nothing in the application would notice —

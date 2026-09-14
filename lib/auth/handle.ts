@@ -3,12 +3,27 @@
  *
  * Registration required a unique email address, which a nine-year-old has not
  * got. The workarounds families reach for are all bad in the same way: a parent
- * invents `daughter+mira@gmail.com`, or hands over an address the child cannot
- * read, or the child shares a login and the whole point of separate sheets goes
- * away. None of that is a child having an account.
+ * invents `mum+mira@gmail.com`, or hands over an address the child cannot read,
+ * or everybody shares a login and the whole point of separate sheets goes away.
+ * None of that is a child having an account.
  *
  * So an account is identified by **an email address or a username**, and needs
  * exactly one of them to sign in.
+ *
+ * ## Which kind is always stated, never guessed
+ *
+ * This briefly worked by looking for an `@` in what was typed. The sign-up form
+ * and the sign-in page *say* which kind they mean now, and the answer travels
+ * with the form, so nothing inspects the text to work out what it was meant to
+ * be. That is what lets a username be almost anything: dots, spaces, digits
+ * first, whatever a child can remember and type.
+ *
+ * ## The one thing a username may not contain
+ *
+ * An `@`. Not for parsing — nothing parses any more — but because a username of
+ * `dad@example.com` would be indistinguishable from an actual address in every
+ * conversation about who is who, and on the administrator's list of accounts.
+ * Two columns keep the *software* unconfused; this keeps the people unconfused.
  *
  * ## Why a child's account holds no address
  *
@@ -28,58 +43,59 @@
  *
  * A username-only account also cannot become the platform administrator:
  * `shouldAdminister` matches on an address, and a null address matches nothing.
- * That is deliberate rather than incidental.
  */
 
-/** Trimmed and lowercased. Both kinds of handle are stored this way. */
+/** Which of the two an account signs in with. */
+export type HandleKind = "email" | "username";
+
+/**
+ * Trimmed, lowercased, and with any run of inner whitespace collapsed to one
+ * space. Both kinds are stored this way.
+ *
+ * The collapsing is forgiveness rather than restriction: a username may contain
+ * spaces now, and `mira  b` typed with two of them should still be the same
+ * person as `mira b`. A sign-in that fails on invisible whitespace is one a
+ * child cannot diagnose and will blame on herself.
+ */
 export function normaliseHandle(raw: string): string {
-  return raw.trim().toLowerCase();
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /**
- * Whether this is meant as an email address rather than a username.
+ * The longest a username may be.
  *
- * The `@` decides, and usernames are forbidden from containing one, so no
- * string can be read both ways. A typo like `mira@` is then an *invalid email*
- * rather than a surprising username, which is the better error to give.
+ * Not a rule about what it may *say* — anything goes there — just a bound, so
+ * one cannot be pasted in at a length no screen could ever show.
  */
-export function looksLikeEmail(handle: string): boolean {
-  return handle.includes("@");
-}
-
-/** Length bounds, kept here so the form hint and the check cannot disagree. */
-export const USERNAME_MIN = 3;
-export const USERNAME_MAX = 30;
+export const USERNAME_MAX = 60;
 
 /**
- * Whether this is a username a child could type, remember, and read back.
+ * Whether this username can be stored, typed back, and told apart from an
+ * address by a person.
  *
- * Lowercase letters, digits, dashes and underscores, starting with a letter.
- * Deliberately narrow:
- *
- *   - **No dots**, so nothing ever looks half like an address.
- *   - **No spaces**, because "mira b" typed back with two spaces is a login
- *     failure a nine-year-old cannot debug.
- *   - **Starts with a letter**, so a username is never mistaken for an id.
- *
- * Case is not preserved. There is nowhere it would be shown — the display name
- * is what appears on screen — and preserving it only creates the question of
- * whether `Mira` and `mira` are the same person, which at a family's kitchen
- * table has exactly one right answer.
+ * Deliberately almost nothing: it has to be there, it has to fit, and it may
+ * not contain an `@`. Every other rule about *shape* went when the screens
+ * started saying which kind they wanted — those all existed so one box could
+ * tell a username from an address by looking at it, and nothing looks now.
  */
 export function usernameProblem(username: string): string | null {
-  if (username.length < USERNAME_MIN) {
-    return `A username needs at least ${USERNAME_MIN} characters.`;
-  }
+  if (username.length === 0) return "Choose a username.";
   if (username.length > USERNAME_MAX) {
     return `A username can be at most ${USERNAME_MAX} characters.`;
   }
-  if (!/^[a-z]/.test(username)) {
-    return "A username has to start with a letter.";
+  if (username.includes("@")) {
+    return "A username cannot contain an @ — that would make it look like somebody's email address.";
   }
-  if (!/^[a-z0-9_-]+$/.test(username)) {
-    return "A username can use letters, numbers, dashes and underscores — like mira-b.";
-  }
+  return null;
+}
+
+/** Which kind this account signs in with, or null when somehow neither. */
+export function signInKind(account: {
+  email: string | null;
+  username: string | null;
+}): HandleKind | null {
+  if (account.email) return "email";
+  if (account.username) return "username";
   return null;
 }
 
@@ -89,6 +105,9 @@ export function usernameProblem(username: string): string | null {
  * The display name is what appears everywhere a person is *named*; this is for
  * the two or three places that show the account itself — the profile header,
  * the account menu, the administrator's list of who is in which household.
+ *
+ * It returns the bare text. The administrator's list pairs it with
+ * `signInKind`, which is cheap and means a reader never has to wonder.
  */
 export function signInName(account: { email: string | null; username: string | null }): string {
   return account.email ?? account.username ?? "no sign-in";

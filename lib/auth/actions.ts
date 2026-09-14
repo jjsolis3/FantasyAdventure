@@ -14,7 +14,7 @@ import {
   normaliseInviteCode,
   planInvite,
 } from "@/lib/auth/invites";
-import { looksLikeEmail, normaliseHandle, usernameProblem } from "@/lib/auth/handle";
+import { normaliseHandle, usernameProblem } from "@/lib/auth/handle";
 import { createHousehold, householdNameFor } from "@/lib/game/households";
 import { shouldAdminister } from "@/lib/auth/platform-admin";
 
@@ -36,14 +36,18 @@ const registerSchema = z.object({
     .trim()
     .min(1, "Tell us what to call you.")
     .max(60, "That name is a bit long."),
-  // One box, two kinds of answer. The `@` decides which, and a username is
-  // forbidden from containing one, so nothing can be read both ways.
   handle: z.string().trim().min(1, "Choose how you will sign in.").max(200),
+  // Which kind the form was asking for. Stated, never inferred — a username may
+  // contain an `@` now, so no amount of looking at the string could tell you.
+  // Anything unrecognised is an address, which is the option that can only ever
+  // create an ordinary grown-up's account.
+  handleKind: z.enum(["email", "username"]).catch("email"),
   password: passwordSchema,
 });
 
 const loginSchema = z.object({
-  handle: z.string().min(1, "Enter your email or username."),
+  handle: z.string().min(1, "Enter your sign-in."),
+  handleKind: z.enum(["email", "username"]).catch("email"),
   password: z.string().min(1, "Enter your password."),
 });
 
@@ -61,6 +65,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
     inviteCode: formData.get("inviteCode"),
     displayName: formData.get("displayName"),
     handle: formData.get("handle"),
+    handleKind: formData.get("handleKind") ?? undefined,
     password: formData.get("password"),
   });
 
@@ -82,7 +87,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   // spelled out separately would be two things to keep in step.
   const startsHousehold = !(invite.grant === "HOUSEHOLD_MEMBER" && invite.householdId);
 
-  const asEmail = looksLikeEmail(handle);
+  const asEmail = parsed.data.handleKind === "email";
 
   // Whoever answers for a household needs a real address: they are the contact
   // when something goes wrong, they are who a password reset would reach, and
@@ -207,6 +212,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = loginSchema.safeParse({
     handle: formData.get("handle"),
+    handleKind: formData.get("handleKind") ?? undefined,
     password: formData.get("password"),
   });
 
@@ -214,13 +220,15 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
-  // One box, either kind of handle. `findFirst` rather than `findUnique`
-  // because two columns are being asked about; both are unique, and a username
-  // cannot contain an `@`, so at most one row can ever match.
+  // One column, decided by which page this came from. Two accounts may present
+  // the same text — one as an address and one as a username — and this is why
+  // that is unambiguous rather than merely tolerable: the sign-in page says
+  // which kind it is asking about, so there is only ever one row to find.
   const handle = normaliseHandle(parsed.data.handle);
-  const user = await db.user.findFirst({
-    where: { OR: [{ email: handle }, { username: handle }] },
-  });
+  const user =
+    parsed.data.handleKind === "email"
+      ? await db.user.findUnique({ where: { email: handle } })
+      : await db.user.findUnique({ where: { username: handle } });
 
   // Deliberately vague: saying "no such account" would let anyone test which
   // addresses and usernames are registered. Usernames make that worse rather

@@ -246,12 +246,16 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', forMira.code);
     await page.fill('input[name="displayName"]', "Mira");
-    await page.fill('input[name="handle"]', "mira-b");
+    await page.selectOption('select[name="handleKind"]', "username");
+    // Deliberately a username the old shape rules would have refused: a dot, a
+    // space, and a digit first. Nothing infers a kind from the text any more,
+    // so all of that is hers to choose.
+    await page.fill('input[name="handle"]', "9 mira.b");
     await page.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(page);
     await page.waitForURL(`${BASE}/`);
 
-    const mira = await db.user.findUnique({ where: { username: "mira-b" } });
+    const mira = await db.user.findUnique({ where: { username: "9 mira.b" } });
     check("a child can register with a username", mira !== null);
     check("and holds no email address at all", mira?.email === null, mira?.email ?? "(none)");
     check(
@@ -269,10 +273,30 @@ try {
     // check would pass without ever testing a sign-in.
     const again = await (await browser.newContext()).newPage();
     await again.goto(`${BASE}/login`);
-    await again.fill('input[name="handle"]', "  Mira-B  ");
+    await again.click('button:has-text("I sign in with a username")');
+    await again.fill('input[name="handle"]', "  9  MIRA.B  ");
     await again.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(again);
-    check("and signs in with it, whatever the capitals", again.url() === `${BASE}/`, again.url());
+    check(
+      "and signs in with it after pressing the button, whatever the capitals and spaces",
+      again.url() === `${BASE}/`,
+      again.url(),
+    );
+
+    // Without pressing that button, the same text is looked for among the email
+    // addresses and found nowhere — which is the whole mechanism, and the reason
+    // nothing has to inspect what was typed.
+    const wrongDoor = await (await browser.newContext()).newPage();
+    await wrongDoor.goto(`${BASE}/login`);
+    await wrongDoor.fill('input[name="handle"]', "9 mira.b");
+    await wrongDoor.fill('input[name="password"]', "a long enough password");
+    await submitAndSettle(wrongDoor);
+    check(
+      "and the same text is not found while the form is asking for an email",
+      wrongDoor.url() !== `${BASE}/`,
+      wrongDoor.url(),
+    );
+    await wrongDoor.close();
     await again.close();
   }
 
@@ -287,6 +311,7 @@ try {
     await page.goto(`${BASE}/register`);
     await page.fill('input[name="inviteCode"]', newFamily.code);
     await page.fill('input[name="displayName"]', "A friend");
+    await page.selectOption('select[name="handleKind"]', "username");
     await page.fill('input[name="handle"]', "friendly");
     await page.fill('input[name="password"]', "a long enough password");
     await submitAndSettle(page);
