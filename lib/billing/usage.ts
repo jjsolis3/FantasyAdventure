@@ -13,7 +13,7 @@
 
 import { db } from "@/lib/db";
 import type { Plan, SubscriptionStatus } from "@/generated/prisma/enums";
-import { entitlementsFor, type Entitlements } from "@/lib/billing/plans";
+import { UNLIMITED, entitlementsFor, type Entitlements } from "@/lib/billing/plans";
 import {
   campaignVerdict,
   linkVerdict,
@@ -203,12 +203,23 @@ export async function linkVerdictFor(householdId: string): Promise<Verdict> {
   return linkVerdict(entitlementsFor(subscription), inUse);
 }
 
-/** Whether a turn may be taken. */
+/**
+ * Whether a turn may be taken.
+ *
+ * On the hot path: every turn asks this, through `loadCampaign`. So an
+ * unmetered household is answered without the count — there is no number that
+ * could change the answer, and running a `COUNT(*)` over a family's whole
+ * month to prove it three times a turn is work done for nothing. Every other
+ * plan still pays for its own ceiling, which is the right way round.
+ */
 export async function turnVerdictFor(householdId: string): Promise<Verdict> {
   const subscription = await subscriptionFor(householdId);
-  const used = await countTurns(householdId, periodStart(subscription));
+  const entitlements = entitlementsFor(subscription);
 
-  return turnVerdict(entitlementsFor(subscription), used);
+  if (entitlements.turnsPerMonth >= UNLIMITED) return turnVerdict(entitlements, 0);
+
+  const used = await countTurns(householdId, periodStart(subscription));
+  return turnVerdict(entitlements, used);
 }
 
 /** Whether the storyteller may draw for this family. */

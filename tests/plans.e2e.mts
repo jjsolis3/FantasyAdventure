@@ -19,13 +19,22 @@
  *      there was no argument that could reach it. This is the support tool for
  *      a household whose only grown-up has locked themselves out.
  *   3. A seat cap bites, **counting codes handed out and not yet used**, so a
- *      family cannot mint its way past the limit and arrive over it.
- *   4. An adventure cap bites.
- *   5. A failed payment stops new things without stopping the story — the
+ *      family cannot mint its way past the limit and arrive over it. Two codes
+ *      are written before the third is refused, which is the control: a check
+ *      where everything is refused proves nothing about the ceiling.
+ *   4. A failed payment stops new things without stopping the story — the
  *      refusal says it is about the payment, not about a count.
- *   6. Running the installation can be handed over through the interface, the
+ *   5. Running the installation can be handed over through the interface, the
  *      last administrator cannot be retired, and the control never appears on
  *      your own row.
+ *
+ * The other four ceilings — adventures, turns, pictures and linked families —
+ * are covered by `tests/entitlements.test.ts` rather than here, and they are
+ * wired the same way this one is: the verdict is asked, and its sentence is
+ * what the screen shows. What a browser proves that a unit test cannot is that
+ * the wiring exists at all, and one worked example of it is enough; four would
+ * be four character builders and a model server for the sake of the same
+ * three lines.
  *
  * Every household starts UNMETERED, which is what a self-hosted installation
  * gets and what the migration gave everybody who already existed. So the caps

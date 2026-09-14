@@ -304,19 +304,14 @@ export class OutOfTurnsError extends Error {
  * should not be spending their own allowance on it — and the alternative, each
  * player paying for their own turns, would mean a joint adventure stopping
  * halfway through for one child and carrying on for the other.
+ *
+ * The count comes *after* the load rather than before it, so the common case —
+ * a family with turns left, or no ceiling at all — pays for one query instead
+ * of two. Refusing after loading wastes the load, and refusing is the rare
+ * case; charging every turn to make the rare one cheaper is the wrong trade.
  */
 async function loadCampaign(campaignId: string, userId: string) {
-  const owner = await db.campaign.findFirst({
-    where: memberCampaignFilter(campaignId, userId),
-    select: { householdId: true },
-  });
-
-  if (owner) {
-    const budget = await turnVerdictFor(owner.householdId);
-    if (!budget.ok) throw new OutOfTurnsError(budget.reason);
-  }
-
-  return db.campaign.findFirst({
+  const campaign = await db.campaign.findFirst({
     where: memberCampaignFilter(campaignId, userId),
     include: {
       storyline: { include: { acts: { orderBy: { index: "asc" } } } },
@@ -344,6 +339,13 @@ async function loadCampaign(campaignId: string, userId: string) {
       memories: true,
     },
   });
+
+  if (campaign) {
+    const budget = await turnVerdictFor(campaign.householdId);
+    if (!budget.ok) throw new OutOfTurnsError(budget.reason);
+  }
+
+  return campaign;
 }
 
 type LoadedCampaign = NonNullable<Awaited<ReturnType<typeof loadCampaign>>>;
