@@ -43,6 +43,8 @@ export default async function FamilySettingsPage() {
       : 0,
   ]);
 
+  const householdSize = household?._count.members ?? 0;
+
   const cards = [
     {
       href: "/settings/adventurers",
@@ -57,6 +59,13 @@ export default async function FamilySettingsPage() {
       blurb:
         "Hearthlight is invite-only. Make a code for each person who needs their own sign-in — which is what everyone playing from their own device needs.",
       note: `${unusedInvites} unused`,
+    },
+    {
+      href: "/settings/people",
+      title: "Your family",
+      blurb:
+        "Everybody with a sign-in of their own. This is also where you help somebody who has forgotten their password — a child has no email address to send a reset to, so you set a new one and tell her.",
+      note: `${householdSize} ${householdSize === 1 ? "person" : "people"}`,
     },
     {
       href: "/settings/families",

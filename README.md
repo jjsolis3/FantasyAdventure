@@ -2345,12 +2345,20 @@ conversation about who is who. Two columns keep the *software* unconfused; this
 keeps the people unconfused — and the administrator's household list names which
 kind each account is, so nobody has to infer it from punctuation.
 
-**Whoever answers for a household still needs an address.** They are the contact
-when something goes wrong, they are who a password reset would reach, and they
-are the billing contact if this ever takes money. That rule hangs off the same
-value that decides whether an invitation starts a household, so the two cannot
-drift apart — and it means a username-only account can never become the platform
-administrator, since a null address matches no named one and the first-account
+**A username is a child's account, and only a child's.** Every grown-up here has
+an address, and holding one is what makes an account ordinary: it is how they
+are reached when something goes wrong, how a password reset finds them, and who
+the bill belongs to if this ever takes money.
+
+The invitation already says which this is, because somebody decided it when they
+wrote the code — a `MEMBER` plays, anyone else helps run a family — so the rule
+reads off the invitation rather than trusting the sign-up form, and the two
+cannot disagree. A code written for a grown-up cannot be spent on a username
+however the page is driven, and whoever *starts* a household needs an address
+for the same reason twice over.
+
+It also means a username-only account can never become the platform
+administrator: a null address matches no named one, and the first-account
 fallback is only reachable by an invitation that demands an email.
 
 **The database insists an account has at least one of the two.** A row with
@@ -2364,6 +2372,63 @@ is an account holding almost no personal data about a child: a display name she
 chose, and the things her character did. If Hearthlight ever takes money it is a
 service for under-13s, and the least data that makes the thing work is the only
 defensible amount.
+
+### Forgetting a password
+
+A nine-year-old will forget her password. Until recently that was the end of the
+account and everything on it: a password was set at registration and changed
+only on the profile screen, which asks for the current one. No reset, no
+override. Neither her parent nor whoever runs the installation could help.
+
+**The grown-up next to her sets a new one**, at **Settings → Your family**.
+Nothing is emailed, because her account holds no address to email — that is the
+whole point of her signing in with a username.
+
+**Authority runs downwards and never sideways or up.** An owner may reset a
+parent or a member of their own household; a parent may reset a member only, so
+"promote the eldest so she can help" does not quietly become "the eldest can
+take the household from you"; a member resets nobody; and whoever runs the
+installation may help any family, because somebody has to be able to. Nobody
+resets a platform administrator through household authority — being the owner of
+the household that person lives in is not a route to the storyteller's API key —
+and nobody resets themselves here, because knowing your own password means the
+profile screen, which asks for it.
+
+**Two things go with the password.** The lock, because a forgotten password and
+a locked account arrive together — she tried eight times before asking for help,
+and a reset that left the lock in place would hand her a new password that also
+does not work, for fifteen minutes, with no explanation she could act on. And
+every session that account had, because if the reason for the reset was that a
+sibling knew the old password, a still-live session on the sibling's tablet
+would defeat the exercise.
+
+### Why there is no "email me a reset link"
+
+It is a fair question and the answer is a calculation rather than a limitation.
+
+Sending mail means a provider account, credentials in the deployment, a domain
+with SPF and DKIM records or the mail lands in spam, a token table, and two more
+pages. Hearthlight has six runtime dependencies and no mailer.
+
+What that buys is nothing for the people who need reset most: **a child has no
+address to send anything to.** It would serve the grown-ups, and every grown-up
+already has somebody who can help them — a household's people have their owner,
+and a household's owner has whoever runs the installation.
+
+That leaves exactly one account with nobody above it: the administrator's own.
+For that there is `scripts/set-password.mts`, run on the machine that holds the
+database:
+
+```
+DATABASE_URL=… npx tsx scripts/set-password.mts you@example.com 'a long new password'
+```
+
+A shell on that machine can read the database anyway, which is precisely why it
+is safe to allow there and not safe to put on a screen.
+
+**When that calculation changes:** the day Hearthlight holds families who are
+not yours to telephone. Self-service reset is a support-cost question, and the
+support cost is currently one person who can be asked directly.
 
 ### Twelve means twelve
 
@@ -2632,6 +2697,7 @@ app/
   settings/adventurers/    Fixing and re-laying a sheet in your own household
   settings/invites/        Codes for your own family, and what each one grants
   settings/families/       The families yours has agreed to adventure with
+  settings/people/         Who is in your family, and helping one of them back in
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
   admin/adventures/        Writing and editing storylines in the app
@@ -2720,6 +2786,7 @@ tests/
   invites.test.ts   Unit tests — who is offered along, and in what order
   households.test.ts     Unit tests — naming one, who may act for it, whose it is
   invite-grants.test.ts  Unit tests — who may admit a family, and whose house a code is for
+  member-password.test.ts  Unit tests — who may help somebody back into their account
   handle.test.ts         Unit tests — what a child may sign in with, and what shows it
   visibility.test.ts     Unit tests — one pair one row, and who can see whom
   auth.e2e.mts      Browser-driven auth flow
@@ -2739,6 +2806,7 @@ tests/
                       and a code that puts a child inside it rather than beside it
   families.e2e.mts    Two families: strangers, agreed, travelling, and stopped —
                       and the adventure that survives the stopping
+  people.e2e.mts      A forgotten password, the lock it came with, and who may lift it
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

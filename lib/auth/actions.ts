@@ -89,15 +89,26 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 
   const asEmail = parsed.data.handleKind === "email";
 
-  // Whoever answers for a household needs a real address: they are the contact
-  // when something goes wrong, they are who a password reset would reach, and
-  // they are the billing contact if this ever takes money. A child joining a
-  // family needs none of that, and is better off holding none of it.
-  if (startsHousehold && !asEmail) {
+  // **A username is a child's account, and only a child's.**
+  //
+  // Every grown-up here has an address, and holding one is what makes an
+  // account ordinary: it is how they are reached when something goes wrong, how
+  // a password reset finds them, and who the bill belongs to if this ever takes
+  // money. A child has none of that and is better off holding none of it.
+  //
+  // The invitation already says which this is, because somebody decided it when
+  // they wrote the code: a `MEMBER` plays, and anyone else helps run a family.
+  // So the rule reads off the invitation rather than trusting the form, and the
+  // two cannot disagree.
+  const forSomebodyWhoPlays = !startsHousehold && invite.intendedRole === "MEMBER";
+
+  if (!asEmail && !forSomebodyWhoPlays) {
     return {
-      error: "Whoever starts a family signs in with an email address.",
+      error: startsHousehold
+        ? "Whoever starts a family signs in with an email address."
+        : "Only a child's account signs in with a username. This invitation is for a grown-up.",
       fieldErrors: {
-        handle: "An email address, please — the grown-up who answers for a family needs one.",
+        handle: "An email address, please — a grown-up's account is reached by email.",
       },
     };
   }

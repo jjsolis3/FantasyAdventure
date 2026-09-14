@@ -69,7 +69,7 @@ export function InviteForm({ mayAdmitFamilies }: { mayAdmitFamilies: boolean }) 
             { value: "MEMBER", label: "Play — make and play their own adventurers" },
             { value: "PARENT", label: "Help run the household — also invites and fixes sheets" },
           ]}
-          hint="A child's code should be the first one. The second is for another grown-up in the house."
+          hint="A child's code is the first one, and it is the only one that can be redeemed with a username instead of an email address. The second is for another grown-up in the house."
         />
       )}
 

@@ -58,13 +58,13 @@ export function RegisterForm({ isFirstAccount }: { isFirstAccount: boolean }) {
             With an email address
           </option>
           <option value="username" className="bg-hearth-950">
-            With a username — for a child with no email
+            With a username — a child&rsquo;s account
           </option>
         </select>
         <span className="mt-1.5 block text-sm text-hearth-400">
           {asEmail
-            ? "Whoever answers for a family needs an address — it is how they are reached if something goes wrong."
-            : "Anything she can remember and type. No email is collected at all."}
+            ? "Every grown-up's account is reached by email — it is how a password reset finds them."
+            : "For a child, on an invitation that says she plays. Anything she can remember and type, and no email is collected at all."}
         </span>
       </label>
 
