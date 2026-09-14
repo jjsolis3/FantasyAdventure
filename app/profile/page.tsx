@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
-import { signInName } from "@/lib/auth/handle";
+import { signInKind, signInName } from "@/lib/auth/handle";
+import { mayUseUsername } from "@/lib/auth/member-authority";
 import { Card, PageTitle } from "@/components/ui";
-import { PasswordForm, ProfileForm } from "./profile-forms";
+import { PasswordForm, ProfileForm, SignInForm } from "./profile-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,18 @@ export default async function ProfilePage() {
             displayName={user.displayName}
             defaultReadingLevel={user.defaultReadingLevel}
             defaultTone={user.defaultTone}
+          />
+        </Card>
+
+        <Card>
+          <h2 className="font-display mb-5 text-xl text-hearth-100">How you sign in</h2>
+          <SignInForm
+            signIn={signInName(user)}
+            isUsername={signInKind(user) === "username"}
+            mayUseUsername={mayUseUsername({
+              householdRole: sessionUser.householdRole,
+              platformAdmin: user.role === "PLATFORM_ADMIN",
+            })}
           />
         </Card>
 

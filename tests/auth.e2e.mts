@@ -438,7 +438,46 @@ try {
     check("display name saved", user?.displayName === "Dad", user?.displayName);
     check("reading level saved", user?.defaultReadingLevel === "EARLY_READER", user?.defaultReadingLevel);
     check("tone saved", user?.defaultTone === "ADVENTUROUS", user?.defaultTone);
+
+    // ---- Changing the address you sign in with --------------------------
+    //
+    // Nobody could, until now: the profile screen did display name, reading
+    // level, tone and password, so changing email provider meant being stuck.
+    //
+    // It asks for the password, and that is the point. A session somebody else
+    // had got hold of could otherwise rewrite the address and then use the
+    // forgotten-password flow to keep the account for good.
+    await page.fill('input[name="handle"]', "dad@example.com");
+    await page.fill('input[name="signInPassword"]', "definitely not it");
+    await submitAndSettle(page, 'button:has-text("Save how I sign in")');
+    check(
+      "changing it needs your password",
+      (await db.user.count({ where: { email: "dad@example.com" } })) === 0,
+    );
+
+    await page.fill('input[name="handle"]', "dad@example.com");
+    await page.fill('input[name="signInPassword"]', "a brand new long password");
+    await submitAndSettle(page, 'button:has-text("Save how I sign in")');
+    check(
+      "and goes through with it",
+      (await db.user.count({ where: { email: "dad@example.com" } })) === 1,
+    );
+
+    // A grown-up of a household is reached by email — that is what the reset
+    // flow depends on — so the choice is not even drawn for them.
+    check(
+      "a grown-up is not offered a username",
+      (await page.locator('select[name="handleKind"]').count()) === 0,
+    );
     await page.close();
+
+    const backIn = await (await browser.newContext()).newPage();
+    await backIn.goto(`${BASE}/login`);
+    await backIn.fill('input[name="handle"]', "dad@example.com");
+    await backIn.fill('input[name="password"]', "a brand new long password");
+    await submitAndSettle(backIn);
+    check("the new address signs in", backIn.url() === `${BASE}/`, backIn.url());
+    await backIn.close();
   }
   // ---- Repeated failures lock the account --------------------------------
   // Runs last, and against Grandma, because it deliberately locks the account.

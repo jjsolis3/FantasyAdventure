@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mayResetPassword } from "../lib/auth/member-password.ts";
+import {
+  mayEditSignIn,
+  mayResetPassword,
+  maySetRole,
+  mayUseUsername,
+} from "../lib/auth/member-authority.ts";
 
 /**
  * Who may set somebody else's password.
@@ -109,4 +114,91 @@ test("nobody resets themselves here, and is told where to go", () => {
 
 test("not even the administrator", () => {
   assert.equal(mayResetPassword(operator, { ...operator }).ok, false);
+});
+
+// ---- Changing what somebody may do ------------------------------------------
+//
+// This was the platform administrator's job until the two roles ended up on
+// different accounts and the cost showed: promoting your own spouse meant
+// signing out and in as whoever runs the server. A household is the unit a
+// family is administered in, so its owner administers it.
+
+test("the owner may promote somebody who plays", () => {
+  assert.equal(maySetRole(owner, child, "PARENT").ok, true);
+});
+
+test("and demote somebody who helps run it", () => {
+  assert.equal(maySetRole(owner, parent, "MEMBER").ok, true);
+});
+
+test("a parent may not hand out their own job", () => {
+  // The whole escalation guard. If a parent could grant PARENT, "promote the
+  // eldest so she can help" would become a way around every rule that tells the
+  // two apart — including who may reset whose password.
+  const verdict = maySetRole(parent, child, "PARENT");
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.ok ? "" : verdict.reason, /answers for this family/);
+});
+
+test("and nobody changes their own", () => {
+  // An owner who demotes themselves leaves a family unable to invite, reset a
+  // password or put a sheet right — and the person who could undo it is the one
+  // who just gave the power away.
+  const verdict = maySetRole(owner, { ...owner }, "MEMBER");
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.ok ? "" : verdict.reason, /your own role/);
+});
+
+test("OWNER is not a role a family can hand out", () => {
+  // Handing a household to a different owner is a transfer rather than an edit,
+  // and it stays with the operator, where an accident is recoverable.
+  assert.equal(maySetRole(owner, parent, "OWNER").ok, false);
+  assert.equal(maySetRole(owner, child, "nonsense").ok, false);
+});
+
+test("not across households, and not on the administrator", () => {
+  assert.equal(maySetRole(owner, { ...child, householdId: OTHER }, "PARENT").ok, false);
+  assert.equal(maySetRole(owner, { ...operator, userId: "u_ops" }, "MEMBER").ok, false);
+});
+
+test("whoever runs Hearthlight may still set roles anywhere", () => {
+  assert.equal(maySetRole(operator, { ...child, householdId: OTHER }, "PARENT").ok, true);
+});
+
+// ---- Who may hold a username ------------------------------------------------
+
+test("somebody who only plays may sign in with a username", () => {
+  assert.equal(mayUseUsername({ householdRole: "MEMBER", platformAdmin: false }), true);
+});
+
+test("and the grown-ups may not, because a reset has to reach them", () => {
+  assert.equal(mayUseUsername({ householdRole: "OWNER", platformAdmin: false }), false);
+  assert.equal(mayUseUsername({ householdRole: "PARENT", platformAdmin: false }), false);
+});
+
+test("nor whoever runs the installation, whatever their household role", () => {
+  assert.equal(mayUseUsername({ householdRole: "MEMBER", platformAdmin: true }), false);
+});
+
+test("nor somebody in no household at all", () => {
+  assert.equal(mayUseUsername({ householdRole: null, platformAdmin: false }), false);
+});
+
+// ---- Changing how somebody signs in -----------------------------------------
+
+test("editing a sign-in asks exactly what resetting a password asks", () => {
+  // Deliberately the same rule rather than a similar one: being able to set
+  // somebody's password and being able to change the address that password
+  // protects are the same amount of power over an account, and two rules that
+  // meant to agree would eventually stop agreeing.
+  for (const [actor, target] of [
+    [owner, child],
+    [parent, child],
+    [parent, owner],
+    [child, parent],
+    [owner, { ...child, householdId: OTHER }],
+    [owner, { ...owner }],
+  ] as const) {
+    assert.equal(mayEditSignIn(actor, target).ok, mayResetPassword(actor, target).ok);
+  }
 });

@@ -159,6 +159,9 @@ export async function renameHouseholdAction(
   _prev: HouseholdFormState,
   formData: FormData,
 ): Promise<HouseholdFormState> {
+  // The operator's version, which renames *other* people's families and so has
+  // to take an id. A family renaming itself is `renameOwnHouseholdAction`, which
+  // takes the household off the session and therefore has nothing to check.
   await requirePlatformAdmin();
 
   const householdId = String(formData.get("householdId") ?? "");
