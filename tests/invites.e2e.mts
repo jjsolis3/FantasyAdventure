@@ -22,7 +22,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { buildCharacter } from "./e2e-helpers.mts";
 import { generateInviteCode, generateJoinCode } from "../lib/auth/invite-code.ts";
-import { householdOf } from "./e2e-helpers.mjs";
+import { householdOf, inviteInto } from "./e2e-helpers.mjs";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3399";
 const connectionString =
@@ -94,8 +94,15 @@ try {
   const mira = await db.character.findFirstOrThrow({ where: { userId: hostUser.id } });
 
   // ---- A child with their own sign-in and their own adventurer -------------
-  const childInvite = await db.inviteCode.create({
-    data: { code: generateInviteCode(), createdById: hostUser.id, note: "daughter" },
+  //
+  // Into *this* household, which is the whole premise of the file: one family
+  // where everybody has their own sign-in. A code with no household on it means
+  // "start a family of your own" now, and a daughter invited that way is
+  // correctly invisible to her own father.
+  const childInvite = await inviteInto(db, {
+    householdId: await householdOf(db, hostUser.id),
+    createdById: hostUser.id,
+    forName: "daughter",
   });
   const childContext = await browser.newContext();
   const child = await register(childContext, childInvite.code, "Daughter", "daughter@example.com");

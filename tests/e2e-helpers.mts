@@ -32,6 +32,7 @@
 import type { Page } from "@playwright/test";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { findArchetype } from "../lib/game/character-options.ts";
+import { generateInviteCode } from "../lib/auth/invite-code.ts";
 import { createHousehold, householdNameFor, singleHouseholdFor } from "../lib/game/households.ts";
 import { SKILLS_PER_CHARACTER } from "../lib/game/rules.ts";
 
@@ -74,6 +75,37 @@ export async function householdOf(db: PrismaClient, userId: string): Promise<str
   const membership = await singleHouseholdFor(db, userId);
   if (!membership) throw new Error(`No household for user ${userId} — did registration change?`);
   return membership.householdId;
+}
+
+/**
+ * An invitation into a household that already exists.
+ *
+ * Fixtures used to write `db.inviteCode.create({ data: { code } })` and get a
+ * second account that was, in practice, part of the same family. Since
+ * invitations say what they grant, a code with no household on it means
+ * something quite specific — *start a family of your own* — and once the
+ * boundary is actually read, a daughter invited that way becomes invisible to
+ * her own father.
+ *
+ * That is the application behaving correctly and the fixture lying. So this
+ * exists to make a test say which it means: `inviteInto` for somebody joining
+ * this family, and a plain `NEW_HOUSEHOLD` code for a genuinely separate one.
+ */
+export async function inviteInto(
+  db: PrismaClient,
+  options: { householdId: string; createdById?: string; role?: "PARENT" | "MEMBER"; forName?: string },
+): Promise<{ code: string }> {
+  return db.inviteCode.create({
+    data: {
+      code: generateInviteCode(),
+      grant: "HOUSEHOLD_MEMBER",
+      householdId: options.householdId,
+      intendedRole: options.role ?? "MEMBER",
+      createdById: options.createdById ?? null,
+      forName: options.forName ?? null,
+    },
+    select: { code: true },
+  });
 }
 
 /** Clicks a submit and waits for the page to stop moving. */
