@@ -98,13 +98,3 @@ export function visibleCharacterWhere(
     ],
   };
 }
-
-/**
- * Whether two households have agreed to play together.
- *
- * The same question `visibleCharacterWhere` asks, for the places that need a
- * yes or no rather than a filter — joining an adventure by code, most of all.
- */
-export function areLinked(householdIds: string[], other: string | null | undefined): boolean {
-  return other !== null && other !== undefined && householdIds.includes(other);
-}

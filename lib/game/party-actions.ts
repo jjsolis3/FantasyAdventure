@@ -6,7 +6,6 @@ import { z } from "zod";
 import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { generateJoinCode, normaliseInviteCode } from "@/lib/auth/invite-code";
-import { areLinked, visibleHouseholdIds } from "@/lib/game/visibility";
 import type { FormState } from "@/lib/auth/actions";
 
 const joinSchema = z.object({
@@ -48,23 +47,30 @@ export async function joinCampaignAction(_prev: FormState, formData: FormData): 
     return { error: `${campaign.title} has already finished.` };
   }
 
-  // Possession of the code used to be the *entire* authorisation, and joining
-  // grants read access to every party member's sheet. That was fine between
-  // friends round one table; it is not fine once the installation holds
-  // families who have never met, because a code pasted anywhere becomes a way
-  // into a stranger's children.
+  // **A join code admits you to this adventure, and to nothing else.**
   //
-  // So the code still carries the invitation — it is what makes joining one
-  // step rather than a negotiation — but it only works between families who
-  // have already agreed to play together. The refusal names the adventure
-  // rather than the household, because somebody holding a real code is not
-  // being told a secret by learning that the adventure exists.
-  const householdIds = await visibleHouseholdIds(db, user.householdId);
-  if (!areLinked(householdIds, campaign.householdId)) {
-    return {
-      error: `${campaign.title} belongs to a family yours has not agreed to adventure with yet. Swap family codes first, in Settings → Families.`,
-    };
-  }
+  // This was briefly gated on the two households being linked, on the reasoning
+  // that possession of a code should not be the whole authorisation. That was
+  // the wrong trade, and an aunt handed a code across the room is what showed
+  // it: linking is a *household* act, so making her link first would expose
+  // every child in both families to the other, permanently, in order to join
+  // one evening. A rule that pushes people into over-linking costs more privacy
+  // than the one it protects.
+  //
+  // So the two codes keep two different scopes, each the smallest that does its
+  // job. A `KIN-` code links two families and lets them see each other's
+  // adventurers. A `PARTY-` code adds one adventurer to one adventure, and what
+  // it grants is what `memberCampaignWhere` grants: that campaign, and the
+  // sheets of the people in it. Not the household's other children.
+  //
+  // It is still two consents — the host generates and hands over the code, the
+  // guest chooses to use it — which is the same structure the family codes use
+  // one level up, and it is what was asked for: *"as long as an invite code or
+  // sharing method is implemented and agreed from both sides."*
+  //
+  // What remains: a leaked code admits its holder to that one adventure until
+  // the host rotates it. That is a real if bounded exposure, and rotation is on
+  // the adventure's own screen.
 
   const character = await db.character.findFirst({
     where: { id: parsed.data.characterId, userId: user.id },

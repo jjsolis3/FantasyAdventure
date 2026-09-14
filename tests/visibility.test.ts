@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { areLinked, canonicalLink, visibleCharacterWhere } from "../lib/game/visibility.ts";
+import { canonicalLink, visibleCharacterWhere } from "../lib/game/visibility.ts";
 
 /**
  * Who you can see.
@@ -61,27 +61,4 @@ test("an account in no household sees only the people it is travelling with", ()
   const where = visibleCharacterWhere("me", []);
   const branches = where.OR as Record<string, unknown>[];
   assert.deepEqual(branches[0], { householdId: { in: [] } });
-});
-
-// ---- Yes or no, for the places that need one --------------------------------
-
-test("two families that have agreed are linked", () => {
-  assert.equal(areLinked(["hh_mine", "hh_friends"], "hh_friends"), true);
-});
-
-test("two that have not are not", () => {
-  assert.equal(areLinked(["hh_mine"], "hh_strangers"), false);
-});
-
-test("your own household counts, because you adventure with yourself", () => {
-  assert.equal(areLinked(["hh_mine"], "hh_mine"), true);
-});
-
-test("and nothing is linked to nothing", () => {
-  // An adventure with no household is not a thing the schema permits —
-  // `Campaign.householdId` is NOT NULL — but a join code typed against a row
-  // read before that column existed must refuse rather than wave somebody in.
-  assert.equal(areLinked(["hh_mine"], null), false);
-  assert.equal(areLinked(["hh_mine"], undefined), false);
-  assert.equal(areLinked([], null), false);
 });

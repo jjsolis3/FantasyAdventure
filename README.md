@@ -2291,11 +2291,18 @@ one-family app a duplicated rule is a smell, between two families it is a leak,
 because moving the rule leaves the copy answering the old question. Both now
 import it.
 
-**A join code is no longer the whole authorisation.** Possession of a `PARTY-`
-code used to be the entire check, and joining grants read access to every party
-member's sheet. It still carries the invitation — that is what makes joining one
-step rather than a negotiation — but it now only works between families who have
-already agreed to play together.
+**The two codes keep two different scopes**, each the smallest that does its
+job. A `KIN-` code links two families and lets them see each other's adventurers.
+A `PARTY-` code adds one adventurer to one adventure, and grants exactly what
+party membership grants: that campaign and the sheets of the people in it — not
+the household's other children.
+
+Gating the join code on a household link was tried and reversed. It sounded
+safer and was not: linking is a *household* act, so an aunt handed a code across
+the room would have had to expose every child in both families, permanently, in
+order to join one evening. A rule that pushes people into over-linking costs more
+privacy than it saves. What remains is that a leaked `PARTY-` code admits its
+holder to that one adventure until the host rotates it.
 
 **And `needsConsent` became a gift rather than a restriction.** It compared
 *account* ids, which meant that on this very installation, where a father and

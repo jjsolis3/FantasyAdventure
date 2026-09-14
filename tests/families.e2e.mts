@@ -137,6 +137,7 @@ try {
   // when the link was cut, rather than the check quietly passing on somebody
   // the party branch was always going to match.
   await buildCharacter(solis, "Tamsyn", "Human", "Trickster");
+  await buildCharacter(solis, "Merrow", "Human", "Wondersmith");
   await buildCharacter(friend, "Quenby", "Fox-folk", "Healer");
   await buildCharacter(friend, "Halbrick", "Stonekin", "Guardian");
 
@@ -206,10 +207,17 @@ try {
     String(await imageStatus(friendContext, quenby.id, "portrait")),
   );
 
-  // And a join code is no longer the whole authorisation. Possession of a
-  // `PARTY-` code used to be the *entire* check, and joining grants read access
-  // to every party member's sheet — fine between friends round one table, not
-  // fine once a code pasted anywhere becomes a way into a stranger's children.
+  // A join code still works between families who have agreed to nothing — and
+  // that is deliberate, after this test briefly asserted the opposite.
+  //
+  // Gating it on a household link sounded safer and was not: linking is a
+  // *household* act, so an aunt handed a code across the room would have had to
+  // expose every child in both families, permanently, to join one evening. A
+  // rule that pushes people into over-linking costs more privacy than it saves.
+  //
+  // So the two codes keep two different scopes. What is asserted here is that
+  // the narrow one really is narrow: joining by code hands over that adventure
+  // and the people in it, and **not** the household's other children.
   const storyline = await db.storyline.findFirstOrThrow({ where: { minPlayers: { lte: 2 } } });
   const solisOnly = await db.campaign.create({
     data: {
@@ -226,16 +234,28 @@ try {
 
   await friend.goto(`${BASE}/campaigns/join`);
   await friend.fill('input[name="code"]', solisOnly.joinCode);
-  await submitAndSettle(friend);
+  await friend.click('button:has-text("Quenby")');
+  await submitAndSettle(friend, 'button:has-text("Join the adventure")');
   check(
-    "a real join code alone does not get a stranger to the table",
-    !friend.url().includes(`/campaigns/${solisOnly.id}`),
+    "a code handed over still gets a guest to that table",
+    friend.url().includes(`/campaigns/${solisOnly.id}`),
     friend.url(),
   );
   check(
-    "and says why, rather than pretending the code was wrong",
-    ((await friend.textContent("body")) ?? "").includes("has not agreed to adventure with"),
+    "and they see who is in the party",
+    ((await friend.textContent("main")) ?? "").includes("Tamsyn"),
   );
+
+  // But the Solis house has another child who is in no adventure at all, and
+  // joining one party is not a way to meet her.
+  check(
+    "but not the household's other children",
+    !((await offered(friend)).includes("Merrow")),
+  );
+
+  // Take her back out, so the sections below start from two families who have
+  // agreed to nothing and travelled nowhere.
+  await db.partyMember.deleteMany({ where: { campaignId: solisOnly.id, characterId: quenby.id } });
 
   console.log("\n-- Agreed: one shares a code, the other types it -----------------");
 
@@ -263,7 +283,11 @@ try {
   const nowOffered = await offered(solis);
   check("now the picker offers them", nowOffered.includes("Quenby"));
   check("all of them, not only the one they end up playing with", nowOffered.includes("Halbrick"));
-  check("and offers them the other way too", (await offered(friend)).includes("Tamsyn"));
+  const friendNowSees = await offered(friend);
+  check("and offers them the other way too", friendNowSees.includes("Tamsyn"));
+  // Including the Solis child who is in no adventure — she is the one the check
+  // after the unlink turns on, so it matters that she is visible *here*.
+  check("the whole household, not only the one in a party", friendNowSees.includes("Merrow"));
 
   // The same two calls that were refused a moment ago, from the same browser.
   const linkedPortrait = await imageStatus(solisContext, quenby.id, "portrait");
@@ -331,27 +355,11 @@ try {
   // written to pass. The friend's half of the cut is proved below instead, by
   // a door that really is shut.
 
-  // No *new* sharing, which is the other half of what stopping means. A fresh
-  // adventure in the Solis house is closed to them again.
-  const afterTheFact = await db.campaign.create({
-    data: {
-      title: "The Quiet Lane",
-      ownerId: joseId,
-      householdId: solisHome,
-      storylineId: storyline.id,
-      tone: "COZY",
-      readingLevel: "FAMILY_MIXED",
-      joinCode: generateJoinCode(),
-      party: { create: [{ characterId: tamsyn.id, position: 0 }] },
-    },
-  });
-  await friend.goto(`${BASE}/campaigns/join`);
-  await friend.fill('input[name="code"]', afterTheFact.joinCode);
-  await submitAndSettle(friend);
+  // And the Solis child who never travelled with them is out of reach again,
+  // which is the friend's half of the cut.
   check(
-    "and a new adventure is closed to them again",
-    !friend.url().includes(`/campaigns/${afterTheFact.id}`),
-    friend.url(),
+    "and the other family loses sight of them too",
+    !((await offered(friend)).includes("Merrow")),
   );
 
   // The half of this that matters most, and the reason the party branch of
