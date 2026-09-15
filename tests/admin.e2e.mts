@@ -92,10 +92,15 @@ try {
     ),
     hub.replace(/\n+/g, " / ").slice(0, 160),
   );
-  check(
-    "and offers none of the family's, which are not its business",
-    !hub.includes("Invitations"),
-  );
+  // Named one by one rather than as "no Invitations card", which is what this
+  // used to say. Invitations are on both screens now and mean different things
+  // on each: a family invites people into itself, and the installation admits
+  // whole families — the act that decides how many families there are, which
+  // is not a thing a family does. So the check is the family's *other* screens,
+  // which genuinely have no business here.
+  for (const card of ["Adventurers", "Your family", "Families you adventure with"]) {
+    check(`and offers none of the family's — no ${card}`, !hub.includes(card));
+  }
 
   // Every one of these belongs to the installation. `/settings` is deliberately
   // not in the list any more — it is the player's own family's screen now, and
