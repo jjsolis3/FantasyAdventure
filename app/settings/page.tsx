@@ -180,7 +180,13 @@ export default async function FamilySettingsPage() {
         </p>
       ) : null}
 
-      {usage ? <PlanCard usage={usage} /> : null}
+      {usage ? (
+        <Link href="/settings/billing" className="block">
+          <div className="transition-opacity hover:opacity-90">
+            <PlanCard usage={usage} />
+          </div>
+        </Link>
+      ) : null}
 
       <div className="space-y-4">
         {cards.map((card) => (

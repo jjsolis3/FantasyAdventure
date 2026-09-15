@@ -2755,6 +2755,66 @@ flow, the billing portal button, and a warning on `/admin/households` that a
 family paying through Stripe will have a hand-set plan overwritten by the next
 event.
 
+### Buying a plan, and changing one
+
+The sending end. Two redirects to Stripe and nothing else — because **neither
+of them decides what a family is paying for.** That is the webhook's job and
+only the webhook's, so nothing on this side writes `plan` or `status`.
+
+What the checkout action does write is the customer id, once, before the
+redirect — so a family who abandons a checkout and comes back does not
+accumulate a Stripe customer per attempt. The idempotency key is the
+household's own id, which makes "the same request" mean exactly the right thing
+here: one customer per family, however many times the button is pressed.
+
+**Coming back from a successful checkout says "this may take a moment".** Not
+"you are now on Homestead". The redirect lands a second or two before the
+webhook does, and a page that congratulated somebody on a plan the database has
+not been told about is a page that contradicts the app — and the family believes
+the page.
+
+**Only the household's `OWNER` may buy.** The role has said *"later, the billing
+contact"* since the day it existed. A `PARENT` may invite, reset a child's
+password and put a sheet right; committing the family to a recurring payment is
+a different kind of act and belongs to the one person who answers for them. A
+platform administrator cannot buy on somebody's behalf either — they have a
+manual override that costs nobody anything, and putting a stranger's card
+details in front of them is not support.
+
+**A family already paying goes to the portal, not through checkout again.** Two
+live subscriptions against one household is a mess with no good way out: two
+invoices, two renewal dates, and a webhook race over which one owns the plan.
+That includes a family whose card has failed — a fresh checkout would leave the
+broken subscription behind, still failing, still emailing them, and the card
+gets fixed in the portal. A family who has *cancelled* may start again.
+
+**Cancelling, changing card and changing plan are Stripe's screens.** Each is a
+week of work and a compliance surface, Stripe has all three, and whatever
+somebody does there arrives back as a webhook — which is the only thing this app
+trusts anyway.
+
+**`fetch` rather than the Stripe SDK**, which is a judgement call and a
+reversible one. The surface is three form-encoded POSTs, none of which can be
+exercised from a development machine without an account — so the library's value
+would sit in code paths no test can reach. What it would have bought is done
+explicitly instead: the API version is pinned rather than left to whatever a
+dashboard says, idempotency keys are set where a double-submit would cost money,
+and the one genuinely fiddly part — Stripe's `line_items[0][price]` bracket
+notation — is a pure function with tests. Getting that encoding subtly wrong
+produces a request Stripe *accepts* while ignoring the part that mattered, and
+the part that matters most is `subscription_data[metadata][householdId]`:
+without it every subscription event about that family is refused as carrying no
+household, and somebody has paid for a plan that never arrives.
+
+Note the contrast with the signature, which was hand-written for the opposite
+reason — so that forgery, replay and rotation *could* be tested. One is the
+thing that guards money and the other is three HTTP calls.
+
+**The administrator's override is still there and now says so.** A hand-set plan
+on a family who pays through Stripe holds only until the next event about them,
+and `/admin/households` says that where the control is. The failure is otherwise
+silent: the screen accepts the change and a webhook undoes it hours later.
+
 ### Before anybody is charged
 
 Not code, and not advice — this is a note about what is still open, written down
@@ -3005,6 +3065,7 @@ In the application's **Environment Variables** tab:
 | `DEFAULT_PLAN` | Optional. `UNMETERED` by default: no ceiling on people, adventures, turns or pictures, which is what a family running their own copy should get. Set `HEARTH` to put every newly registered household on the trial. |
 | `STRIPE_WEBHOOK_SECRET` | Optional. Unset, this installation sells nothing and `/api/billing/webhook` answers 503. Required as soon as any price is set — with prices and no secret, billing stays switched off on purpose rather than leaving an endpoint that would take unverified writes. |
 | `STRIPE_PRICE_HOMESTEAD`, `STRIPE_PRICE_KEEP` | Optional. Stripe **price** ids (`price_…`), not product ids. `HEARTH` and `UNMETERED` have none and cannot be bought. |
+| `STRIPE_SECRET_KEY` | Optional. The key the app calls Stripe with — `sk_…`, never a publishable one. There is no client-side Stripe here: checkout is a server action that redirects. Without it the plans still show and the button still says what went wrong. |
 
 ### 4. Health check and domain
 
@@ -3084,6 +3145,7 @@ app/
   settings/families/       The families yours has agreed to adventure with
   settings/people/         Who is in your family, and helping one of them back in
   settings/adventures/     Stories this family has written, and copies to start from
+  settings/billing/        What this family pays for, and the way to change it
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
   admin/adventures/        The shared library, and who each adventure is for
@@ -3119,6 +3181,9 @@ lib/
     stripe-signature.ts Proving a webhook came from Stripe, unaltered, recently
     stripe-events.ts    What a Stripe event means in this app's own terms
     stripe-sync.ts      Deduplication, ordering, and the only write
+    checkout.ts         Who may buy what, before any of it reaches Stripe
+    stripe-api.ts       Three POSTs, with Stripe's bracket form encoding
+    checkout-actions.ts Two redirects: start a subscription, manage one
   ai/
     provider.ts     OpenAI-compatible and Anthropic clients
     images.ts       The drawing request, and the prompt it is safe to send
@@ -3212,6 +3277,7 @@ tests/
                       failed, and the installation changing hands
   stripe-billing.test.ts  Forged, replayed and rotated signatures; what each
                       Stripe status means here; reading an event
+  checkout.test.ts    Who may buy what, and Stripe's form encoding
   billing.e2e.mts     The webhook against the running route: refusals, a
                       duplicate, and one that arrives out of order
   storyline-scope.test.ts  Who an adventure is for, and who may take it apart
