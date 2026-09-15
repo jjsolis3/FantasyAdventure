@@ -231,8 +231,67 @@ model Subscription {
   externalCustomerId     String? @unique
   externalSubscriptionId String? @unique
 
+  /// When the newest Stripe event this row has acted on was created.
+  ///
+  /// Webhooks arrive out of order. Not often, and not predictably — a retry
+  /// after a blip can deliver a `subscription.updated` from thirty seconds ago
+  /// *after* the cancellation that followed it, and the row would end up
+  /// showing the older truth for ever. Comparing against this and refusing
+  /// anything older is the whole fix, and it costs one column.
+  ///
+  /// Deduplication is a different problem with a different answer — see
+  /// `WebhookEvent`. This one is about ordering, not about repeats.
+  lastEventAt DateTime?
+
+  /// When a parent was verified as a parent, and how.
+  ///
+  /// Not book-keeping. Hearthlight is explicitly for children under 13, which
+  /// in the United States puts a paid installation inside COPPA, and COPPA
+  /// wants consent that is *verifiable* — a record of the check, not a ticked
+  /// box. A payment from the parent's own card is one of the methods the FTC
+  /// recognises, so the moment a subscription first goes live is the moment
+  /// that test is passed. Writing it down then costs nothing; reconstructing it
+  /// afterwards from Stripe's invoices is the kind of thing nobody wants to be
+  /// doing for the first time when they are asked.
+  ///
+  /// This is a record of a fact, not legal advice, and it is not on its own
+  /// compliance: the notice saying what is collected and where it is sent, and
+  /// deletion on request, are still owed. See the README.
+  consentedAt     DateTime?
+  /// How, so the record says what was actually done. `stripe_payment` today.
+  consentMethod   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A webhook that has already been dealt with.
+///
+/// Stripe delivers at least once, not exactly once: a response that is slow, or
+/// a deploy landing mid-request, and the same event arrives again. Most of them
+/// are harmless to repeat — writing the same status twice changes nothing — but
+/// "most" is not a property to rely on as billing grows, and the fix is one
+/// insert.
+///
+/// **The id is Stripe's own event id**, so the deduplication *is* the primary
+/// key: inserting and catching the unique violation is the check, with no
+/// read-then-write race to lose. Nothing else in here has that shape, which is
+/// why this model does not have a `cuid()` like all the others.
+///
+/// Safe to prune. Anything older than Stripe's own retry window — three days —
+/// can never arrive again, so this table has a natural ceiling however long it
+/// is left alone.
+model WebhookEvent {
+  /// Stripe's event id, verbatim. `evt_…`.
+  id   String @id
+  type String
+
+  /// When Stripe made it, not when it arrived — the ordering `lastEventAt`
+  /// compares against, kept here too so a delivery can be reconstructed.
+  createdAt  DateTime
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
 }
 
 /// The ladder. What each one actually allows lives in `lib/billing/plans.ts`,
