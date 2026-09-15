@@ -14,10 +14,16 @@
  * for ever, and no amount of unit testing a pure function catches a missing
  * column.
  *
- * No browser, deliberately: this is an endpoint a machine talks to, and driving
- * Chromium at it would test nothing extra and hide the status codes. No Stripe
- * account either — the requests are signed here with the secret
- * `scripts/e2e.sh` gives the server.
+ * The webhook half uses no browser, deliberately: it is an endpoint a machine
+ * talks to, and driving Chromium at it would test nothing extra while hiding
+ * the status codes. The second half does use one, for the screen a family
+ * actually sees.
+ *
+ * No Stripe account either. The requests are signed here with the secret
+ * `scripts/e2e.sh` gives the server, and `STRIPE_SECRET_KEY` is deliberately
+ * *unset* — which is what lets the last section check the thing most worth
+ * checking about a payment button nobody can press yet: that it fails in a
+ * sentence rather than a stack trace.
  *
  * Usage:
  *   1. Scratch Postgres, migrated and seeded.
@@ -26,10 +32,11 @@
  *
  * Destructive — point it at a scratch database, never a real one.
  */
+import { chromium, type Page } from "@playwright/test";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { signForTesting } from "../lib/billing/stripe-signature.ts";
-import { BASE } from "./e2e-helpers.mjs";
+import { BASE, inviteInto, submitAndSettle } from "./e2e-helpers.mjs";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://hearthlight@127.0.0.1:5520/hearthlight?schema=public";
@@ -95,6 +102,18 @@ async function deliver(body: string, signature?: string | null) {
 
 async function subscriptionOf(householdId: string) {
   return db.subscription.findUniqueOrThrow({ where: { householdId } });
+}
+
+const PASSWORD = "a long enough password";
+
+async function register(page: Page, code: string, name: string, email: string) {
+  await page.goto(`${BASE}/register`);
+  await page.fill('input[name="inviteCode"]', code);
+  await page.fill('input[name="displayName"]', name);
+  await page.fill('input[name="handle"]', email);
+  await page.fill('input[name="password"]', PASSWORD);
+  await submitAndSettle(page);
+  await page.waitForURL(`${BASE}/`);
 }
 
 try {
@@ -258,6 +277,76 @@ try {
     where: { id: { in: ["evt_unsigned", "evt_forged", "evt_stale"] } },
   });
   check("and a request that failed verification left none", forgeries === 0, String(forgeries));
+
+  console.log("\n-- The screen a family sees ---------------------------------------");
+
+  const browser = await chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+  });
+
+  try {
+    const bootstrap = await db.inviteCode.findFirstOrThrow({
+      where: { isBootstrap: true, redeemedById: null },
+    });
+
+    const owner = await (await browser.newContext()).newPage();
+    await register(owner, bootstrap.code, "Halbrick", "halbrick@example.test");
+
+    const ownerUser = await db.user.findUniqueOrThrow({
+      where: { email: "halbrick@example.test" },
+      select: { id: true, households: { select: { householdId: true } } },
+    });
+    const theirHousehold = ownerUser.households[0]!.householdId;
+
+    await owner.goto(`${BASE}/settings/billing`);
+    const page = (await owner.textContent("body")) ?? "";
+    check("the owner is offered the plans that have a price", page.includes("Homestead") && page.includes("Keep"));
+    check(
+      "with the numbers the caps actually compare against",
+      page.includes("6 people in the family") && page.includes("400 turns a month"),
+    );
+    check("and is not offered the self-hosted plan", !page.includes("Choose Unmetered"));
+
+    // Pressing it with no STRIPE_SECRET_KEY set. The whole point of this check:
+    // a payment button that cannot reach Stripe must say so in a sentence, not
+    // fall over — and this is the state every installation is in before
+    // somebody pastes a key in.
+    await owner.click('button:has-text("Choose Homestead")');
+    await owner.waitForSelector("text=/Could not|does not sell/", { timeout: 15_000 }).catch(() => {});
+    const afterPress = (await owner.textContent("body")) ?? "";
+    // The matched sentence, not the top of the page — a detail that says
+    // "Hearthlight Adventures Characters…" tells nobody anything when this
+    // fails. And the match itself proves the request got *past* `planCheckout`
+    // and fell over at Stripe: a rule refusal reads differently.
+    const said = afterPress.match(/Could not [^.]+\./)?.[0] ?? "(nothing said)";
+    check("pressing it without a key fails in a sentence", said !== "(nothing said)", said);
+    check("and nothing was written", (await subscriptionOf(theirHousehold)).plan !== "HOMESTEAD");
+
+    // A second grown-up in the same family. Inviting, resetting a child's
+    // password and fixing a sheet are one kind of act; committing the family to
+    // a recurring payment is another, and belongs to whoever answers for them.
+    const { code } = await inviteInto(db, {
+      householdId: theirHousehold,
+      createdById: ownerUser.id,
+      role: "PARENT",
+      forName: "Quenby",
+    });
+    const parent = await (await browser.newContext()).newPage();
+    await register(parent, code, "Quenby", "quenby@example.test");
+
+    await parent.goto(`${BASE}/settings/billing`);
+    const parentPage = (await parent.textContent("body")) ?? "";
+    check(
+      "a parent who does not answer for the family is told so",
+      parentPage.includes("Only whoever answers for this family"),
+    );
+    check(
+      "and is given no button to press",
+      (await parent.locator('button:has-text("Choose Homestead")').count()) === 0,
+    );
+  } finally {
+    await browser.close();
+  }
 } finally {
   await db.$disconnect();
 }

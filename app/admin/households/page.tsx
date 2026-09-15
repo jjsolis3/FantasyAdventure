@@ -216,6 +216,19 @@ export default async function HouseholdsPage() {
               <p className="mt-2 text-xs text-hearth-500">
                 {allowanceLine(household)}
               </p>
+
+              {/* The break-glass is still here — comping a family, parking an
+                  account being argued about — but it is no longer the only way a
+                  plan moves, and a hand-set one on a family who pays through
+                  Stripe lasts until the next event about them. Said out loud,
+                  because the failure is silent: the screen accepts the change,
+                  and a webhook undoes it hours later. */}
+              {household.subscription?.externalSubscriptionId ? (
+                <p className="mt-2 text-xs text-amber-300/90">
+                  This family pays through Stripe. Anything set here holds only until Stripe next
+                  says otherwise — to change what they are actually billed, change it there.
+                </p>
+              ) : null}
             </div>
           </Card>
         ))}

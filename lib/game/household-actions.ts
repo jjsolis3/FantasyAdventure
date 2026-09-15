@@ -354,7 +354,15 @@ export async function householdOverview() {
           },
         },
         subscription: {
-          select: { plan: true, status: true, currentPeriodStart: true, currentPeriodEnd: true },
+          select: {
+            plan: true,
+            status: true,
+            currentPeriodStart: true,
+            currentPeriodEnd: true,
+            // So the screen can warn that a hand-set plan on a family who pays
+            // through Stripe is only true until the next webhook.
+            externalSubscriptionId: true,
+          },
         },
         _count: { select: { characters: true, campaigns: true } },
       },
