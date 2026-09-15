@@ -150,6 +150,7 @@ export default async function AdventuresPage({
                 storylineId={storyline.id}
                 title={storyline.title}
                 scope={storyline.scope}
+                tier={storyline.tier}
                 householdId={storyline.householdId}
                 households={households}
               />

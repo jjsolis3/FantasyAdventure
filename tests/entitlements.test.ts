@@ -8,12 +8,14 @@ import {
   entitlementsFor,
 } from "../lib/billing/plans.ts";
 import {
+  adventureVerdict,
   campaignVerdict,
   linkVerdict,
   pictureVerdict,
   remaining,
   seatVerdict,
   turnVerdict,
+  writingVerdict,
 } from "../lib/billing/caps.ts";
 import { periodStart } from "../lib/billing/usage.ts";
 
@@ -233,4 +235,59 @@ test("and mid-February is still inside the month that began on the 31st", () => 
   const subscription = { currentPeriodStart: new Date("2026-01-31T00:00:00Z") };
   const start = periodStart(subscription, new Date("2026-02-15T00:00:00Z"));
   assert.equal(start.toISOString(), "2026-01-31T00:00:00.000Z");
+});
+
+// ---- What comes with which plan --------------------------------------------
+
+test("the free plan gets the adventures that come with it and not the rest", () => {
+  // Five whole adventures, played properly — not a sampler. What is held back
+  // is *more* of them, which is a different kind of limit from a trial that
+  // stops mid-story.
+  assert.equal(hearth.extraAdventures, false);
+  assert.equal(adventureVerdict(hearth, { tier: "STARTER" }).ok, true);
+  assert.equal(adventureVerdict(hearth, { tier: "EXTRA" }).ok, false);
+});
+
+test("and a paid one gets all of them", () => {
+  assert.equal(adventureVerdict(homestead, { tier: "EXTRA" }).ok, true);
+  assert.equal(adventureVerdict(unmetered, { tier: "EXTRA" }).ok, true);
+});
+
+test("the refusal says the library they have is still theirs", () => {
+  // Not "upgrade to continue". A family on the free plan has not run out of
+  // anything — they are looking at something that was never included.
+  const verdict = adventureVerdict(hearth, { tier: "EXTRA" });
+  assert.match(verdict.ok ? "" : verdict.reason, /already in your library are yours/);
+});
+
+test("writing your own comes with a larger plan", () => {
+  assert.equal(writingVerdict(hearth).ok, false);
+  assert.equal(writingVerdict(homestead).ok, true);
+});
+
+test("and the refusal says what it is actually for", () => {
+  // The upgrade that makes the storyteller worth having rather than the one
+  // that makes it bigger, and the wording should say so — a family deciding
+  // whether to pay is deciding about this.
+  const verdict = writingVerdict(hearth);
+  assert.match(verdict.ok ? "" : verdict.reason, /your own street, with your own cat/);
+});
+
+test("a family that has stopped paying keeps the adventures it wrote", () => {
+  // The whole shape of these ceilings: "may I add one more", never "give it
+  // back". Writing a *new* one stops; the ones already written are not gated
+  // here or anywhere — nothing in the app asks this before letting a family
+  // play or edit what is already theirs.
+  const gone = entitlementsFor({ plan: "HOMESTEAD", status: "CANCELED" });
+  assert.equal(writingVerdict(gone).ok, false);
+  assert.match(writingVerdict(gone).ok ? "" : (writingVerdict(gone) as { reason: string }).reason, /subscription has ended/);
+});
+
+test("every plan above the free one includes writing and the whole library", () => {
+  // The ladder again, for the two capabilities that are booleans rather than
+  // numbers — a paid plan that quietly lacked one would be a refund request.
+  for (const plan of ["HOMESTEAD", "KEEP", "UNMETERED"] as const) {
+    assert.equal(PLANS[plan].writeAdventures, true, `${plan} writing`);
+    assert.equal(PLANS[plan].extraAdventures, true, `${plan} library`);
+  }
 });

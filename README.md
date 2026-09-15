@@ -2815,6 +2815,89 @@ on a family who pays through Stripe holds only until the next event about them,
 and `/admin/households` says that where the control is. The failure is otherwise
 silent: the screen accepts the change and a webhook undoes it hours later.
 
+### A copy of everything, and the door
+
+The two obligations that arrive with charging money for something children
+write in. Both live on `/settings/your-data`, on one screen on purpose: nobody
+should be able to find the door without walking past their own belongings, and
+every service that puts deletion somewhere else is hoping you will not find it.
+
+**The export is everything, by default.** Each query uses `include` rather than
+a hand-written column list, so a field added next year is in the file the day it
+exists. A list would be correct when written and quietly incomplete for ever
+after — and the failure is invisible, because an export missing half a family
+still downloads fine.
+
+What is held back is named *in the file*, so a family can see what was withheld
+and why: password hashes, sessions, reset links, and the payment processor's
+ids. An export ends up in a downloads folder and on a memory stick, and anything
+in it that grants access is a key travelling by post. Pictures are out for a
+duller reason — tens of megabytes would make it unreadable, and each is
+downloadable from its own adventurer's page.
+
+It carries the **narration**, turn by turn, not a manifest of what exists. That
+is the thing worth keeping, and a test asserts a real sentence survives the
+round trip, because an empty export looks exactly like a working one.
+
+**Closing is the owner's alone, and deliberately not the operator's.** This is
+the one place in the app where `everywhere` takes a power away rather than
+granting one: somebody supporting a family should not find a working button on
+the family's own screen that ends the family. They can already do more from
+`/admin`, where it is their own decision rather than one made while looking at
+somebody else's page.
+
+The name is typed out, as when resetting an adventurer, and for the same reason.
+The failure this guards against is not somebody who did not mean it — it is
+somebody with two tabs open who meant it about the *other* family.
+
+Accounts go with the household, the children's included, which is the most
+surprising consequence and so it is said before rather than after. What does not
+go is an adventure another family started that one of these adventurers merely
+travelled in: that story is theirs, and it stays, missing a member of its party.
+
+**Verified against every table rather than the ones I would have named.** Four
+tables hold a `sceneId` with no foreign key behind it — the same shape as the
+`campaignId` bug this repository already fixed once — so the test looks for rows
+that outlived their scene in each of them. Naming tables from memory would have
+missed exactly those.
+
+### What comes with which plan
+
+Five of the shipped adventures come with every plan, including the free one.
+That is a property of each *adventure* rather than a number on the plan: "the
+first five" would mean the set silently changes the day somebody reorders the
+library, and a family part-way through number six would find it gone, which is
+the one thing a cap must never do.
+
+**Locked adventures are shown, never hidden.** A family deciding whether an
+upgrade is worth it cannot decide that against a list of numbers, and a shop
+that hides its shelves is how a plan page becomes something nobody reads. The
+setup picker greys them with the reason; `/settings/store` lists them by name.
+
+**Writing your own is the upgrade.** It is the part a machine is actually good
+for — a story about your own street, with your own cat in it, is the one thing
+here that cannot come off a shelf. Everything a family has already written stays
+playable and editable whatever they pay: like every ceiling here, this one asks
+*may I add one more* and never reaches back.
+
+`/settings/store` is the shop and `/settings/billing` is the account, apart on
+purpose. Putting a cancel button on a shop front is how you get people
+cancelling.
+
+**Which five is a commercial decision**, so it is an operator's control on
+`/admin/adventures` rather than a constant. The seed sets a tier when it
+*creates* a row and never when it updates one, so that choice survives every
+redeploy.
+
+One thing worth recording, because reasoning about it got it wrong. The
+migration that marks five adventures as starters runs *before* the seed on a
+fresh install — `migrate deploy` then `npm run seed`, every container start — so
+on a new database it applied to an empty table and every adventure arrived as a
+starter. Only visible on a freshly reset database, which is exactly what the
+browser harness builds, and it was a test that found it rather than a reading of
+the code. The seed owns the tier now; the migration still does the work on an
+installation that already has rows, and the two agree.
+
 ### Before anybody is charged
 
 Not code, and not advice — this is a note about what is still open, written down
@@ -3146,6 +3229,8 @@ app/
   settings/people/         Who is in your family, and helping one of them back in
   settings/adventures/     Stories this family has written, and copies to start from
   settings/billing/        What this family pays for, and the way to change it
+  settings/store/          The shelf: every adventure, and what a plan opens
+  settings/your-data/      A copy of everything, and the door out
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
   admin/adventures/        The shared library, and who each adventure is for
@@ -3184,6 +3269,10 @@ lib/
     checkout.ts         Who may buy what, before any of it reaches Stripe
     stripe-api.ts       Three POSTs, with Stripe's bracket form encoding
     checkout-actions.ts Two redirects: start a subscription, manage one
+  game/
+    export.ts       Everything a family has written, in one file
+    close-household.ts  Who may end a family, and what goes with it
+    close-actions.ts    The only place this app deletes a person's account
   ai/
     provider.ts     OpenAI-compatible and Anthropic clients
     images.ts       The drawing request, and the prompt it is safe to send
@@ -3278,6 +3367,9 @@ tests/
   stripe-billing.test.ts  Forged, replayed and rotated signatures; what each
                       Stripe status means here; reading an event
   checkout.test.ts    Who may buy what, and Stripe's form encoding
+  close-household.test.ts  Who may end a family, and what they have to type
+  your-data.e2e.mts   The export carries the story and no credential; closing
+                      leaves nothing behind, checked against every table
   billing.e2e.mts     The webhook against the running route: refusals, a
                       duplicate, and one that arrives out of order
   storyline-scope.test.ts  Who an adventure is for, and who may take it apart

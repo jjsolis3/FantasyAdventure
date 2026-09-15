@@ -12,7 +12,7 @@ import {
   visibleHouseholdIds,
   visibleStorylineWhere,
 } from "@/lib/game/visibility";
-import { campaignVerdictFor } from "@/lib/billing/usage";
+import { adventureVerdictFor, campaignVerdictFor } from "@/lib/billing/usage";
 import type { FormState } from "@/lib/auth/actions";
 
 const campaignSchema = z.object({
@@ -100,6 +100,12 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     },
   });
   if (!storyline) return { error: "That adventure is not available." };
+
+  // Visible is not the same as startable. The whole library is browsable on
+  // every plan — a shop that hides its shelves is not a shop — so the tier is
+  // checked here rather than by leaving adventures out of the query.
+  const included = await adventureVerdictFor(user.householdId, storyline);
+  if (!included.ok) return { error: included.reason };
 
   const partyIds = partyIdsFrom(formData);
 

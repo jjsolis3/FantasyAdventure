@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireHouseholdParent } from "@/lib/auth/session";
 import { duplicateStorylineAction, setStorylineActiveAction } from "@/lib/game/storyline-actions";
 import { visibleStorylineWhere } from "@/lib/game/visibility";
+import { entitlementsOf } from "@/lib/billing/usage";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
@@ -63,6 +64,12 @@ export default async function FamilyAdventuresPage({
     (storyline) => storyline.householdId !== actor.householdId,
   );
 
+  // Writing a *new* one is what a plan gates. Everything already written stays
+  // editable and playable whatever the family pays — the ceiling asks "may I
+  // add one more", and never reaches back for what is already there.
+  const entitlements = await entitlementsOf(actor.householdId);
+  const mayWrite = entitlements.writeAdventures;
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
@@ -79,6 +86,27 @@ export default async function FamilyAdventuresPage({
 
       {saved ? <Alert tone="success">Saved.</Alert> : null}
 
+      {mayWrite ? null : (
+        <Card className="mb-6 border-hearth-700/50">
+          <h2 className="font-display mb-2 text-xl text-hearth-100">
+            Writing comes with a larger plan
+          </h2>
+          <p className="text-sm text-hearth-200/70">
+            A story about your own street, with your own cat in it, is the one thing here you
+            cannot get off a shelf. Anything this family has already written stays yours — it is
+            still listed below, still playable and still editable.
+          </p>
+          <p className="mt-3">
+            <Link
+              href="/settings/store"
+              className="inline-block rounded-lg bg-hearth-600 px-4 py-2 text-sm font-medium text-hearth-50 hover:bg-hearth-500"
+            >
+              See what a larger plan opens
+            </Link>
+          </p>
+        </Card>
+      )}
+
       <Card className="mb-6">
         <h2 className="font-display mb-2 text-xl text-hearth-100">Start from one you know</h2>
         <p className="mb-4 text-sm text-hearth-200/70">
@@ -87,7 +115,11 @@ export default async function FamilyAdventuresPage({
           touches the one you copied.
         </p>
 
-        {canCopy.length === 0 ? (
+        {!mayWrite ? (
+          <p className="text-sm text-hearth-400">
+            Copying one is part of writing your own, so it comes with the same plan.
+          </p>
+        ) : canCopy.length === 0 ? (
           <p className="text-sm text-hearth-400">There is nothing to copy yet.</p>
         ) : (
           <form action={duplicateStorylineAction} className="flex flex-wrap items-end gap-3">
@@ -117,12 +149,14 @@ export default async function FamilyAdventuresPage({
         <h2 className="font-display flex-1 text-xl text-hearth-100">
           Written by this family <span className="text-base text-hearth-400">({mine.length})</span>
         </h2>
-        <Link
-          href="/settings/adventures/new"
-          className="rounded-lg border border-hearth-700 px-3 py-1.5 text-sm text-hearth-100 hover:border-hearth-600"
-        >
-          Write one from scratch
-        </Link>
+        {mayWrite ? (
+          <Link
+            href="/settings/adventures/new"
+            className="rounded-lg border border-hearth-700 px-3 py-1.5 text-sm text-hearth-100 hover:border-hearth-600"
+          >
+            Write one from scratch
+          </Link>
+        ) : null}
       </div>
 
       {mine.length === 0 ? (

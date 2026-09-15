@@ -44,10 +44,26 @@ async function ensureBootstrapInvite() {
   console.log(`${banner}\n`);
 }
 
+/**
+ * How many of the shipped adventures come with every plan.
+ *
+ * Set here rather than only in a migration, because on a *fresh* install the
+ * migration runs against an empty table — `migrate deploy` before `npm run
+ * seed`, every container start — so a tier assigned by SQL alone would apply to
+ * nothing and every adventure would arrive as a starter. Found by a test on a
+ * freshly reset database, which is the only place the difference shows.
+ *
+ * The first five in `storylines.ts` rather than an arbitrary five: the file is
+ * written in the order the adventures are meant to be met, and the earliest are
+ * the gentlest — the right set for a family finding out whether their children
+ * like this at all.
+ */
+const STARTER_COUNT = 5;
+
 async function main() {
   console.log("Seeding storylines…");
 
-  for (const { acts, ...storyline } of storylines) {
+  for (const [index, { acts, ...storyline }] of storylines.entries()) {
     // An adventure somebody has written or edited in the app is theirs, and this
     // file is no longer the source of truth for it. Without this check, a
     // redeploy would silently restore the shipped text over a family's own —
@@ -72,9 +88,15 @@ async function main() {
 
     // Upsert so re-running the seed on an existing database is safe. Acts are
     // replaced wholesale rather than merged — the seed file is the source of truth.
+    // Tier is set when the row is *made* and never on an update, so that an
+    // operator who moves an adventure between tiers on `/admin/adventures`
+    // keeps that choice through every redeploy. The text is this file's; which
+    // plan an adventure belongs to is a commercial decision and theirs.
+    const tier = index < STARTER_COUNT ? "STARTER" : "EXTRA";
+
     const record = await db.storyline.upsert({
       where: { slug: storyline.slug },
-      create: storyline,
+      create: { ...storyline, tier },
       update: storyline,
     });
 
