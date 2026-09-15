@@ -93,6 +93,7 @@ export default async function EditAdventurePage({ params }: { params: Promise<{ 
 
       <Card>
         <StorylineForm
+          surface="admin"
           initial={{
             id: storyline.id,
             title: storyline.title,

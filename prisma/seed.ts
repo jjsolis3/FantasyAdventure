@@ -54,10 +54,19 @@ async function main() {
     // and this seed runs on every container start.
     const existing = await db.storyline.findUnique({
       where: { slug: storyline.slug },
-      select: { isCustom: true },
+      select: { isCustom: true, scope: true },
     });
     if (existing?.isCustom) {
       console.log(`  – ${storyline.title} (edited here; left alone)`);
+      continue;
+    }
+    // A family's own adventure is not this file's to touch whatever its slug
+    // says. In practice household slugs carry a random suffix so they cannot
+    // collide with a shipped one — but "in practice" is not a guarantee, and
+    // the cost of being wrong here is a redeploy silently replacing a story a
+    // child helped write with one from a seed file.
+    if (existing && existing.scope !== "SYSTEM") {
+      console.log(`  – ${storyline.title} (belongs to a family; left alone)`);
       continue;
     }
 

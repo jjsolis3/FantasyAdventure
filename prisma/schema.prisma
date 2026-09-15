@@ -104,6 +104,7 @@ model Household {
   campaigns    Campaign[]
   aiCalls      AiCall[]
   invites      InviteCode[]
+  storylines   Storyline[]
   linksA       HouseholdLink[]   @relation("HouseholdA")
   linksB       HouseholdLink[]   @relation("HouseholdB")
   subscription Subscription?
@@ -2106,12 +2107,61 @@ model Storyline {
   /// the source of truth for this row.
   isCustom        Boolean        @default(false)
 
+  /// Who this adventure is for. See `StorylineScope`.
+  ///
+  /// Separate from `isCustom`, which answers a different question — *has a
+  /// person edited this* — and is the seed's business alone. A shipped
+  /// adventure somebody has tweaked is `SYSTEM` and custom; a family's own is
+  /// `HOUSEHOLD` and custom; the two facts stay apart because conflating them
+  /// would mean editing a shipped adventure quietly took it away from everybody
+  /// else on the installation.
+  scope           StorylineScope @default(SYSTEM)
+
+  /// Whose it is, for a `HOUSEHOLD` or `COMMUNITY` one. Null on `SYSTEM`.
+  ///
+  /// SET NULL rather than CASCADE, deliberately. A campaign points at its
+  /// storyline for the premise and the act it is in, so deleting one would take
+  /// the spine out of a story halfway through being told — which is why this app
+  /// has no storyline delete at all. If a household ever goes, its adventures
+  /// are left ownerless rather than removed: nobody sees them in a picker again,
+  /// because `HOUSEHOLD` with a null household matches no family, and every
+  /// journal that was written about one still reads.
+  householdId     String?
+  household       Household?     @relation(fields: [householdId], references: [id], onDelete: SetNull)
+
   acts            StorylineAct[]
   campaigns       Campaign[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@index([isActive])
+  @@index([scope, householdId])
+}
+
+/// Who an adventure is for.
+///
+/// Until this existed every adventure was installation-wide and only whoever
+/// ran the server could write one. That was right while one family played, and
+/// it is the same leak households were built to close the moment two do: a
+/// family's homemade adventure about their own house, with their own cat in it,
+/// would appear in every other family's setup list.
+enum StorylineScope {
+  /// Ships with the game, and the seed owns it unless somebody has edited it.
+  /// Everybody sees these.
+  SYSTEM
+
+  /// Written by one family, and theirs. Nobody else sees it — **not even a
+  /// family they have agreed to adventure with.** Linking households means
+  /// "our children play together", which is not the same as "you may run my
+  /// adventure": a half-written story about your own street, with the
+  /// neighbours in it, is not something to hand over because the children are
+  /// friends. `COMMUNITY` is the one click that says otherwise, and an explicit
+  /// share is the same shape as the link itself.
+  HOUSEHOLD
+
+  /// Written by a family and deliberately offered to everybody on the
+  /// installation. Still theirs to edit; the sharing is what changed.
+  COMMUNITY
 }
 
 /// One act of a storyline. `beats` are optional waypoints the GM should try to

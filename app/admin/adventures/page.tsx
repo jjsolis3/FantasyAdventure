@@ -4,6 +4,7 @@ import { requirePlatformAdmin } from "@/lib/auth/session";
 import { duplicateStorylineAction, setStorylineActiveAction } from "@/lib/game/storyline-actions";
 import { Alert, Card, PageTitle } from "@/components/ui";
 import { READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
+import { StorylineScopeForm } from "./scope-form";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +16,18 @@ export default async function AdventuresPage({
   await requirePlatformAdmin();
   const { saved } = await searchParams;
 
-  const storylines = await db.storyline.findMany({
-    include: {
-      _count: { select: { acts: true, campaigns: true } },
-    },
-    orderBy: [{ isCustom: "desc" }, { title: "asc" }],
-  });
+  // Everything, including what families have written — this is the screen
+  // where somebody decides whether one of those should be offered to everybody.
+  const [storylines, households] = await Promise.all([
+    db.storyline.findMany({
+      include: {
+        _count: { select: { acts: true, campaigns: true } },
+        household: { select: { name: true } },
+      },
+      orderBy: [{ scope: "asc" }, { isCustom: "desc" }, { title: "asc" }],
+    }),
+    db.household.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
@@ -72,6 +79,16 @@ export default async function AdventuresPage({
                   not offered
                 </span>
               )}
+              {/* Whose it is, said out loud. Without this the list reads as one
+                  library, which is exactly the assumption that made every
+                  family's adventure visible to every other family. */}
+              {storyline.scope === "SYSTEM" ? null : (
+                <span className="rounded-full border border-hearth-600/50 bg-hearth-800/40 px-2.5 py-0.5 text-xs text-hearth-300">
+                  {storyline.scope === "COMMUNITY"
+                    ? `shared · ${storyline.household?.name ?? "nobody"}`
+                    : (storyline.household?.name ?? "nobody's")}
+                </span>
+              )}
             </div>
 
             <p className="mt-1 text-sm text-hearth-200/70 italic">{storyline.tagline}</p>
@@ -98,6 +115,7 @@ export default async function AdventuresPage({
 
               <form action={duplicateStorylineAction}>
                 <input type="hidden" name="storylineId" value={storyline.id} />
+                <input type="hidden" name="surface" value="admin" />
                 <button
                   type="submit"
                   aria-label={`Make a copy of ${storyline.title}`}
@@ -121,6 +139,20 @@ export default async function AdventuresPage({
                   {storyline.isActive ? "Stop offering it" : "Offer it"}
                 </button>
               </form>
+            </div>
+
+            {/* The only place a family's adventure becomes everybody's. Kept
+                below the buttons rather than beside them because it is the one
+                control here that changes who can *see* something, and those
+                should never be a misclick away from the ones that do not. */}
+            <div className="mt-4 border-t border-hearth-800/50 pt-3">
+              <StorylineScopeForm
+                storylineId={storyline.id}
+                title={storyline.title}
+                scope={storyline.scope}
+                householdId={storyline.householdId}
+                households={households}
+              />
             </div>
           </Card>
         ))}

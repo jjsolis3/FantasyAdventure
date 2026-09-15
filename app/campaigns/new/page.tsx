@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 import { CampaignSetup } from "@/components/campaign/campaign-setup";
 import { invitableCharacters } from "@/lib/game/invites";
-import { visibleHouseholdIds } from "@/lib/game/visibility";
+import { visibleHouseholdIds, visibleStorylineWhere } from "@/lib/game/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,12 @@ export default async function NewCampaignPage() {
   const [user, storylines, characters, invitable] = await Promise.all([
     db.user.findUniqueOrThrow({ where: { id: sessionUser.id } }),
     db.storyline.findMany({
-      where: { isActive: true },
+      // The ones that ship, the ones deliberately shared, and this family's
+      // own. Not a linked family's — see `visibleStorylineWhere` for why that
+      // is the one place adventures and adventurers part company.
+      where: { isActive: true, ...visibleStorylineWhere(sessionUser.householdId) },
       include: { _count: { select: { acts: true } } },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ scope: "asc" }, { createdAt: "asc" }],
     }),
     db.character.findMany({
       where: { userId: sessionUser.id },

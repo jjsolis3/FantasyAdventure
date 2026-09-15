@@ -114,6 +114,9 @@ export default async function FamilySettingsPage() {
 
   const householdSize = household?._count.members ?? 0;
   const usage = actor.householdId ? await householdUsage(actor.householdId) : null;
+  const ownAdventures = actor.householdId
+    ? await db.storyline.count({ where: { householdId: actor.householdId } })
+    : 0;
 
   const cards = [
     {
@@ -129,6 +132,16 @@ export default async function FamilySettingsPage() {
       blurb:
         "Hearthlight is invite-only. Make a code for each person who needs their own sign-in — which is what everyone playing from their own device needs.",
       note: `${unusedInvites} unused`,
+    },
+    {
+      href: "/settings/adventures",
+      title: "Your adventures",
+      blurb:
+        "Write your own, or take a copy of one you have played and change the ending. Nobody outside this family can see them — not even a family you adventure with.",
+      note:
+        ownAdventures === 0
+          ? "none yet"
+          : `${ownAdventures} ${ownAdventures === 1 ? "adventure" : "adventures"}`,
     },
     {
       href: "/settings/people",
