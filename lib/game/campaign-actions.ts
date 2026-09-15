@@ -7,7 +7,11 @@ import type { Prisma } from "@/generated/prisma/client.ts";
 import { db, isUniqueViolation } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { generateJoinCode } from "@/lib/auth/invite-code";
-import { visibleCharacterWhere, visibleHouseholdIds } from "@/lib/game/visibility";
+import {
+  visibleCharacterWhere,
+  visibleHouseholdIds,
+  visibleStorylineWhere,
+} from "@/lib/game/visibility";
 import { campaignVerdictFor } from "@/lib/billing/usage";
 import type { FormState } from "@/lib/auth/actions";
 
@@ -83,8 +87,17 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     return { error: "Please fix the highlighted fields.", fieldErrors: fieldErrorsFrom(parsed.error) };
   }
 
+  // Scoped to what this family may actually start, not merely to what exists.
+  // It was `{ id, isActive }` alone, which accepted **any** adventure in the
+  // database: the picker offered a short list, but the picker is not the rule,
+  // and a hand-posted id could reach another family's homemade story. Same
+  // mistake, and the same fix, as the invite-target check above it.
   const storyline = await db.storyline.findFirst({
-    where: { id: parsed.data.storylineId, isActive: true },
+    where: {
+      id: parsed.data.storylineId,
+      isActive: true,
+      ...visibleStorylineWhere(user.householdId),
+    },
   });
   if (!storyline) return { error: "That adventure is not available." };
 

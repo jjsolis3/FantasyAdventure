@@ -258,7 +258,8 @@ try {
   await dad.goto(`${BASE}/settings/invites`);
   await dad.waitForLoadState("networkidle");
   await dad.fill('input[name="forName"]', "Bea");
-  await dad.selectOption('select[name="grant"]', "HOUSEHOLD_MEMBER");
+  // No grant to pick any more. The family screen writes one kind of code and
+  // says so in a hidden field; admitting a family moved to `/admin/invites`.
   await dad.selectOption('select[name="intendedRole"]', "MEMBER");
   await dad.click('button:has-text("Create invite code")');
   await dad.waitForSelector("text=/Invite created/", { timeout: 10_000 });
@@ -288,12 +289,26 @@ try {
 
   console.log("\n-- Only whoever runs Hearthlight may admit a family --------------");
 
-  check("the operator is offered the choice", (await dad.locator('select[name="grant"]').count()) === 1);
+  // The choice used to be here, drawn for the operator alone. That put the one
+  // decision about how many families exist on the screen a parent uses to
+  // invite their nine-year-old, visible to a single account — so it moved, and
+  // the family screen now offers the same single kind of code to everybody
+  // including whoever runs the installation.
+  check(
+    "the family screen offers no choice, not even to the operator",
+    (await dad.locator('select[name="grant"]').count()) === 0,
+  );
+
+  await dad.goto(`${BASE}/admin/invites`);
+  check(
+    "the choice is on the administrator's screen instead",
+    (await dad.locator('select[name="grant"]').count()) === 1,
+  );
 
   await stranger.goto(`${BASE}/settings/invites`);
   await stranger.waitForLoadState("networkidle");
   check(
-    "another family's parent is not",
+    "and another family's parent is not offered it anywhere",
     (await stranger.locator('select[name="grant"]').count()) === 0,
   );
 

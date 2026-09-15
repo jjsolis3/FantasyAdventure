@@ -98,3 +98,59 @@ export function visibleCharacterWhere(
     ],
   };
 }
+
+/**
+ * Adventures this family may start.
+ *
+ * The other half of the same boundary, and the one that was missing entirely:
+ * `Storyline` had no household at all, so every adventure written in the app
+ * was offered to every family on the installation, and only whoever ran the
+ * server could write one.
+ *
+ * **Deliberately not linked-household-aware**, which is the one place this
+ * disagrees with `visibleCharacterWhere` above. Linking two households means
+ * *our children play together*; it does not mean *you may run my adventure*. A
+ * half-written story about your own street with the neighbours in it is not
+ * something to hand over because the children are friends — and `COMMUNITY` is
+ * the single click that says otherwise, which is the same shape as the link
+ * itself: an explicit act, not a consequence of one.
+ *
+ * Nothing here stops a family *playing* an adventure somebody else started.
+ * That flows through party membership and the campaign's own `storylineId`, and
+ * touches none of this — so a joint evening keeps working, and a family that
+ * unlinks does not lose the story they are in the middle of.
+ *
+ * `householdId` is nullable because a signed-out visitor has none. They get the
+ * shipped adventures and nothing else, which is the right answer for a page
+ * that is a brochure.
+ */
+export function visibleStorylineWhere(
+  householdId: string | null | undefined,
+): Prisma.StorylineWhereInput {
+  return {
+    OR: [
+      { scope: "SYSTEM" },
+      { scope: "COMMUNITY" },
+      // Spread rather than a null comparison. `householdId: null` would match
+      // every ownerless row — which, after a household is deleted, is exactly
+      // the set of adventures nobody should be offered.
+      ...(householdId ? [{ scope: "HOUSEHOLD" as const, householdId }] : []),
+    ],
+  };
+}
+
+/** Whether this family may edit that adventure — theirs, and only theirs. */
+export function mayEditStoryline(
+  actor: { householdId: string | null; everywhere: boolean },
+  storyline: { scope: string; householdId: string | null },
+): boolean {
+  // Whoever runs the installation can put anything right, including a family's
+  // own — somebody has to be able to help, and the alternative is a support
+  // request that can only be answered with SQL.
+  if (actor.everywhere) return true;
+
+  // A shipped adventure is the installation's, however many families read it.
+  if (storyline.scope === "SYSTEM") return false;
+
+  return actor.householdId !== null && storyline.householdId === actor.householdId;
+}

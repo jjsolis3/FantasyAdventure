@@ -42,7 +42,19 @@ const BLANK_ACT: ActDraft = { title: "", goal: "", beats: "", seeks: "" };
  * actually does to the game, because somebody writing their first adventure has
  * no other way to know why "goal" and "beats" are different boxes.
  */
-export function StorylineForm({ initial }: { initial: StorylineDraft }) {
+export function StorylineForm({
+  initial,
+  surface,
+}: {
+  initial: StorylineDraft;
+  /**
+   * Which screen this is, which decides where saving lands — the family's
+   * adventures or the installation's. A required prop rather than a defaulted
+   * one, so a new page cannot quietly send a family to a screen they are not
+   * allowed on.
+   */
+  surface: "admin" | "household";
+}) {
   const [state, formAction] = useActionState<FormState, FormData>(saveStorylineAction, null);
   const [acts, setActs] = useState<ActDraft[]>(
     initial.acts.length > 0 ? initial.acts : [BLANK_ACT, BLANK_ACT, BLANK_ACT],
@@ -57,6 +69,7 @@ export function StorylineForm({ initial }: { initial: StorylineDraft }) {
       {state?.error ? <Alert>{state.error}</Alert> : null}
 
       {initial.id ? <input type="hidden" name="id" value={initial.id} /> : null}
+      <input type="hidden" name="surface" value={surface} />
 
       <section className="space-y-5">
         <Field

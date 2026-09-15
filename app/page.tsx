@@ -5,6 +5,7 @@ import { Alert, Card, PageTitle } from "@/components/ui";
 import { READING_LEVEL_LABELS, TONE_LABELS } from "@/components/campaign/options";
 import { WhereYouLeftOff } from "@/components/home/where-you-left-off";
 import { whereYouLeftOff } from "@/lib/game/where-you-left-off";
+import { visibleStorylineWhere } from "@/lib/game/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,13 @@ export const dynamic = "force-dynamic";
 // and it was one tone out of date: SPOOKY was added to the game and never here,
 // so three of the ten adventures introduced themselves as "SPOOKY" in capitals.
 
-async function loadStorylines() {
+async function loadStorylines(householdId: string | null) {
   try {
     const storylines = await db.storyline.findMany({
-      where: { isActive: true },
+      // Signed out this is a brochure, and a brochure shows what ships. Signed
+      // in it also shows the family's own, which is where somebody who has just
+      // written one will look for it first.
+      where: { isActive: true, ...visibleStorylineWhere(householdId) },
       include: { acts: { orderBy: { index: "asc" } } },
       orderBy: { createdAt: "asc" },
     });
@@ -28,7 +32,7 @@ async function loadStorylines() {
 
 export default async function Home() {
   const user = await getCurrentUser().catch(() => null);
-  const { storylines, error } = await loadStorylines();
+  const { storylines, error } = await loadStorylines(user?.householdId ?? null);
 
   // Only asked once there is somebody to ask about. Signed out, this page is a
   // brochure and should not touch the campaign tables at all.

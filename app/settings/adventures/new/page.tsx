@@ -1,30 +1,35 @@
 import Link from "next/link";
-import { requirePlatformAdmin } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
+import { requireHouseholdParent } from "@/lib/auth/session";
 import { Card, PageTitle } from "@/components/ui";
 import { StorylineForm } from "@/components/settings/storyline-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewAdventurePage() {
-  await requirePlatformAdmin();
+export default async function NewFamilyAdventurePage() {
+  const actor = await requireHouseholdParent();
+  if (!actor.householdId) redirect("/settings");
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <PageTitle
-        eyebrow="Settings · Adventures"
+        eyebrow="Your household"
         title="Write an adventure"
         lead="You are writing the spine, not the story. The storyteller improvises everything that actually happens — what you write here is what it holds on to while it does."
       />
 
       <div className="mb-6">
-        <Link href="/admin/adventures" className="text-sm text-hearth-300 underline hover:text-hearth-200">
-          ← All adventures
+        <Link
+          href="/settings/adventures"
+          className="text-sm text-hearth-300 underline hover:text-hearth-200"
+        >
+          ← Your adventures
         </Link>
       </div>
 
       <Card>
         <StorylineForm
-          surface="admin"
+          surface="household"
           initial={{
             title: "",
             tagline: "",

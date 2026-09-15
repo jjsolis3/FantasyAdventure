@@ -2258,6 +2258,69 @@ did before, making a household of its own. The bootstrap code is deliberately
 left alone: it is the way into an empty installation, there is no household for
 it to join, and a null household already means *make one*.
 
+### Adventures that belong to somebody
+
+Households drew the boundary around adventurers. `Storyline` was the one table
+it never reached: every adventure written in the app was installation-wide, and
+only whoever ran the server could write one. Right while one family played, and
+the same leak the boundary exists to close the moment two do — a family's
+homemade story about their own house, with their own cat in it, appearing in
+every other family's setup list.
+
+| Scope | Who sees it | Who may edit it |
+|---|---|---|
+| `SYSTEM` | everybody | whoever runs the installation |
+| `HOUSEHOLD` | one family | that family |
+| `COMMUNITY` | everybody | the family who wrote it |
+
+**Deliberately not linked-household-aware**, and this is the one place adventures
+and adventurers part company. `visibleCharacterWhere` follows household links;
+`visibleStorylineWhere` does not. Linking two households means *our children
+play together* — it does not mean *you may run my adventure*. A half-written
+story about your own street, with the neighbours in it, is not something to hand
+over because the children are friends. `COMMUNITY` is the one click that says
+otherwise, and an explicit share is the same shape as the link itself.
+
+None of this stops anybody *playing* a story somebody else started. That flows
+through party membership and the campaign's own `storylineId` and touches none
+of the above, so a joint evening keeps working and a family that unlinks does
+not lose the adventure they are halfway through.
+
+**A family cannot publish to everybody.** Promotion to `COMMUNITY` is the
+administrator's alone. This is an app for children: a story that reaches other
+people's children should have had somebody look at it, and the alternative —
+letting a household publish and building moderation to catch it afterwards — is
+a much bigger thing badly disguised as a smaller one.
+
+**Copying leads the family's screen, above writing from scratch.** A blank
+premise box is a much harder job than changing the ending of a story you have
+already played together, and the second is the one a nine-year-old will actually
+sit down for. The copy is theirs the moment it is made: switched off until it is
+finished, out of the seed's hands for good, and carrying a slug nothing can
+collide with — two families both writing "The Cat Who Came Back" would otherwise
+have the second told the title was taken by an adventure she cannot see, which
+is a confusing refusal and a small admission that the other family exists.
+
+**The rule was one line missing.** `createCampaignAction` validated the chosen
+adventure with `{ id, isActive }` and no household filter at all, so the picker
+was the only thing standing between a hand-posted id and another family's story.
+The picker is not the rule. `setStorylineActiveAction` had the same shape —
+`updateMany` by an id off the form, with nothing compared against the caller.
+
+**Nothing that already exists moves.** Every adventure stays `SYSTEM`, including
+the ones written in the app. They are visible to everybody today, and assigning
+them to whichever household happened to be first would take them away from every
+other family on the installation — a behaviour change nobody asked for, applied
+by a migration that could not be argued with. Moving one into a household is a
+decision, and there is a control for it on `/admin/adventures`.
+
+There is still no delete, for the reason there never was: a campaign holds its
+storyline for the premise and the act the party are in, and a finished one is
+what a journal is about. Putting it away is as far as it goes. If a household is
+ever deleted its adventures are left ownerless rather than removed — `SET NULL`,
+not cascade — so nobody is offered them again and every journal written about
+one still reads.
+
 ### Families who adventure together
 
 Households made the boundary. This is what reads it.
@@ -2622,6 +2685,76 @@ There is no payment processor yet. The plan and its state are set by hand on
 anyway, and which is what the columns a webhook will eventually write already
 are.
 
+### The receiving end of billing
+
+There is no checkout button yet, on purpose. The half that was built first is
+the half that has to be right before a single card is taken: **a checkout that
+completes against a broken webhook is a family who paid and got nothing.**
+
+**The webhook is the authority and the browser never is.** A checkout redirect
+lands on a URL anybody can visit and proves nothing at all. A family's plan
+changes because a signed event said so, or it does not change.
+
+So `/api/billing/webhook` is four steps and no judgement — verify, read, sync,
+answer — and every decision worth making lives in a pure function next to a
+test. Nothing here needs a Stripe account, a key or a card to run.
+
+**Signature verification is written out rather than taken from an SDK**, for one
+reason: it can be tested. The cases that matter are a forged signature, a
+replayed one, a body altered after signing, and a rotation with two secrets
+briefly live — and not one of those is reachable by clicking through a checkout
+with a test card. The four things people get wrong are each a test:
+
+- **The raw body, byte for byte.** The signature covers the bytes that arrived,
+  so a route that parses JSON and re-serialises has already lost.
+- **Constant-time comparison**, or a hex digest leaks one character at a time.
+- **A tolerance on the timestamp, in both directions.** Without it a captured
+  request is a permanent key, and a replayed `subscription.updated` puts a
+  cancelled family back on a paid plan.
+- **More than one `v1=`.** Stripe sends several during a secret rotation. A
+  check reading only the first rejects half the traffic for the duration —
+  exactly when nobody wants to be debugging webhooks.
+
+**`checkout.session.completed` is ignored.** It says a purchase happened; it
+does not say what state the subscription is in a moment later, and acting on it
+writes `ACTIVE` for a card that is about to be declined. The subscription events
+carry the actual state and arrive for every later change as well: one source,
+not two that can disagree.
+
+**Stripe's vocabulary is not ours, and the differences are the point.**
+`unpaid` and `incomplete` both become `PAST_DUE` rather than `CANCELED` —
+Stripe has cancelled nothing in either case, and a child halfway through a
+chapter should not be stopped by a retry schedule or by a bank's verification
+step. An **unrecognised** status changes nothing at all: a future one quietly
+resolving to `ACTIVE` gives the product away, and one resolving to `CANCELED`
+stops a paying family's children mid-story. Doing nothing loudly is the only
+option that is wrong in a way somebody can see and undo.
+
+**Delivered at least once, and sometimes out of order.** Two problems, two
+answers. `WebhookEvent` is keyed on Stripe's own event id, so the insert *is*
+the deduplication check with no read-then-write race to lose.
+`Subscription.lastEventAt` refuses anything older than what has already been
+applied — because a retry after a blip can deliver a `subscription.updated` from
+thirty seconds ago *after* the cancellation that followed it, and the family
+would show the wrong state for ever.
+
+**Almost everything answers 200**, including duplicates, events about households
+this installation does not have, and payloads it cannot parse. A non-2xx tells
+Stripe to redeliver for three days with backoff, which is right for "the
+database was down" and harmful for "I will never be able to use this". An
+unverified signature is the exception and gets a 400, because something is wrong
+that retrying cannot fix.
+
+**Consent is recorded here**, because this is where the app learns a payment
+succeeded — see below. Written once and never rewritten: a renewal must not move
+the date, and a cancellation must not clear it, because the consent was still
+given and the record of it is the point.
+
+What is still missing is everything that *sends* to this: the price→checkout
+flow, the billing portal button, and a warning on `/admin/households` that a
+family paying through Stripe will have a hand-set plan overwritten by the next
+event.
+
 ### Before anybody is charged
 
 Not code, and not advice — this is a note about what is still open, written down
@@ -2646,7 +2779,11 @@ documents and features, not an account hierarchy.
 
 One thing helps more than it looks: taking a payment from the parent's own card
 is one of the FTC's recognised methods of verifying that a parent is a parent.
-The subscription work and the consent work point the same way.
+The subscription work and the consent work point the same way — which is why
+`Subscription.consentedAt` and `consentMethod` are written the moment a
+subscription first goes live, by the webhook, rather than reconstructed from a
+processor's invoices later. It is a record of a fact, and on its own it is not
+compliance: the notice and the deletion are still owed.
 
 **The provider's terms are a separate question, and the account shape cannot
 answer it.** Several hosted model providers prohibit under-13 end users outright,
@@ -2866,6 +3003,8 @@ In the application's **Environment Variables** tab:
 | `COOKIE_SECURE` | Optional. Leave unset — it follows `X-Forwarded-Proto` automatically. Set `true` to force secure cookies once you are on https. |
 | `PLATFORM_ADMIN_EMAIL` | Optional but strongly recommended. The address that becomes the administrator on registering. Unset, the first account to reach `/register` takes the installation. **It only applies at registration** — to move the role on a server that is already running, use the control on `/admin/households`. |
 | `DEFAULT_PLAN` | Optional. `UNMETERED` by default: no ceiling on people, adventures, turns or pictures, which is what a family running their own copy should get. Set `HEARTH` to put every newly registered household on the trial. |
+| `STRIPE_WEBHOOK_SECRET` | Optional. Unset, this installation sells nothing and `/api/billing/webhook` answers 503. Required as soon as any price is set — with prices and no secret, billing stays switched off on purpose rather than leaving an endpoint that would take unverified writes. |
+| `STRIPE_PRICE_HOMESTEAD`, `STRIPE_PRICE_KEEP` | Optional. Stripe **price** ids (`price_…`), not product ids. `HEARTH` and `UNMETERED` have none and cannot be bought. |
 
 ### 4. Health check and domain
 
@@ -2944,9 +3083,10 @@ app/
   settings/invites/        Codes for your own family — one kind, into your house
   settings/families/       The families yours has agreed to adventure with
   settings/people/         Who is in your family, and helping one of them back in
+  settings/adventures/     Stories this family has written, and copies to start from
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
-  admin/adventures/        Writing and editing storylines in the app
+  admin/adventures/        The shared library, and who each adventure is for
   admin/usage/             What every call used, and what it cost
   admin/households/        Which accounts are one family, who answers for it,
                            who runs the installation, and what each family pays
@@ -2975,6 +3115,10 @@ lib/
     plans.ts        What each plan allows, as numbers — no database, no session
     caps.ts         One ceiling per function: an allowance, a count, a sentence
     usage.ts        What a household has used, and the one-line gate each site asks
+    stripe-plans.ts     Which Stripe price is which plan — env, not database
+    stripe-signature.ts Proving a webhook came from Stripe, unaltered, recently
+    stripe-events.ts    What a Stripe event means in this app's own terms
+    stripe-sync.ts      Deduplication, ordering, and the only write
   ai/
     provider.ts     OpenAI-compatible and Anthropic clients
     images.ts       The drawing request, and the prompt it is safe to send
@@ -3066,6 +3210,13 @@ tests/
   platform-role.test.ts Handing the installation on, and the three refusals
   plans.e2e.mts       Admitting a family, a seat cap that bites, a card that
                       failed, and the installation changing hands
+  stripe-billing.test.ts  Forged, replayed and rotated signatures; what each
+                      Stripe status means here; reading an event
+  billing.e2e.mts     The webhook against the running route: refusals, a
+                      duplicate, and one that arrives out of order
+  storyline-scope.test.ts  Who an adventure is for, and who may take it apart
+  adventures.e2e.mts  A family's own adventure: copied, edited, invisible to
+                      the family next door, and shared only by the operator
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter

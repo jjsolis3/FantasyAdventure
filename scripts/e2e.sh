@@ -63,6 +63,19 @@ export APP_URL="${APP_URL:-${E2E_BASE_URL}}"
 export SMTP_URL="${SMTP_URL:-smtp://e2e:e2e@127.0.0.1:1}"
 export MAIL_FROM="${MAIL_FROM:-Hearthlight <hearth@example.test>}"
 
+# Billing has to read as *configured*, for the same reason and in the same
+# place: the webhook route runs inside `next start`, so a secret exported only
+# to the test process would leave the endpoint answering "billing is not
+# configured here" and every assertion below it passing on a 503.
+#
+# Nothing here reaches Stripe. These are a secret the test signs its own
+# requests with and two price ids that exist nowhere — which is the whole point,
+# because what is under test is the signature, the deduplication and the
+# ordering, none of which need an account or a card.
+export STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-whsec_e2e_not_a_real_secret}"
+export STRIPE_PRICE_HOMESTEAD="${STRIPE_PRICE_HOMESTEAD:-price_e2e_homestead}"
+export STRIPE_PRICE_KEEP="${STRIPE_PRICE_KEEP:-price_e2e_keep}"
+
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "DATABASE_URL is not set. Point it at a scratch database." >&2
   exit 1
@@ -72,6 +85,8 @@ ALL=(
   auth characters campaigns play rounds invites quests loadout growth knacks
   acquaintances personal-quests progression settings admin households families people forgot screen bonds
   briefing chapters chronicle companions dials dreams encounters forks levels luck pressure
+  billing
+  adventures
   plans
   rebalance reset
   rivals
