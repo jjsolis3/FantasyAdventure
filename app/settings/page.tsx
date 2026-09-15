@@ -151,6 +151,13 @@ export default async function FamilySettingsPage() {
       note: `${householdSize} ${householdSize === 1 ? "person" : "people"}`,
     },
     {
+      href: "/settings/your-data",
+      title: "Your family's data",
+      blurb:
+        "Download everything you have written — every adventurer, and the whole of each story as it was told. This is also where you close the family for good, which is deliberately the same screen: nobody should be able to find the door without walking past their own belongings.",
+      note: "a copy, or the door",
+    },
+    {
       href: "/settings/families",
       title: "Families you adventure with",
       blurb:

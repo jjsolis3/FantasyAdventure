@@ -11,10 +11,17 @@ export function SubmitButton({
   children,
   pendingLabel,
   variant = "primary",
+  disabled = false,
 }: {
   children: ReactNode;
   pendingLabel?: string;
   variant?: "primary" | "secondary" | "danger";
+  /**
+   * Held shut until a form is ready to be sent — a typed confirmation that does
+   * not match yet, say. A courtesy rather than a guard: the server checks the
+   * same thing, because a `disabled` attribute is a suggestion.
+   */
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
@@ -27,7 +34,7 @@ export function SubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className={`rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]}`}
     >
       {pending ? (pendingLabel ?? children) : children}
