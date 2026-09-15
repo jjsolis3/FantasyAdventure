@@ -298,7 +298,22 @@ try {
     });
     const theirHousehold = ownerUser.households[0]!.householdId;
 
-    await owner.goto(`${BASE}/settings/billing`);
+    // Onto the free plan first. A household registers UNMETERED here, and an
+    // unmetered family is shown "you have everything already" rather than a
+    // shop — correct, and not the thing this section is about.
+    await owner.goto(`${BASE}/admin/households`);
+    const planForm = owner.locator(
+      `form:has(input[value="${theirHousehold}"]):has(select[name="plan"])`,
+    );
+    await planForm.locator('select[name="plan"]').selectOption("HEARTH");
+    await planForm.locator('button[type="submit"]').click();
+    await owner.waitForLoadState("networkidle").catch(() => {});
+
+    // The shop is `/settings/store`; `/settings/billing` is the account. The
+    // plan cards used to be on billing and moved, which is what broke this
+    // check — the two pages answer different questions and a cancel button on a
+    // shop front is how you get people cancelling.
+    await owner.goto(`${BASE}/settings/store`);
     const page = (await owner.textContent("body")) ?? "";
     check("the owner is offered the plans that have a price", page.includes("Homestead") && page.includes("Keep"));
     check(
@@ -320,7 +335,7 @@ try {
     // and fell over at Stripe: a rule refusal reads differently.
     const said = afterPress.match(/Could not [^.]+\./)?.[0] ?? "(nothing said)";
     check("pressing it without a key fails in a sentence", said !== "(nothing said)", said);
-    check("and nothing was written", (await subscriptionOf(theirHousehold)).plan !== "HOMESTEAD");
+    check("and nothing was written", (await subscriptionOf(theirHousehold)).plan === "HEARTH");
 
     // A second grown-up in the same family. Inviting, resetting a child's
     // password and fixing a sheet are one kind of act; committing the family to
@@ -334,7 +349,7 @@ try {
     const parent = await (await browser.newContext()).newPage();
     await register(parent, code, "Quenby", "quenby@example.test");
 
-    await parent.goto(`${BASE}/settings/billing`);
+    await parent.goto(`${BASE}/settings/store`);
     const parentPage = (await parent.textContent("body")) ?? "";
     check(
       "a parent who does not answer for the family is told so",
