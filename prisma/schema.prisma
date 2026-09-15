@@ -2166,6 +2166,18 @@ model Storyline {
   /// the source of truth for this row.
   isCustom        Boolean        @default(false)
 
+  /// Whether this one comes with every plan, or is part of a paid one.
+  ///
+  /// Only meaningful for `SYSTEM` and `COMMUNITY` adventures — a family's own is
+  /// theirs whatever they pay. Deliberately a property of the *adventure* rather
+  /// than a number on the plan: "the first five" would mean the set silently
+  /// changes when somebody reorders the library, and a family part-way through
+  /// number six would find it gone.
+  ///
+  /// Locked ones are still shown. A store that hides what you could have is not
+  /// a store, and a family choosing a plan should be able to see what is in it.
+  tier            StorylineTier  @default(STARTER)
+
   /// Who this adventure is for. See `StorylineScope`.
   ///
   /// Separate from `isCustom`, which answers a different question — *has a
@@ -2204,6 +2216,19 @@ model Storyline {
 /// it is the same leak households were built to close the moment two do: a
 /// family's homemade adventure about their own house, with their own cat in it,
 /// would appear in every other family's setup list.
+/// Whether an adventure comes with every plan or with a paid one.
+///
+/// The free plan is deliberately generous about *what* rather than *how much*:
+/// a family trying Hearthlight gets whole adventures, played properly, not a
+/// sampler. What a paid plan adds is more of them — and the ability to write
+/// their own, which is the part that makes the storyteller worth having.
+enum StorylineTier {
+  /// Comes with every plan, including the free one.
+  STARTER
+  /// Part of a paid plan. Shown to everybody, startable on Homestead and above.
+  EXTRA
+}
+
 enum StorylineScope {
   /// Ships with the game, and the seed owns it unless somebody has edited it.
   /// Everybody sees these.

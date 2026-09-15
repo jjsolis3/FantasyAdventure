@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db, isUniqueViolation } from "@/lib/db";
 import { requireHouseholdParent, requirePlatformAdmin } from "@/lib/auth/session";
 import { mayEditStoryline, visibleStorylineWhere } from "@/lib/game/visibility";
+import { writingVerdictFor } from "@/lib/billing/usage";
 import type { FormState } from "@/lib/auth/actions";
 
 /**
@@ -231,6 +232,14 @@ export async function saveStorylineAction(_prev: FormState, formData: FormData):
         return { error: "Only whoever runs Hearthlight can add to the installation's library." };
       }
 
+      // Only on the way in. A family who wrote adventures and later moved to a
+      // smaller plan keeps every one of them, keeps playing them and keeps
+      // editing them — this is "may I add one more", like every other ceiling.
+      if (mine) {
+        const allowed = await writingVerdictFor(actor.householdId);
+        if (!allowed.ok) return { error: allowed.reason };
+      }
+
       const created = await db.storyline.create({
         data: {
           ...data,
@@ -322,6 +331,12 @@ export async function duplicateStorylineAction(formData: FormData): Promise<void
   if (!id) return;
   if (mine && !actor.householdId) return;
 
+  // A copy is a new adventure, so it asks the same question writing one does.
+  if (mine) {
+    const allowed = await writingVerdictFor(actor.householdId);
+    if (!allowed.ok) return;
+  }
+
   const source = await db.storyline.findFirst({
     where: actor.everywhere
       ? { id }
@@ -394,9 +409,11 @@ export async function setStorylineScopeAction(
 
   const id = String(formData.get("storylineId") ?? "");
   const scope = String(formData.get("scope") ?? "");
+  const tier = String(formData.get("tier") ?? "STARTER");
   const householdId = String(formData.get("householdId") ?? "") || null;
 
   if (!id) return { error: "Pick an adventure." };
+  if (tier !== "STARTER" && tier !== "EXTRA") return { error: "That is not a tier." };
   if (scope !== "SYSTEM" && scope !== "HOUSEHOLD" && scope !== "COMMUNITY") {
     return { error: "That is not a scope." };
   }
@@ -422,6 +439,10 @@ export async function setStorylineScopeAction(
     where: { id },
     data: {
       scope,
+      // Which plan it comes with. A commercial decision, so it is the
+      // operator's and survives every redeploy — the seed sets a tier when it
+      // *makes* a row and never when it updates one.
+      tier,
       // `SYSTEM` and `COMMUNITY` keep their author, so a shared adventure can
       // still be edited by the family who wrote it. Only a shipped one has
       // genuinely nobody behind it.
@@ -433,11 +454,12 @@ export async function setStorylineScopeAction(
   revalidatePath("/settings/adventures");
   revalidatePath("/campaigns/new");
 
+  const included = tier === "STARTER" ? "with every plan" : "with a paid plan";
   const said =
     scope === "COMMUNITY"
-      ? `${storyline.title} is offered to every family now.`
+      ? `${storyline.title} is offered to every family now, ${included}.`
       : scope === "SYSTEM"
-        ? `${storyline.title} is part of the installation's library now.`
+        ? `${storyline.title} is part of the installation's library, ${included}.`
         : `${storyline.title} belongs to one family now.`;
   return { error: "", done: said };
 }

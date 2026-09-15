@@ -155,6 +155,61 @@ export function pictureVerdict(entitlements: Entitlements): Verdict {
 }
 
 /**
+ * Whether this family may start that adventure.
+ *
+ * Only ever about `EXTRA` ones, and only ever about *starting*. A family
+ * already partway through an adventure that later becomes locked keeps playing
+ * it — the gate is here, at setup, and never in `loadCampaign`. A cap that
+ * reached into a story already being told would be the one thing these must
+ * never do.
+ *
+ * A family's own adventure is theirs whatever they pay, which falls out of the
+ * tier rather than needing a case here: nothing written by a household is ever
+ * marked `EXTRA`.
+ */
+export function adventureVerdict(
+  entitlements: Entitlements,
+  storyline: { tier: string },
+): Verdict {
+  const problem = accountProblem(entitlements);
+  if (problem) return { ok: false, reason: problem };
+
+  if (storyline.tier === "EXTRA" && !entitlements.extraAdventures) {
+    return {
+      ok: false,
+      reason:
+        "That adventure comes with a larger plan. The ones already in your library are yours to " +
+        "play as often as you like.",
+    };
+  }
+  return OK;
+}
+
+/**
+ * Whether this family may write an adventure of their own.
+ *
+ * The upgrade that makes the storyteller worth having rather than the one that
+ * makes it bigger. Note what this does *not* gate: a family who wrote
+ * adventures and then moved to a smaller plan keeps every one of them, keeps
+ * playing them, and keeps editing them. Only writing a new one stops — the same
+ * "may I add one more" shape as every other ceiling here.
+ */
+export function writingVerdict(entitlements: Entitlements): Verdict {
+  const problem = accountProblem(entitlements);
+  if (problem) return { ok: false, reason: problem };
+
+  if (!entitlements.writeAdventures) {
+    return {
+      ok: false,
+      reason:
+        "Writing your own adventures comes with a larger plan — it is the part that lets the " +
+        "storyteller tell a story about your own street, with your own cat in it.",
+    };
+  }
+  return OK;
+}
+
+/**
  * How much of an allowance is left, for a screen rather than a gate.
  *
  * Returns null where there is no ceiling, so a self-hosted family is shown

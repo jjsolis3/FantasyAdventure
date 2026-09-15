@@ -23,6 +23,14 @@ export type StorylineChoice = {
   maxPlayers: number;
   estimatedScenes: number;
   actCount: number;
+  /**
+   * Whether this family's plan includes it.
+   *
+   * Shown and not startable, rather than hidden. A family choosing a plan
+   * should be able to see what is in the larger one, and a library that quietly
+   * shrinks is a library a family thinks it is losing.
+   */
+  locked?: boolean;
 };
 
 export type CharacterChoice = {
@@ -117,25 +125,34 @@ export function CampaignSetup({
         <div className="space-y-3">
           {storylines.map((storyline) => {
             const selected = storyline.id === storylineId;
+            const locked = storyline.locked === true;
             return (
               <button
                 key={storyline.id}
                 type="button"
+                disabled={locked}
                 onClick={() => pickStoryline(storyline)}
                 className={`block w-full rounded-xl border p-4 text-left transition-colors ${
-                  selected
-                    ? "border-hearth-500 bg-hearth-800/40"
-                    : "border-hearth-800/60 bg-hearth-900/30 hover:border-hearth-700"
+                  locked
+                    ? "cursor-not-allowed border-hearth-800/40 bg-hearth-900/10 opacity-60"
+                    : selected
+                      ? "border-hearth-500 bg-hearth-800/40"
+                      : "border-hearth-800/60 bg-hearth-900/30 hover:border-hearth-700"
                 }`}
               >
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="font-display text-lg text-hearth-100">{storyline.title}</span>
+                  {locked ? (
+                    <span className="rounded-full border border-hearth-700/50 bg-hearth-800/40 px-2 py-0.5 text-xs text-hearth-300">
+                      a larger plan
+                    </span>
+                  ) : null}
                   <span className="text-xs text-hearth-400">
                     {storyline.minPlayers}–{storyline.maxPlayers} adventurers · {storyline.actCount} acts
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-hearth-200/70 italic">{storyline.tagline}</p>
-                {selected ? (
+                {selected && !locked ? (
                   <p className="mt-3 text-sm leading-relaxed text-hearth-200/60">{storyline.premise}</p>
                 ) : null}
               </button>

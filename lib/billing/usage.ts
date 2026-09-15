@@ -15,11 +15,13 @@ import { db } from "@/lib/db";
 import type { Plan, SubscriptionStatus } from "@/generated/prisma/enums";
 import { UNLIMITED, entitlementsFor, type Entitlements } from "@/lib/billing/plans";
 import {
+  adventureVerdict,
   campaignVerdict,
   linkVerdict,
   pictureVerdict,
   seatVerdict,
   turnVerdict,
+  writingVerdict,
   type Verdict,
 } from "@/lib/billing/caps";
 
@@ -225,4 +227,17 @@ export async function turnVerdictFor(householdId: string): Promise<Verdict> {
 /** Whether the storyteller may draw for this family. */
 export async function pictureVerdictFor(householdId: string | null): Promise<Verdict> {
   return pictureVerdict(entitlementsFor(await subscriptionFor(householdId)));
+}
+
+/** Whether this family may start that adventure. */
+export async function adventureVerdictFor(
+  householdId: string | null,
+  storyline: { tier: string },
+): Promise<Verdict> {
+  return adventureVerdict(entitlementsFor(await subscriptionFor(householdId)), storyline);
+}
+
+/** Whether this family may write an adventure of their own. */
+export async function writingVerdictFor(householdId: string | null): Promise<Verdict> {
+  return writingVerdict(entitlementsFor(await subscriptionFor(householdId)));
 }

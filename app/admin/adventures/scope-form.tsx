@@ -24,12 +24,14 @@ export function StorylineScopeForm({
   storylineId,
   title,
   scope,
+  tier,
   householdId,
   households,
 }: {
   storylineId: string;
   title: string;
   scope: string;
+  tier: string;
   householdId: string | null;
   households: HouseholdChoice[];
 }) {
@@ -66,6 +68,19 @@ export function StorylineScopeForm({
           ))}
         </select>
       )}
+
+      {/* Which plan it comes with. Five adventures come with every plan by
+          default; which five is a commercial decision rather than a fact about
+          the content, so it is changeable here and survives every redeploy. */}
+      <select
+        name="tier"
+        defaultValue={tier}
+        aria-label={`Which plan ${title} comes with`}
+        className="rounded-md border border-hearth-700 bg-hearth-900/60 px-2 py-1 text-xs text-hearth-100"
+      >
+        <option value="STARTER">with every plan</option>
+        <option value="EXTRA">with a paid plan</option>
+      </select>
 
       <SubmitButton variant="secondary" pendingLabel="Saving…">
         Save who it is for

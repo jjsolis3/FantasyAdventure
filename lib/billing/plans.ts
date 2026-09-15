@@ -39,6 +39,25 @@ export type Allowance = {
   linkedHouseholds: number;
   /** Whether the storyteller may draw. */
   pictures: boolean;
+  /**
+   * Whether the adventures marked `EXTRA` can be started.
+   *
+   * Never whether they can be *seen*. A family on the free plan browses the
+   * whole library and is told which plan opens the rest — a shop that hides its
+   * shelves is not a shop, and hiding them would also mean a family could not
+   * tell whether upgrading was worth it.
+   */
+  extraAdventures: boolean;
+  /**
+   * Whether this family may write adventures of its own.
+   *
+   * The upgrade that makes the storyteller worth having rather than the one
+   * that makes it bigger: a story about your own street, with your own cat in
+   * it, is the thing a machine cannot be bought off a shelf to do. Writing is
+   * gated; a family's existing adventures are never taken away, because caps
+   * here ask "may I add one more" and nothing else.
+   */
+  writeAdventures: boolean;
 };
 
 /**
@@ -62,6 +81,10 @@ export const PLANS: Record<Plan, Allowance> = {
     turnsPerMonth: 60,
     linkedHouseholds: 1,
     pictures: false,
+    // Five whole adventures, played properly — not a sampler. What is held back
+    // is *more* of them, and the ability to write your own.
+    extraAdventures: false,
+    writeAdventures: false,
   },
 
   /** One family, playing properly. The plan almost everybody should be on. */
@@ -71,6 +94,8 @@ export const PLANS: Record<Plan, Allowance> = {
     turnsPerMonth: 400,
     linkedHouseholds: 5,
     pictures: true,
+    extraAdventures: true,
+    writeAdventures: true,
   },
 
   /** Cousins, grandparents, three adventures running at once. */
@@ -80,6 +105,8 @@ export const PLANS: Record<Plan, Allowance> = {
     turnsPerMonth: 1200,
     linkedHouseholds: 20,
     pictures: true,
+    extraAdventures: true,
+    writeAdventures: true,
   },
 
   /**
@@ -100,6 +127,8 @@ export const PLANS: Record<Plan, Allowance> = {
     turnsPerMonth: UNLIMITED,
     linkedHouseholds: UNLIMITED,
     pictures: true,
+    extraAdventures: true,
+    writeAdventures: true,
   },
 };
 

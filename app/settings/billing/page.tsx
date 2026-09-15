@@ -3,11 +3,11 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireHouseholdParent } from "@/lib/auth/session";
 import { householdUsage } from "@/lib/billing/usage";
-import { PLANS, UNLIMITED, describeAllowance } from "@/lib/billing/plans";
+import { UNLIMITED, describeAllowance } from "@/lib/billing/plans";
 import { purchasablePlans, webhookSecret } from "@/lib/billing/stripe-plans";
 import { canOpenPortal } from "@/lib/billing/checkout";
 import { Alert, Card, PageTitle } from "@/components/ui";
-import { BuyPlan, ManageSubscription } from "./plan-forms";
+import { ManageSubscription } from "./plan-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -18,27 +18,13 @@ const PLAN_NAMES: Record<string, string> = {
   UNMETERED: "Unmetered",
 };
 
-const PLAN_BLURBS: Record<string, string> = {
-  HOMESTEAD: "One family, playing properly. The plan most households should be on.",
-  KEEP: "Cousins, grandparents, and several adventures running at once.",
-};
-
-/** What a plan allows, in the numbers the caps actually compare against. */
-function allowanceLines(plan: keyof typeof PLANS): string[] {
-  const allowance = PLANS[plan];
-  return [
-    `${allowance.seats} people in the family`,
-    `${allowance.campaigns} ${allowance.campaigns === 1 ? "adventure" : "adventures"} at once`,
-    `${allowance.turnsPerMonth} turns a month`,
-    `adventuring with ${allowance.linkedHouseholds} other ${
-      allowance.linkedHouseholds === 1 ? "family" : "families"
-    }`,
-    allowance.pictures ? "pictures of every chapter" : "no pictures",
-  ];
-}
-
 /**
  * What this family is paying for, and how to change it.
+ *
+ * The account, not the shop. What a family *could* have — the whole library,
+ * with what a larger plan opens said out loud — is `/settings/store`, and the
+ * two are apart on purpose: putting a cancel button on a shop front is how you
+ * get people cancelling.
  *
  * **Nothing on this page is the authority on anything.** A family's plan
  * changes when Stripe tells the webhook it changed, which is why coming back
@@ -67,7 +53,6 @@ export default async function BillingPage({
 
   const { entitlements } = usage;
   const selling = webhookSecret() !== null && purchasablePlans().length > 0;
-  const isOwner = actor.user.householdRole === "OWNER";
   const managing = canOpenPortal({ actor: { householdRole: actor.user.householdRole }, subscription });
   const unmetered = entitlements.turnsPerMonth >= UNLIMITED;
 
@@ -160,37 +145,21 @@ export default async function BillingPage({
             family may do, and there is nothing to pay.
           </p>
         </Card>
-      ) : managing ? null : (
-        <>
-          {!isOwner ? (
-            <div className="mb-6">
-              <Alert>
-                Only whoever answers for this family can set up a payment. The plans below are what
-                is available; ask them to choose one from their own account.
-              </Alert>
-            </div>
-          ) : null}
-
-          <div className="space-y-4">
-            {purchasablePlans().map((plan) => (
-              <Card key={plan}>
-                <h3 className="font-display text-lg text-hearth-100">{PLAN_NAMES[plan] ?? plan}</h3>
-                <p className="mt-1 text-sm text-hearth-200/70">{PLAN_BLURBS[plan] ?? ""}</p>
-
-                <ul className="mt-3 space-y-1 text-sm text-hearth-200/80">
-                  {allowanceLines(plan).map((line) => (
-                    <li key={line}>· {line}</li>
-                  ))}
-                </ul>
-
-                {/* The price is on Stripe's page, not this one. Two places for a
-                    number that changes is one place that will be wrong, and the
-                    one people act on is the checkout. */}
-                {isOwner ? <BuyPlan plan={plan} label={`Choose ${PLAN_NAMES[plan] ?? plan}`} /> : null}
-              </Card>
-            ))}
-          </div>
-        </>
+      ) : (
+        <Card>
+          <h2 className="font-display mb-2 text-lg text-hearth-100">What else is there?</h2>
+          <p className="mb-4 text-sm text-hearth-200/70">
+            The shelf has every adventure on this server on it, with what a larger plan would open
+            said out loud. It is the page to decide from; this one is for what you are already
+            paying.
+          </p>
+          <Link
+            href="/settings/store"
+            className="inline-block rounded-lg bg-hearth-600 px-4 py-2 font-medium text-hearth-50 hover:bg-hearth-500"
+          >
+            See the shelf
+          </Link>
+        </Card>
       )}
 
       <p className="mt-8 text-sm text-hearth-400">

@@ -151,6 +151,13 @@ export default async function FamilySettingsPage() {
       note: `${householdSize} ${householdSize === 1 ? "person" : "people"}`,
     },
     {
+      href: "/settings/store",
+      title: "The shelf",
+      blurb:
+        "Every adventure on this server, and what a larger plan would open — shown rather than hidden, so you can tell whether it is worth it. Writing your own is here too.",
+      note: "browse",
+    },
+    {
       href: "/settings/your-data",
       title: "Your family's data",
       blurb:

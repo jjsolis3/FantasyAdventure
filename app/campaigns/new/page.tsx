@@ -5,6 +5,7 @@ import { Card, PageTitle } from "@/components/ui";
 import { CampaignSetup } from "@/components/campaign/campaign-setup";
 import { invitableCharacters } from "@/lib/game/invites";
 import { visibleHouseholdIds, visibleStorylineWhere } from "@/lib/game/visibility";
+import { entitlementsOf } from "@/lib/billing/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function NewCampaignPage() {
   // Own household plus the families it has agreed to play with. Read before the
   // rest so the picker below is scoped by it rather than offering the database.
   const householdIds = await visibleHouseholdIds(db, sessionUser.householdId);
+  const entitlements = await entitlementsOf(sessionUser.householdId);
 
   const [user, storylines, characters, invitable] = await Promise.all([
     db.user.findUniqueOrThrow({ where: { id: sessionUser.id } }),
@@ -23,7 +25,9 @@ export default async function NewCampaignPage() {
       // is the one place adventures and adventurers part company.
       where: { isActive: true, ...visibleStorylineWhere(sessionUser.householdId) },
       include: { _count: { select: { acts: true } } },
-      orderBy: [{ scope: "asc" }, { createdAt: "asc" }],
+      // Included ones first, then the rest — a family on the free plan should
+      // meet what they have before what they could have.
+      orderBy: [{ tier: "asc" }, { scope: "asc" }, { createdAt: "asc" }],
     }),
     db.character.findMany({
       where: { userId: sessionUser.id },
@@ -57,6 +61,10 @@ export default async function NewCampaignPage() {
             maxPlayers: storyline.maxPlayers,
             estimatedScenes: storyline.estimatedScenes,
             actCount: storyline._count.acts,
+            // Shown with a lock rather than left out. `createCampaignAction`
+            // refuses it either way — this only decides whether the family can
+            // see what a larger plan would open.
+            locked: storyline.tier === "EXTRA" && !entitlements.extraAdventures,
           }))}
           characters={characters}
           invitable={invitable}

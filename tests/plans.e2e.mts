@@ -273,6 +273,98 @@ try {
   await restored.locator('button[type="submit"]').click();
   await operator.waitForLoadState("networkidle").catch(() => {});
 
+  console.log("\n-- The shelf, and what a larger plan opens --------------------------");
+
+  // Back onto the trial, to see the shop the way a family on it does.
+  await operator.goto(`${BASE}/admin/households`);
+  const onHearth = operator.locator(`form:has(input[value="${theirHousehold}"]):has(select[name="plan"])`);
+  await onHearth.locator('select[name="plan"]').selectOption("HEARTH");
+  await onHearth.locator('select[name="status"]').selectOption("ACTIVE");
+  await onHearth.locator('button[type="submit"]').click();
+  await operator.waitForLoadState("networkidle").catch(() => {});
+
+  const starters = await db.storyline.count({ where: { scope: "SYSTEM", tier: "STARTER" } });
+  const extras = await db.storyline.count({ where: { scope: "SYSTEM", tier: "EXTRA" } });
+  check("five adventures come with every plan", starters === 5, String(starters));
+  check("and the rest come with a paid one", extras > 0, String(extras));
+
+  await ownerPage.goto(`${BASE}/settings/store`);
+  const shelf = (await ownerPage.textContent("body")) ?? "";
+  check("the shelf says what is theirs to play", shelf.includes("Yours to play"));
+
+  // The whole point of a shop: the locked ones are *shown*. A family deciding
+  // whether an upgrade is worth it cannot decide that against a list of
+  // numbers, and hiding the shelves is how a plan page becomes unread.
+  check("and shows what a larger plan would open", shelf.includes("With a larger plan"));
+  check("writing your own is named as the upgrade", shelf.includes("Write your own"));
+
+  const lockedTitle = (
+    await db.storyline.findFirstOrThrow({ where: { scope: "SYSTEM", tier: "EXTRA" } })
+  ).title;
+  check("a locked adventure is named rather than hidden", shelf.includes(lockedTitle), lockedTitle);
+
+  // And the picker will not start it. The screen is not the rule: the id is
+  // posted through the real setup form, which is what a hand-post looks like.
+  await ownerPage.goto(`${BASE}/settings/adventures`);
+  const writing = (await ownerPage.textContent("body")) ?? "";
+  check(
+    "writing is held back on the trial",
+    writing.includes("Writing comes with a larger plan"),
+  );
+  check(
+    "and there is no button to write one",
+    (await ownerPage.locator('a:has-text("Write one from scratch")').count()) === 0,
+  );
+
+  const lockedStoryline = await db.storyline.findFirstOrThrow({
+    where: { scope: "SYSTEM", tier: "EXTRA" },
+    select: { id: true },
+  });
+  const startedBefore = await db.campaign.count({ where: { storylineId: lockedStoryline.id } });
+  await ownerPage.goto(`${BASE}/campaigns/new`);
+  const hasForm = (await ownerPage.locator('input[name="title"]').count()) > 0;
+  if (hasForm) {
+    await ownerPage.fill('input[name="title"]', "Not on this plan");
+    await ownerPage.evaluate((id) => {
+      const hidden = document.querySelector<HTMLInputElement>('input[name="storylineId"]');
+      if (hidden) hidden.value = id;
+    }, lockedStoryline.id);
+    await ownerPage.locator('input[name="partyIds"]').first().check().catch(() => {});
+    await submitAndSettle(ownerPage);
+  }
+  check(
+    "and a locked adventure cannot be started by posting its id",
+    (await db.campaign.count({ where: { storylineId: lockedStoryline.id } })) === startedBefore,
+  );
+
+  // The control. Put them on a paid plan and the same adventure is theirs —
+  // otherwise every check above would pass with the library simply broken.
+  await operator.goto(`${BASE}/admin/households`);
+  const upgraded = operator.locator(`form:has(input[value="${theirHousehold}"]):has(select[name="plan"])`);
+  await upgraded.locator('select[name="plan"]').selectOption("HOMESTEAD");
+  await upgraded.locator('button[type="submit"]').click();
+  await operator.waitForLoadState("networkidle").catch(() => {});
+
+  await ownerPage.goto(`${BASE}/settings/store`);
+  const afterUpgrade = (await ownerPage.textContent("body")) ?? "";
+  check(
+    "on a paid plan nothing is held back",
+    !afterUpgrade.includes("With a larger plan"),
+  );
+  await ownerPage.goto(`${BASE}/settings/adventures`);
+  check(
+    "and writing is theirs",
+    (await ownerPage.locator('a:has-text("Write one from scratch")').count()) === 1,
+  );
+
+  // Put them back where the rest of this file expects to find them.
+  await operator.goto(`${BASE}/admin/households`);
+  const restoredAgain = operator.locator(`form:has(input[value="${theirHousehold}"]):has(select[name="plan"])`);
+  await restoredAgain.locator('select[name="plan"]').selectOption("UNMETERED");
+  await restoredAgain.locator('select[name="status"]').selectOption("ACTIVE");
+  await restoredAgain.locator('button[type="submit"]').click();
+  await operator.waitForLoadState("networkidle").catch(() => {});
+
   console.log("\n-- Handing over the installation -----------------------------------");
 
   await operator.goto(`${BASE}/admin/households`);
