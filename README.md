@@ -2258,6 +2258,69 @@ did before, making a household of its own. The bootstrap code is deliberately
 left alone: it is the way into an empty installation, there is no household for
 it to join, and a null household already means *make one*.
 
+### Adventures that belong to somebody
+
+Households drew the boundary around adventurers. `Storyline` was the one table
+it never reached: every adventure written in the app was installation-wide, and
+only whoever ran the server could write one. Right while one family played, and
+the same leak the boundary exists to close the moment two do — a family's
+homemade story about their own house, with their own cat in it, appearing in
+every other family's setup list.
+
+| Scope | Who sees it | Who may edit it |
+|---|---|---|
+| `SYSTEM` | everybody | whoever runs the installation |
+| `HOUSEHOLD` | one family | that family |
+| `COMMUNITY` | everybody | the family who wrote it |
+
+**Deliberately not linked-household-aware**, and this is the one place adventures
+and adventurers part company. `visibleCharacterWhere` follows household links;
+`visibleStorylineWhere` does not. Linking two households means *our children
+play together* — it does not mean *you may run my adventure*. A half-written
+story about your own street, with the neighbours in it, is not something to hand
+over because the children are friends. `COMMUNITY` is the one click that says
+otherwise, and an explicit share is the same shape as the link itself.
+
+None of this stops anybody *playing* a story somebody else started. That flows
+through party membership and the campaign's own `storylineId` and touches none
+of the above, so a joint evening keeps working and a family that unlinks does
+not lose the adventure they are halfway through.
+
+**A family cannot publish to everybody.** Promotion to `COMMUNITY` is the
+administrator's alone. This is an app for children: a story that reaches other
+people's children should have had somebody look at it, and the alternative —
+letting a household publish and building moderation to catch it afterwards — is
+a much bigger thing badly disguised as a smaller one.
+
+**Copying leads the family's screen, above writing from scratch.** A blank
+premise box is a much harder job than changing the ending of a story you have
+already played together, and the second is the one a nine-year-old will actually
+sit down for. The copy is theirs the moment it is made: switched off until it is
+finished, out of the seed's hands for good, and carrying a slug nothing can
+collide with — two families both writing "The Cat Who Came Back" would otherwise
+have the second told the title was taken by an adventure she cannot see, which
+is a confusing refusal and a small admission that the other family exists.
+
+**The rule was one line missing.** `createCampaignAction` validated the chosen
+adventure with `{ id, isActive }` and no household filter at all, so the picker
+was the only thing standing between a hand-posted id and another family's story.
+The picker is not the rule. `setStorylineActiveAction` had the same shape —
+`updateMany` by an id off the form, with nothing compared against the caller.
+
+**Nothing that already exists moves.** Every adventure stays `SYSTEM`, including
+the ones written in the app. They are visible to everybody today, and assigning
+them to whichever household happened to be first would take them away from every
+other family on the installation — a behaviour change nobody asked for, applied
+by a migration that could not be argued with. Moving one into a household is a
+decision, and there is a control for it on `/admin/adventures`.
+
+There is still no delete, for the reason there never was: a campaign holds its
+storyline for the premise and the act the party are in, and a finished one is
+what a journal is about. Putting it away is as far as it goes. If a household is
+ever deleted its adventures are left ownerless rather than removed — `SET NULL`,
+not cascade — so nobody is offered them again and every journal written about
+one still reads.
+
 ### Families who adventure together
 
 Households made the boundary. This is what reads it.
@@ -2944,9 +3007,10 @@ app/
   settings/invites/        Codes for your own family — one kind, into your house
   settings/families/       The families yours has agreed to adventure with
   settings/people/         Who is in your family, and helping one of them back in
+  settings/adventures/     Stories this family has written, and copies to start from
   admin/            The installation's hub — platform administrators only
   admin/storyteller/       Model provider, keys, connection test
-  admin/adventures/        Writing and editing storylines in the app
+  admin/adventures/        The shared library, and who each adventure is for
   admin/usage/             What every call used, and what it cost
   admin/households/        Which accounts are one family, who answers for it,
                            who runs the installation, and what each family pays
@@ -3066,6 +3130,9 @@ tests/
   platform-role.test.ts Handing the installation on, and the three refusals
   plans.e2e.mts       Admitting a family, a seat cap that bites, a card that
                       failed, and the installation changing hands
+  storyline-scope.test.ts  Who an adventure is for, and who may take it apart
+  adventures.e2e.mts  A family's own adventure: copied, edited, invisible to
+                      the family next door, and shared only by the operator
   progression.e2e.mts Browser-driven skills, items, milestones, Family Moves
   settings.e2e.mts    Browser-driven storyteller settings and connection test
   settings.test.ts    Unit tests — key encryption and the Anthropic adapter
